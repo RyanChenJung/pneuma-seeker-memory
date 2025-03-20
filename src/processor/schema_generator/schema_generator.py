@@ -1,0 +1,2 @@
+class SchemaGenerator:
+    pass
