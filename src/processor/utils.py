@@ -7,6 +7,21 @@ def format_schema(df):
     return f"{schema}\n{sample_row}"
 
 
+def format_schema_with_samples(df, num_samples=3, random_seed=42):
+    import numpy as np
+    schema = "col: " + " | ".join(df.columns)
+    np.random.seed(random_seed)
+    if len(df) <= num_samples:
+        sample_indices = range(len(df))
+    else:
+        sample_indices = np.random.choice(len(df), num_samples, replace=False)
+    sample_rows = []
+    for i, idx in enumerate(sample_indices):
+        row_str = f"sample row {i+1}: " + " | ".join(df.iloc[idx].astype(str))
+        sample_rows.append(row_str)
+    return schema + "\n" + "\n".join(sample_rows)
+
+
 def read_jsonl(file_path: str):
     data: list[dict[str, str]] = []
     with open(file_path, "r", encoding="utf-8") as file:

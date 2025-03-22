@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from processor.src.processor.llm.interface.qwen import Qwen
 from processor.src.processor.llm.interface.gemma import Gemma
 from processor.src.processor.llm.interface.llama import Llama
-from src.processor.types.message import Message
+from processor.src.processor.types.message import Message
 
 
 class ModelInterface(ABC):

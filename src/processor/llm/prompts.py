@@ -10,3 +10,33 @@ Output:
 ['Restaurant ID', 'Restaurant Name', 'Rating', 'Location']
 
 This ensures that a data scientist can efficiently filter and interpret the dataset."""
+
+clear_schema_system_prompt = """You are given a schema of a table, along with some sample row(s). Your goal is to rename the schema to be more explicit and descriptive. For example, 'AvgRating' becomes 'Average Rating'.
+
+Output your result strictly as a Python list, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list."""
+
+plan_generator_first_step_system_prompt = """You are a helpful data scientist.
+
+You will be provided with:
+- A question in natural language.
+- A list of available tables, each represented with its schema and a sample row.
+- A target schema, which defines the supposedly relevant table to answer the question.
+
+Your goal is to determine which table among the available tables consists of the superset or the exact set of the target schema. If the table exists, return "operation": "select_table" and specify the table.
+If table join(s) is **strictly** necessary, then return "operation": "join" and specify the necessary joins.
+
+The output format for selecting a single table:
+{
+    "operation": "select_table",
+    "tables_involved": ["Table_0"],
+    "description": "Select Table_0."
+}
+
+While for joining tables:
+{
+    "operation": "join",
+    "tables_involved": ["Table_0", "Table 1"],
+    "description": "Join Table_0 with Table_1 on Table_0.Department ID and Table_1.DeptID"
+}
+
+Output your result strictly as a Python dictionary, without any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary."""
