@@ -1,0 +1,41 @@
+from torch import bfloat16
+from transformers import AutoTokenizer, Gemma3ForCausalLM
+
+from processor.src.processor.llm.interface.model_interface import ModelInterface
+
+
+class Gemma(ModelInterface):
+    def __init__(self, ckp: str):
+        self.ckp = ckp
+        self.model = None
+        self.tokenizer = None
+
+    def load_model(self):
+        self.model = Gemma3ForCausalLM.from_pretrained(
+            self.ckp,
+            torch_dtype=bfloat16,
+        )
+        self.model.to("cuda")
+
+    def load_tokenizer(self):
+        self.tokenizer = AutoTokenizer.from_pretrained(self.ckp)
+
+    def chat(self, messages):
+        if self.model is None:
+            self.load_model()
+        if self.tokenizer is None:
+            self.load_tokenizer()
+
+        inputs = self.tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(self.model.device)
+        input_len = inputs["input_ids"].shape[-1]
+        generation = self.model.generate(**inputs, max_new_tokens=100, do_sample=False)
+        generation = generation[0][input_len:]
+
+        decoded = self.tokenizer.decode(generation, skip_special_tokens=True)
+        return decoded
