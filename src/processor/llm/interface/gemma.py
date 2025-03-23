@@ -1,10 +1,7 @@
 from torch import bfloat16
 from transformers import AutoTokenizer, Gemma3ForCausalLM
 
-from processor.src.processor.llm.interface.model_interface import ModelInterface
-
-
-class Gemma(ModelInterface):
+class Gemma:
     def __init__(self, ckp: str):
         self.ckp = ckp
         self.model = None

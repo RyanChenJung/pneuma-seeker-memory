@@ -11,9 +11,9 @@ Output:
 
 This ensures that a data scientist can efficiently filter and interpret the dataset."""
 
-clear_schema_system_prompt = """You are given a schema of a table, along with some sample row(s). Your goal is to rename the schema to be more explicit and descriptive. For example, 'AvgRating' becomes 'Average Rating'.
+clear_schema_system_prompt = """You are given a schema of a table, along with some sample row(s), with the pipe character (`|`) as the separator of columns and row values. Your goal is to update the schema to be more explicit and descriptive. For example, the column 'AvgRating' becomes 'Average Rating'. Be careful not to miss any columns (e.g., if there are `ID` and `School ID`, handle them both).
 
-Output your result strictly as a Python list, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list."""
+Output your result strictly as a Python list consisting of the new column names, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list."""
 
 plan_generator_first_step_system_prompt = """You are a helpful data scientist.
 

@@ -1,4 +1,5 @@
 import json
+from ast import literal_eval
 
 
 def format_schema(df):
@@ -21,6 +22,25 @@ def format_schema_with_samples(df, num_samples=3, random_seed=42):
         sample_rows.append(row_str)
     return schema + "\n" + "\n".join(sample_rows)
 
+def format_schema_extensive(df, start=0, end_exclusive=1):
+    schema = "col: " + " | ".join(df.columns)
+    sample_rows = []
+    for idx, i in enumerate(range(start, end_exclusive)):
+        row_str = f"row {idx+1}: " + " | ".join(df.iloc[i].astype(str))
+        sample_rows.append(row_str)
+    return schema + "\n" + "\n".join(sample_rows)
+
+
+def parse_code_string(code: str):
+    if code.startswith('```'):
+        code = code[3:]
+    if code.endswith('```'):
+        code = code[:-3]
+    if code.startswith('python'):
+        code = code[6:]
+    elif code.startswith('sql'):
+        code = code[3:]
+    return literal_eval(code)
 
 def read_jsonl(file_path: str):
     data: list[dict[str, str]] = []
