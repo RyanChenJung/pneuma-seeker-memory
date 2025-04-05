@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 
 class Qwen:
@@ -15,7 +15,7 @@ class Qwen:
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.ckp)
 
-    def chat(self, messages):
+    def chat(self, messages, do_sample = False, temperature = None, seed = None):
         if self.model is None:
             self.load_model()
         if self.tokenizer is None:
@@ -26,11 +26,14 @@ class Qwen:
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
+        if seed is not None:
+            set_seed(seed, True)
+
         generated_ids = self.model.generate(
             **model_inputs,
             max_new_tokens=512,
-            do_sample=False,
-            temperature=None,
+            do_sample=do_sample,
+            temperature=temperature,
             top_p=None,
             top_k=None
         )

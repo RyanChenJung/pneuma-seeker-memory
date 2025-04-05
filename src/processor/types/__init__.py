@@ -1,1 +1,1 @@
-from src.processor.types import *
+from processor.types import *

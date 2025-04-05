@@ -1,7 +1,7 @@
 from torch import bfloat16
 from transformers import pipeline
 
-from processor.src.processor.llm.interface.model_interface import ModelInterface
+from processor.llm.interface.model_interface import ModelInterface
 
 
 class Llama(ModelInterface):

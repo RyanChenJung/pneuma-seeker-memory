@@ -1,1 +1,0 @@
-from processor.schema_generator.schema_generator import SchemaGenerator
