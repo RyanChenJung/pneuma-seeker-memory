@@ -1,4 +1,4 @@
-from processor.planner.planner import Planner
+from processor.base_table_producer.base_table_producer import BaseTableProducer
 from processor.schema_processor.schema_processor import SchemaProcessor
 from processor.types.operation import Operation
 
@@ -6,7 +6,7 @@ from processor.types.operation import Operation
 class Processor:
     def __init__(self, ckp: str):
         self.schema_processor = SchemaProcessor(ckp)
-        self.planner = Planner()
+        self.planner = BaseTableProducer()
     
     def get_enhanced_schema(self, tables):
         return self.schema_processor.get_enhanced_schema(tables)
