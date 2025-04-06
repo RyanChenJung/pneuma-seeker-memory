@@ -30,6 +30,7 @@ class SchemaProcessor:
                 new_col_name = new_col_name.split(':')[0]
                 if new_col_name.endswith('\n'):
                     new_col_name = new_col_name.split('\n')[0]
+                new_col_name = new_col_name.replace(' ', '_')
                 print(f"==> Reasoning: {new_col_reason_and_name}")
                 print(f"==> Renaming column {col} to {new_col_name}")
                 new_columns.append(new_col_name)
