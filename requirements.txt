@@ -5,3 +5,4 @@ transformers>=4.50.0.dev0
 pandas>=2.2.2
 textdistance>=4.6.3
 sentence-transformers>=3.4.1
+openai>=1.63.2

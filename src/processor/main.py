@@ -4,9 +4,10 @@ from processor.types.operation import Operation
 
 
 class Processor:
-    def __init__(self, ckp: str):
+    def __init__(self, ckp: str, api_key: str = ''):
         self.schema_processor = SchemaProcessor(ckp)
         self.planner = BaseTableProducer()
+        self.api_key = api_key
     
     def get_enhanced_schema(self, tables):
         return self.schema_processor.get_enhanced_schema(tables)

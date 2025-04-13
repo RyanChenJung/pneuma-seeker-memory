@@ -1,7 +1,9 @@
 from processor.llm.interface.qwen import Qwen
+from processor.llm.interface.gpt import GPT
 from processor.llm.interface.gemma import Gemma
 from processor.llm.interface.llama import Llama
 from processor.llm.interface.model_interface import ModelInterface
+
 
 def get_model(ckp: str) -> ModelInterface:
     """Factory function to return the correct model instance."""
@@ -12,5 +14,7 @@ def get_model(ckp: str) -> ModelInterface:
         return Llama
     elif "gemma" in normalized_ckp:
         return Gemma
+    elif "gpt" in normalized_ckp:
+        return GPT
     else:
         raise ValueError(f"No interface implementation for this checkpoint: {ckp}")
