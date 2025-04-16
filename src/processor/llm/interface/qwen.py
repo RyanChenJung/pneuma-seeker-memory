@@ -1,21 +1,24 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
+from processor.llm.interface.model_interface import ModelProtocol
+from processor.types.llm_option import LLMOption
 
-class Qwen:
-    def __init__(self, ckp: str):
-        self.ckp = ckp
+
+class Qwen(ModelProtocol):
+    def __init__(self, model_name: str):
+        self.model_name = model_name
         self.model = None
         self.tokenizer = None
 
     def load_model(self):
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.ckp, torch_dtype="auto", device_map="auto"
+            self.model_name, torch_dtype="auto", device_map="auto"
         )
 
     def load_tokenizer(self):
-        self.tokenizer = AutoTokenizer.from_pretrained(self.ckp)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
-    def chat(self, messages, do_sample = False, temperature = None, seed = None):
+    def chat(self, messages, llm_option: LLMOption = LLMOption()):
         if self.model is None:
             self.load_model()
         if self.tokenizer is None:
@@ -26,16 +29,16 @@ class Qwen:
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
-        if seed is not None:
-            set_seed(seed, True)
+        if llm_option.seed is not None:
+            set_seed(llm_option.seed, True)
 
         generated_ids = self.model.generate(
             **model_inputs,
             max_new_tokens=512,
-            do_sample=do_sample,
-            temperature=temperature,
-            top_p=None,
-            top_k=None
+            do_sample=llm_option.do_sample,
+            temperature=llm_option.temperature,
+            top_p=llm_option.top_p,
+            top_k=llm_option.top_k
         )
         generated_ids = [
             output_ids[len(input_ids) :]

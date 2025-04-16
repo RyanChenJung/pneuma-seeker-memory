@@ -1,10 +1,3 @@
-schema_enhancer_prompts = {
-    "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Output your guess directly without any extra formatting.",
-    "column_renamer": 'You are an experienced data scientist. You are given:\n\n- The schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values.\n- A description of what the table represents.\n- A column from the schema to be renamed.\n\nYour goal is to rename the specified column to make it more explicit and descriptive while considering the other columns in the schema and the overall description of the table. Start by thinking for a bit and end your thought with this exact format (to ease parsing of your answer):\n\nNew column name: ...',
-    "description_combinator": 'You are an expert data scientist skilled in precise reasoning. Your task is to synthesize a single, concise description from several similar ones. Always choose the most specific term when multiple levels of abstraction are mentioned (e.g., if both "retail stores" and "businesses" are mentioned, only use "retail stores"). Do not include both general and specific terms together. Be concise, avoid repetition, and return only the refined description—no extra formatting or commentary.'
-}
-
-
 base_table_producer_prompts = {
     "tables_selector": """You are an experienced data scientist. You are given:
 - A table, represented by its schema, a description of what it contains, and some sample rows. The pipe character (`|`) is used as the separator for both columns and row values.
@@ -21,7 +14,7 @@ End your reasoning with the following exact format, to ease parsing:
 
 Relevant: yes/no
 """,
-  "row_extender_step_1": """You are an experienced data scientist. You are given:
+    "row_extender_step_1": """You are an experienced data scientist. You are given:
 - A list of tables, each with its schema, a short description, and a few sample rows.
 - The pipe character (`|`) is used to separate both column names and values.
 
@@ -36,7 +29,7 @@ Do **not** group tables that refer to different concepts/entities, even if they 
 
 Finish with a list of compatible groups like:
 Row extension groups: Group 1: Table_0, Table_2 Group 2: Table_3, Table_4 ... (or none if no combinations are found)""",
-  "row_extender_step_2": """You are an experienced data scientist. You have already analyzed the tables and identified which ones can be combined via row extension (i.e., vertically stacked) because they refer to the same kind of real-world entity.
+    "row_extender_step_2": """You are an experienced data scientist. You have already analyzed the tables and identified which ones can be combined via row extension (i.e., vertically stacked) because they refer to the same kind of real-world entity.
 
 You are given:
 - A list of tables (description + schemas + samples)
@@ -69,7 +62,7 @@ Format if row extension groups exist:
 Format if row extension groups are empty/none:
 ```json
 []```""",
-  "join_planner": """You are a highly skilled data engineer. You are given:
+    "join_planner": """You are a highly skilled data engineer. You are given:
 - A list of tables (with descriptions, schemas, and sample rows)
 - The goal is to **join all tables** together into a final unified table by **step-wise horizontal merging**.
 
@@ -104,11 +97,12 @@ Output your answer directly as a JSON object with the following format without a
     "Left Join Key": "UserID",
     "Right Join Key": "Customer_ID"
   }
-]```"""
+]```""",
 }
 
 
-schema_generator_system_prompt = """You are an expert in data integration. Your task is to determine the minimum target schema---the smallest set of necessary columns required to directly answer a given question without having to perform separate aggregate operations (e.g., performing average on a column). The first column must always be the ID (primary key).
+schema_processor_prompts = {
+    "schema_generator_system_prompt": """You are an expert in data integration. Your task is to determine the minimum target schema---the smallest set of necessary columns required to directly answer a given question without having to perform separate aggregate operations (e.g., performing average on a column). The first column must always be the ID (primary key).
 
 However, the target schema must be self-sufficient: all essential attributes must be included so that the question can be answered without requiring joins or additional lookups. For example, restaurant names must be included, not just their IDs, as data scientists need them for interpretation.
 
@@ -119,8 +113,28 @@ Input: "What are the best restaurants in Chicago with ratings above 3.5?"
 Output:
 ['Restaurant ID', 'Restaurant Name', 'Rating', 'Location']
 
-This ensures that a data scientist can efficiently filter and interpret the dataset."""
+This ensures that a data scientist can efficiently filter and interpret the dataset.""",
+    "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Output your guess directly without any extra formatting.",
+    "column_renamer": """You are an experienced data scientist. You are given:
 
+- The schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values.
+- A description of what the table represents.
+- A column from the schema to be renamed.
+
+Your goal is to rename the specified column to make it more explicit and descriptive while considering the other columns in the schema and the overall description of the table. Start by thinking for a bit and end your thought with this exact format (to ease parsing of your answer):
+
+New column name: ...""",
+    "description_combinator": 'You are an expert data scientist skilled in precise reasoning. Your task is to synthesize a single, concise description from several similar ones. Always choose the most specific term when multiple levels of abstraction are mentioned (e.g., if both "retail stores" and "businesses" are mentioned, only use "retail stores"). Do not include both general and specific terms together. Be concise, avoid repetition, and return only the refined description—no extra formatting or commentary.',
+}
+
+
+
+
+
+
+
+
+# DEPRECATED
 clear_schema_system_prompt = """You are given a schema of a table, along with some sample row(s), with the pipe character (`|`) as the separator of columns and row values. Your goal is to update the schema to be more explicit and descriptive. For example, the column 'AvgRating' becomes 'Average Rating'. Be careful not to miss any columns (e.g., if there are `ID` and `School ID`, handle them both).
 
 Output your result strictly as a Python list consisting of the new column names, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list."""
@@ -152,17 +166,3 @@ While for joining tables:
 }
 
 Output your result strictly as a Python dictionary, without any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary."""
-
-# extract_col_system_prompt = """You are a helpful and knowledgeable data scientist.
-
-# You will be provided with:
-# - A table represented by its schema and rows.
-# - A column to be added to this table whose values depend on the other columns in the table.
-
-# Your goal is to determine the values of the new column for all rows. Ensure you consider **all provided columns together** rather than relying on a single column. For example, a city name may exist in multiple locations, but when paired with its corresponding province or county, ambiguity is reduced.
-
-# Output your result strictly as a Python list representing the new column values and very brief reasoning for all rows, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list.
-
-# Output format:
-# [{'value': ..., 'reasoning': ...}, ...]"""
-

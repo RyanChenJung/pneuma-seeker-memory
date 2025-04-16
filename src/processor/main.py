@@ -1,14 +1,17 @@
 from processor.base_table_producer.base_table_producer import BaseTableProducer
+from processor.llm.interface.model_factory import get_model
+from processor.llm.interface.model_interface import ModelProtocol
 from processor.schema_processor.schema_processor import SchemaProcessor
 from processor.types.operation import Operation
 
 
 class Processor:
-    def __init__(self, ckp: str, api_key: str = ''):
-        self.schema_processor = SchemaProcessor(ckp)
-        self.planner = BaseTableProducer()
-        self.api_key = api_key
-    
+    def __init__(self, model_name: str):
+        model_protocol = get_model(model_name)
+        self.model: ModelProtocol = model_protocol(model_name)
+        self.schema_processor = SchemaProcessor(self.model)
+        self.base_table_producer = BaseTableProducer(self.model)
+
     def get_enhanced_schema(self, tables):
         return self.schema_processor.get_enhanced_schema(tables)
 

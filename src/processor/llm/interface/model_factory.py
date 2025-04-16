@@ -2,10 +2,10 @@ from processor.llm.interface.qwen import Qwen
 from processor.llm.interface.gpt import GPT
 from processor.llm.interface.gemma import Gemma
 from processor.llm.interface.llama import Llama
-from processor.llm.interface.model_interface import ModelInterface
+from processor.llm.interface.model_interface import ModelProtocol
 
 
-def get_model(ckp: str) -> ModelInterface:
+def get_model(ckp: str) -> ModelProtocol:
     """Factory function to return the correct model instance."""
     normalized_ckp = ckp.lower()
     if "qwen" in normalized_ckp:

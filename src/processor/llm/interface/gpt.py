@@ -1,11 +1,14 @@
+import os
 from openai import OpenAI
 from processor.types.llm_option import LLMOption
 from processor.types.message import Message
-from processor.llm.interface.model_interface import ModelInterface
+from processor.llm.interface.model_interface import ModelProtocol
+from dotenv import load_dotenv
 
-class GPT(ModelInterface):
-    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini"):
-        self.client = OpenAI(api_key=api_key)
+class GPT(ModelProtocol):
+    def __init__(self, model_name: str = "gpt-4o-mini"):
+        load_dotenv()
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         self.model_name = model_name
 
     def load_model(self):

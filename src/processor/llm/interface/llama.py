@@ -1,24 +1,24 @@
 from torch import bfloat16
 from transformers import pipeline
 
-from processor.llm.interface.model_interface import ModelInterface
+from processor.llm.interface.model_interface import ModelProtocol
 
 
-class Llama(ModelInterface):
-    def __init__(self, ckp: str):
-        self.ckp = ckp
+class Llama(ModelProtocol):
+    def __init__(self, model_name: str):
+        self.model_name = model_name
         self.model = None
-        self.tokenizer = None
 
     def load_model(self):
         self.model = pipeline(
             "text-generation",
-            model=self.ckp,
+            model=self.model_name,
             torch_dtype=bfloat16,
             device_map="auto",
         )
 
     def load_tokenizer(self):
+        # This model uses pipeline interface; no need to separately handle tokenizer
         pass
 
     def chat(self, messages, max_new_tokens=256):
