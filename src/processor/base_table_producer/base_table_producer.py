@@ -1,4 +1,4 @@
-from processor.types.message import Message
+from processor.utils.message import Message
 from processor.llm.prompts import base_table_producer_prompts
 from processor.llm.interface.model_interface import ModelProtocol
 from processor.utils import format_schema_with_samples

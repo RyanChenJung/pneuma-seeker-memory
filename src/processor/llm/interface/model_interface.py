@@ -1,6 +1,6 @@
 # from abc import ABC, abstractmethod
-from processor.types.llm_option import LLMOption
-from processor.types.message import Message
+from processor.utils.llm_option import LLMOption
+from processor.utils.message import Message
 
 from typing import Protocol
 

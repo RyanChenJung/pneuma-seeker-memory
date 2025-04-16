@@ -1,7 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 from processor.llm.interface.model_interface import ModelProtocol
-from processor.types.llm_option import LLMOption
+from processor.utils.llm_option import LLMOption
 
 
 class Qwen(ModelProtocol):

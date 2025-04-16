@@ -4,14 +4,12 @@ from processor.llm.interface.model_interface import ModelProtocol
 from processor.llm.prompts import schema_processor_prompts
 from processor.utils import format_schema_with_samples
 from tqdm import tqdm
-from processor.types.message import Message
+from processor.utils.message import Message
+from processor.utils.system_context import SystemContext
 
 
 class SchemaProcessor:
-    def __init__(self, model: ModelProtocol):
-        self.model = model
-
-    def get_target_schema(self, question: str) -> list[str]:
+    def get_target_schema(self, ctx: SystemContext, question: str) -> list[str]:
         """
         Produces a target schema given a question.
         """
@@ -28,6 +26,9 @@ class SchemaProcessor:
             return target_schema
         except:
             return []
+
+    def get_table_descriptions(self, table_mappings: dict[str, DataFrame] list[DataFrame]) -> list[str]:
+        pass
 
     def get_enhanced_schema(self, tables: list[DataFrame]) -> list[str]:
         """
