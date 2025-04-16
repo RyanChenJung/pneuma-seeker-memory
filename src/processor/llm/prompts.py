@@ -5,6 +5,109 @@ schema_enhancer_prompts = {
 }
 
 
+base_table_producer_prompts = {
+    "tables_selector": """You are an experienced data scientist. You are given:
+- A table, represented by its schema, a description of what it contains, and some sample rows. The pipe character (`|`) is used as the separator for both columns and row values.
+- A target schema that needs to be constructed using one or more of the available tables.
+
+Your task is to determine whether this table is **relevant** for constructing the target schema — either fully or partially. A table is considered relevant if it provides **any** useful information toward fulfilling the target schema, such as:
+- Matching any of the target columns exactly,
+- Providing a column that can be transformed into a target column,
+- Contributing auxiliary information (e.g., geographic clues from `city` or `address` that help construct `Is in Bay Area`).
+
+Err on the side of inclusion: if you think even **one** column might help, mark the table as **relevant**.
+
+End your reasoning with the following exact format, to ease parsing:
+
+Relevant: yes/no
+""",
+  "row_extender_step_1": """You are an experienced data scientist. You are given:
+- A list of tables, each with its schema, a short description, and a few sample rows.
+- The pipe character (`|`) is used to separate both column names and values.
+
+Your task is to **analyze and describe** what each table represents, and then identify **which tables describe the same kind of real-world entity or object** (such as people, products, companies, events, etc.).
+
+Only group tables that:
+- Refer to the same kind of entity
+- Can be combined via **row extension** (i.e., vertical stacking)
+- Even if the columns are not exactly the same, their rows should be logically stackable (e.g., two tables of products with different attributes)
+
+Do **not** group tables that refer to different concepts/entities, even if they share similar-looking columns.
+
+Finish with a list of compatible groups like:
+Row extension groups: Group 1: Table_0, Table_2 Group 2: Table_3, Table_4 ... (or none if no combinations are found)""",
+  "row_extender_step_2": """You are an experienced data scientist. You have already analyzed the tables and identified which ones can be combined via row extension (i.e., vertically stacked) because they refer to the same kind of real-world entity.
+
+You are given:
+- A list of tables (description + schemas + samples)
+- Your own prior reasoning and a list of row-extension groups (e.g., Group 1: Table_0, Table_2)
+
+Your job is to create a JSON plan that shows how each group can be merged via row extension.
+
+Instructions:
+- For each group, create a **unified schema** by merging **semantically equivalent** columns (e.g., "Customer_Rating" and "RATING" should both become "Rating")
+- Use **simple, general, and meaningful** names for the unified columns (e.g., "Phone", "Address", "Rating", "Reviews")
+- For each table, create a mapping from its original column names to the unified schema
+- It's okay if some original columns do not exist in the unified schema — just leave them unmapped
+- Do not include duplicate columns in the unified schema — each concept should appear only once
+
+Output directly the following format without extra texts or explanations:
+
+Format if row extension groups exist:
+```json
+[
+  {
+    "Tables": ["Table_0", "Table_2"],
+    "Unified Schema": ["Column1", "Column2", ...],
+    "Mappings": {
+      "Table_0": {"OrigColA": "Column1", "OrigColB": "Column2", ...},
+      "Table_2": {"ColX": "Column1", "ColY": "Column2", ...}
+    }
+  }
+]```
+
+Format if row extension groups are empty/none:
+```json
+[]```""",
+  "join_planner": """You are a highly skilled data engineer. You are given:
+- A list of tables (with descriptions, schemas, and sample rows)
+- The goal is to **join all tables** together into a final unified table by **step-wise horizontal merging**.
+
+Assumptions:
+- All tables should be joinable via appropriate key columns, either directly or through intermediate tables.
+- You can choose any join order as long as all tables are included by the end.
+- You should identify the most appropriate **key columns** for joining each pair of tables based on semantics or value similarity.
+- The operations will be carried out using either SQL or semantic joins.
+
+Your task:
+- Construct a step-by-step join plan as a **list of operations**, where each operation joins two tables (or previous join results).
+- Each step should specify:
+  - The two input tables, one of which may be a join result from the prior step.
+  - The columns being used for the join
+  - The resulting table name for that step (e.g., "Join_1", "Join_2", etc.)
+
+Output your answer directly as a JSON object with the following format without any extra explanations or formatting:
+
+```json
+[
+  {
+    "Join Result": "Join_1",
+    "Left Table": "Table_A",
+    "Right Table": "Table_B",
+    "Left Join Key": "Column_X",
+    "Right Join Key": "Column_Y"
+  },
+  {
+    "Join Result": "Join_2",
+    "Left Table": "Join_1",
+    "Right Table": "Table_C",
+    "Left Join Key": "UserID",
+    "Right Join Key": "Customer_ID"
+  }
+]```"""
+}
+
+
 schema_generator_system_prompt = """You are an expert in data integration. Your task is to determine the minimum target schema---the smallest set of necessary columns required to directly answer a given question without having to perform separate aggregate operations (e.g., performing average on a column). The first column must always be the ID (primary key).
 
 However, the target schema must be self-sufficient: all essential attributes must be included so that the question can be answered without requiring joins or additional lookups. For example, restaurant names must be included, not just their IDs, as data scientists need them for interpretation.
