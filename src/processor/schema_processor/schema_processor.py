@@ -1,7 +1,6 @@
 from ast import literal_eval
 from pandas import DataFrame
 from processor.llm.interface.model_interface import ModelProtocol
-from processor.llm.interface.model_factory import get_model
 from processor.llm.prompts import schema_processor_prompts
 from processor.utils import format_schema_with_samples
 from tqdm import tqdm
