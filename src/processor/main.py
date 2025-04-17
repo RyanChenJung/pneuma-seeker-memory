@@ -1,19 +1,20 @@
 import logging
+from typing import Any
 from pandas import DataFrame
 from processor.base_table_producer.base_table_producer import BaseTableProducer
 from processor.llm.interface.model_factory import get_model
-from processor.llm.interface.model_interface import ModelProtocol
 from processor.schema_processor.schema_processor import SchemaProcessor
-from processor.utils.dataframe_store import DataFrameStore
+from processor.table_store.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
 from processor.utils.operation import Operation
 from processor.utils.system_context import SystemContext
 
 
 class Processor:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, table_representation: Any = DataFrame):
         # Initialize DataFrame Store
-        df_store = DataFrameStore()
+        table_store_impl = get_table_store(impl=table_representation)
+        table_store = table_store_impl()
 
         # Initialize logger
         logger = setup_logger(
@@ -25,12 +26,12 @@ class Processor:
         )
 
         # Initialize LLM
-        model_protocol = get_model(model_name)
-        llm: ModelProtocol = model_protocol(model_name)
+        model_impl = get_model(model_name=model_name)
+        llm = model_impl(model_name=model_name)
 
         # Keep track of shared resources as a global context
-        self.context = SystemContext(
-            df_store=df_store,
+        self.ctx = SystemContext(
+            table_store=table_store,
             logger=logger,
             llm=llm,
         )
@@ -50,7 +51,10 @@ class Processor:
         ## Returns
         - str: The target schema for the question.
         """
-        return self.schema_processor.get_target_schema(question)
+        return self.schema_processor.get_target_schema(
+            ctx=self.ctx,
+            question=question,
+        )
 
     def get_enhanced_schema(self, tables: list[DataFrame]) -> list[str]:
         """

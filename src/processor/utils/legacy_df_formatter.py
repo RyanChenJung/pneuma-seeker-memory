@@ -1,13 +1,15 @@
 from pandas import DataFrame
 
+
 def format_schema(df: DataFrame):
     schema = "col: " + " | ".join(df.columns)
-    sample_row = 'sample row: ' + ' | '.join(df.iloc[0].astype(str))
+    sample_row = "sample row: " + " | ".join(df.iloc[0].astype(str))
     return f"{schema}\n{sample_row}"
 
 
 def format_schema_with_samples(df: DataFrame, num_samples=3, random_seed=42):
     import numpy as np
+
     schema = "col: " + " | ".join(df.columns)
     np.random.seed(random_seed)
     if len(df) <= num_samples:
@@ -19,6 +21,7 @@ def format_schema_with_samples(df: DataFrame, num_samples=3, random_seed=42):
         row_str = f"sample row {i+1}: " + " | ".join(df.iloc[idx].astype(str))
         sample_rows.append(row_str)
     return schema + "\n" + "\n".join(sample_rows)
+
 
 def format_schema_extensive(df: DataFrame, start=0, end_exclusive=1):
     schema = "col: " + " | ".join(df.columns)

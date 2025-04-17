@@ -1,6 +1,6 @@
 from processor.utils.message import Message
 from processor.llm.prompts import base_table_producer_prompts
-from processor.llm.interface.model_interface import ModelProtocol
+from processor.llm.interface.model import AbstractModel
 from processor.utils import format_schema_with_samples
 from pandas import DataFrame
 import json
@@ -8,7 +8,7 @@ import pandas as pd
 
 
 class BaseTableProducer:
-    def __init__(self, model: ModelProtocol):
+    def __init__(self, model: AbstractModel):
         self.model = model
 
     def select_tables(

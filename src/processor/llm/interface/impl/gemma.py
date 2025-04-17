@@ -1,9 +1,9 @@
-from processor.llm.interface.model_interface import ModelProtocol
+from processor.llm.interface.model import AbstractModel
 from torch import bfloat16
 from transformers import AutoTokenizer, Gemma3ForCausalLM
 
 
-class Gemma(ModelProtocol):
+class Gemma(AbstractModel):
     def __init__(self, model_name: str):
         self.model_name = model_name
         self.model = None

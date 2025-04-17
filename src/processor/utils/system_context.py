@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from logging import Logger
 
-from processor.llm.interface.model_interface import ModelProtocol
-from processor.utils.dataframe_store import DataFrameStore
+from processor.llm.interface.model import AbstractModel
+from processor.table_store.table_store import AbstractTableStore
 
 
 @dataclass
 class SystemContext:
-    df_store: DataFrameStore
+    table_store: AbstractTableStore
     logger: Logger
-    llm: ModelProtocol
+    llm: AbstractModel
     config: None  # May be supported in the future

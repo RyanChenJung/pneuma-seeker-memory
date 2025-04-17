@@ -1,8 +1,7 @@
 from ast import literal_eval
 from pandas import DataFrame
-from processor.llm.interface.model_interface import ModelProtocol
 from processor.llm.prompts import schema_processor_prompts
-from processor.utils import format_schema_with_samples
+from processor.utils.table_formatter.impl.df_formatter import format_schema_with_samples
 from tqdm import tqdm
 from processor.utils.message import Message
 from processor.utils.system_context import SystemContext
@@ -20,15 +19,20 @@ class SchemaProcessor:
             },
             {"role": "user", "content": f"Question: {question}"},
         ]
-        target_schema = self.model.chat(messages)
+        target_schema = ctx.llm.chat(messages=messages)
         try:
             target_schema = literal_eval(target_schema)
             return target_schema
         except:
             return []
 
-    def get_table_descriptions(self, table_mappings: dict[str, DataFrame] list[DataFrame]) -> list[str]:
-        pass
+    def get_table_descriptions(self, ctx: SystemContext, schema: str) -> list[str]:
+        """
+        Describes all tables within a schema (if not yet described).
+        """
+        table_mapping = ctx.table_store.get_all_tables_in_schema(schema)
+        y = table_mapping['x']
+
 
     def get_enhanced_schema(self, tables: list[DataFrame]) -> list[str]:
         """

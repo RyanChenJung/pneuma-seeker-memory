@@ -1,10 +1,10 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
-from processor.llm.interface.model_interface import ModelProtocol
+from processor.llm.interface.model import AbstractModel
 from processor.utils.llm_option import LLMOption
 
 
-class Qwen(ModelProtocol):
+class Qwen(AbstractModel):
     def __init__(self, model_name: str):
         self.model_name = model_name
         self.model = None
