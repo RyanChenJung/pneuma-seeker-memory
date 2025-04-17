@@ -98,6 +98,17 @@ Output your answer directly as a JSON object with the following format without a
     "Right Join Key": "Customer_ID"
   }
 ]```""",
+    "classification_prompt": """You are a highly skilled data engineer. You are given:
+- A description of a join operation between two tables.
+- Sample values for each join key column from both tables.
+
+Your task is to classify whether the join can be performed using a standard SQL join (e.g., matching IDs or exactly matching names), or if it requires a *semantic join*. A semantic join is needed when the values differ in representation — for example, abbreviations, name variations, different formats, or different languages — and require normalization, transformation, or external knowledge to align correctly.
+
+Carefully examine the values. If they are *not exactly equal*, and some interpretation or resolution is needed to make the join work, it is a semantic join.
+
+At the end of your reasoning, respond in the following format (for easy parsing):
+
+- Operation classification: standard or semantic"""
 }
 
 
