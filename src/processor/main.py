@@ -8,18 +8,23 @@ from processor.table_store.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
 from processor.utils.operation import Operation
 from processor.utils.system_context import SystemContext
+from processor.utils.table_formatter.table_formatter_factory import get_table_formatter
 
 
 class Processor:
-    def __init__(self, model_name: str, table_representation: Any = DataFrame):
-        # Initialize DataFrame Store
-        table_store_impl = get_table_store(impl=table_representation)
+    def __init__(self, model_name: str, table_type: Any = DataFrame):
+        # Initialize Table Store
+        table_store_impl = get_table_store(impl=table_type)
         table_store = table_store_impl()
+
+        # Initialize Table Formatter
+        table_formatter_impl = get_table_formatter(table_type=table_type)
+        table_formatter = table_formatter_impl()
 
         # Initialize logger
         logger = setup_logger(
-            name='processor_logger',
-            log_file='logs/processor.log',
+            name="processor_logger",
+            log_file="logs/processor.log",
             level=logging.INFO,
             max_bytes=10_000_000,
             backup_count=5,
@@ -32,6 +37,7 @@ class Processor:
         # Keep track of shared resources as a global context
         self.ctx = SystemContext(
             table_store=table_store,
+            table_formatter=table_formatter,
             logger=logger,
             llm=llm,
         )
@@ -39,7 +45,7 @@ class Processor:
         # Initialize core services
         self.schema_processor = SchemaProcessor()
         self.base_table_producer = BaseTableProducer()
-    
+
     def get_target_schema(self, question: str):
         """
         Given a question over tables, retrieves the target schema of a table that
@@ -56,7 +62,29 @@ class Processor:
             question=question,
         )
 
-    def get_enhanced_schema(self, tables: list[DataFrame]) -> list[str]:
+    def get_table_descriptions(
+        self,
+        schema: str,
+        num_sampling=3,
+        num_sampled_rows=3,
+    ):
+        """
+        Describes all tables within a schema.
+
+        - num_sampling (int): Number of different samples to consider.
+        - num_sampled_rows (int): Number of rows to sample for each sampling process.
+        - redescribe (bool): Redescribe tables that have already been described.
+        """
+        return self.schema_processor.get_table_descriptions(
+            ctx=self.ctx,
+            schema=schema,
+            num_sampling=num_sampling,
+            num_sampled_rows=num_sampled_rows,
+        )
+
+    def get_enhanced_schemas(
+        self, schema: str, table_descriptions: dict[str, str], num_rows=3
+    ) -> dict[str, list[str]]:
         """
         Given a list of tables, produces enhanced schemas of the tables.
 
@@ -68,7 +96,12 @@ class Processor:
 
         Produces a target schema given a question.
         """
-        return self.schema_processor.get_enhanced_schema(tables)
+        return self.schema_processor.get_enhanced_schemas(
+            ctx=self.ctx,
+            schema=schema,
+            table_descriptions=table_descriptions,
+            num_rows=num_rows,
+        )
 
     def get_transformation_plan(
         self, question: str, target_schema: str, available_table_schemas: list[str]

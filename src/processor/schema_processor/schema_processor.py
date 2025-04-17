@@ -1,7 +1,5 @@
 from ast import literal_eval
-from pandas import DataFrame
 from processor.llm.prompts import schema_processor_prompts
-from processor.utils.table_formatter.impl.df_formatter import format_schema_with_samples
 from tqdm import tqdm
 from processor.utils.message import Message
 from processor.utils.system_context import SystemContext
@@ -26,90 +24,108 @@ class SchemaProcessor:
         except:
             return []
 
-    def get_table_descriptions(self, ctx: SystemContext, schema: str) -> list[str]:
+    def get_table_descriptions(
+        self,
+        ctx: SystemContext,
+        schema: str,
+        num_sampling=3,
+        num_sampled_rows=3,
+    ) -> dict[str, str]:
         """
-        Describes all tables within a schema (if not yet described).
+        Describes all tables within a schema.
+
+        - num_sampling (int): Number of different samples to consider.
+        - num_sampled_rows (int): Number of rows to sample for each sampling process.
+        - redescribe (bool): Redescribe tables that have already been described.
         """
         table_mapping = ctx.table_store.get_all_tables_in_schema(schema)
-        y = table_mapping['x']
+        table_descriptions: dict[str,str] = dict()
+        for table_id, table in tqdm(
+            enumerate(table_mapping.items()), desc="Describing tables"
+        ):
+            ctx.logger.info(
+                "Step 1: Sample rows multiple times to get different perspectives."
+            )
+            sample_descriptions: list[str] = []
+            for i in range(num_sampling):
+                msg: list[Message] = [
+                    {
+                        "role": "system",
+                        "content": schema_processor_prompts["table_descriptor"],
+                    },
+                    {
+                        "role": "user",
+                        "content": ctx.table_formatter.format_table(
+                            table, num_sampled_rows, 42 + i
+                        ),
+                    },
+                ]
+                sample_description = ctx.llm.chat(msg)
+                ctx.logger.debug(f"=> Perspective {i+1}: {sample_description}")
+                sample_descriptions.append(sample_description)
 
+            ctx.logger.info("Step 2: Combine all perspectives.")
+            all_descs = ""
+            for j in range(len(sample_descriptions)):
+                all_descs += f"Description {j}: {sample_descriptions[j]}\n"
+            all_descs = all_descs.strip()
+            msg: list[Message] = [
+                {
+                    "role": "system",
+                    "content": schema_processor_prompts["description_combinator"],
+                },
+                {"role": "user", "content": all_descs},
+            ]
+            table_description = ctx.llm.chat(msg)
+            ctx.logger.info(
+                f"Overall description of table '{table_id}': {table_description}"
+            )
+            table_descriptions[table_id] = table_description
 
-    def get_enhanced_schema(self, tables: list[DataFrame]) -> list[str]:
-        """
-        Enhances the schema of a set of tables.
-        """
-        results = []
-        for table in tqdm(tables):
-            # Step 1: Determine what the table represents
-            table_description = self.__get_table_description(table)
-            print(f"=> Schema description: {table_description}")
+        return table_descriptions
 
-            # Step 2: Rename each column
+    def get_enhanced_schemas(
+        self,
+        ctx: SystemContext,
+        schema: str,
+        table_descriptions: dict[str, str],
+        num_rows=3,
+    ) -> dict[str, list[str]]:
+        """Enhances table schemas."""
+        results: dict[str, list[str]] = []
+        table_mapping = ctx.table_store.get_all_tables_in_schema(schema)
+
+        for table_id, table in table_mapping.items():
+            ctx.logger.info(f"Enhancing schema of table '{table_id}'")
+            table_description = table_descriptions[table_id]
+            ctx.logger.info(f"=> Table description: {table_description}")
+            ctx.logger.info(
+                f"=> Schema before enhancement: {ctx.table_formatter.format_table(table, 0)}"
+            )
+
             new_columns: list[str] = []
-            print(f"=> Overall schema: {table.columns}")
-            for col in table.columns:
-                new_col_reason_and_name = self.__rename_column(
-                    table, col, table_description
-                )
-                new_col_name = new_col_reason_and_name.split("New column name:")[
-                    -1
-                ].strip()
+            for col in ctx.table_formatter.get_table_schema(table):
+                ctx.logger.info(f"==> Renaming column {col}")
+                msg: list[Message] = [
+                    {
+                        "role": "system",
+                        "content": schema_processor_prompts["column_renamer"],
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""- Schema: {ctx.table_formatter.format_table(table, num_rows, 42)}
+
+- Description: {table_description}
+- Column to be renamed: {col}""",
+                    },
+                ]
+
+                new_col_name = ctx.llm.chat(msg).split("New column name:")[-1].strip()
                 new_col_name = new_col_name.split(":")[0]
                 if new_col_name.endswith("\n"):
                     new_col_name = new_col_name.split("\n")[0]
                 new_col_name = new_col_name.replace(" ", "_")
-                print(f"==> Reasoning: {new_col_reason_and_name}")
-                print(f"==> Renaming column {col} to {new_col_name}")
+                ctx.logger.info(f"==> New column name {new_col_name}")
                 new_columns.append(new_col_name)
-            results.append(new_columns)
+            results[table_id] = new_columns
         return results
-
-    def __get_table_description(self, table: DataFrame, sample=3):
-        """
-        Describes what a table represents.
-        """
-        table_desc_samples: list[str] = []
-        for i in range(sample):
-            msg: list[Message] = [
-                {
-                    "role": "system",
-                    "content": schema_processor_prompts["table_descriptor"],
-                },
-                {
-                    "role": "user",
-                    "content": format_schema_with_samples(table, 3, 42 + i),
-                },
-            ]
-            table_desc_sample = self.model.chat(msg)
-            table_desc_samples.append(table_desc_sample)
-
-        # Now combine them
-        all_descs = ""
-        for j in range(len(table_desc_samples)):
-            all_descs += f"Description {j}: {table_desc_samples[j]}\n"
-        all_descs = all_descs.strip()
-        msg: list[Message] = [
-            {
-                "role": "system",
-                "content": schema_processor_prompts["description_combinator"],
-            },
-            {"role": "user", "content": all_descs},
-        ]
-        table_description = self.model.chat(msg)
-        print(f"==> Sample descriptions: {table_desc_samples}")
-        print(f"==> Table description: {table_description}")
-        return table_description
-
-    def __rename_column(self, table: DataFrame, col_name: str, table_desc: str):
-        """
-        Renames a column of a table based on its contents and description.
-        """
-        msg: list[Message] = [
-            {"role": "system", "content": schema_processor_prompts["column_renamer"]},
-            {
-                "role": "user",
-                "content": f"- Schema: {format_schema_with_samples(table)}\n\n- Description: {table_desc}\n\n- Column to be renamed: {col_name}",
-            },
-        ]
-        new_col_name = self.model.chat(msg)
-        return new_col_name

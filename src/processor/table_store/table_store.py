@@ -3,8 +3,6 @@ from typing import TypeVar, Generic
 
 
 T = TypeVar("T")
-SchemaData = dict[str, T]
-
 
 class AbstractTableStore(ABC, Generic[T]):
     @abstractmethod
@@ -35,6 +33,25 @@ class AbstractTableStore(ABC, Generic[T]):
     def delete_table(self, schema: str, table_id: str) -> None:
         """Deletes a specific table from a schema. Raises error if not found."""
         pass
+    
+    @abstractmethod
+    def add_table_metadata(
+        self, schema: str, table_id: str, metadata_id: str, metadata: str, overwrite: bool = False
+    ) -> None:
+        """
+        Adds or updates metadata of a table in a schema. If overwrite is False and metadata exists, raises error.
+        """
+        pass
+
+    @abstractmethod
+    def retrieve_table_metadata(self, schema: str, table_id: str, metadata_id: str) -> str:
+        """Returns a specific table metadata from a schema. Raises error if not found."""
+        pass
+
+    @abstractmethod
+    def delete_table_metadata(self, schema: str, table_id: str, metadata_id: str) -> None:
+        """Deletes a specific table metadata from a schema. Raises error if not found."""
+        pass
 
     @abstractmethod
     def list_all_store(self) -> list[str]:
@@ -52,7 +69,7 @@ class AbstractTableStore(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def get_all_tables_in_schema(self, schema: str) -> SchemaData:
+    def get_all_tables_in_schema(self, schema: str) -> dict[str, T]:
         """Returns a dictionary of all tables in a schema. Raises error if schema not found."""
         pass
 
@@ -64,6 +81,6 @@ class AbstractTableStore(ABC, Generic[T]):
         """Returns total number of tables across all schemas."""
         return sum(len(self.list_tables_in_schema(s)) for s in self.list_all_store())
 
-    def __getitem__(self, schema: str) -> SchemaData:
+    def __getitem__(self, schema: str) -> dict[str, T]:
         """Enables bracket-access for schemas, returns all tables inside."""
         return self.get_all_tables_in_schema(schema)

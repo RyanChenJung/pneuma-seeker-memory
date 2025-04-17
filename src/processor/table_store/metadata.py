@@ -1,6 +1,5 @@
-from typing import TypedDict
+from enum import Enum
 
 
-class DataFrameMetadata(TypedDict):
-    schema: str
-    id: 
+class TableMetadata(Enum):
+    TABLE_DESCRIPTION = 'table description'

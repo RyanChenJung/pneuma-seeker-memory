@@ -33,3 +33,7 @@ class DFFormatter(AbstractTableFormatter[DataFrame]):
                     rows.append(row_str)
             representation += f"\n{'\n'.join(rows)}"
         return representation
+
+    def get_table_schema(self, table: DataFrame):
+        """Returns the schema of a table."""
+        return table.columns
