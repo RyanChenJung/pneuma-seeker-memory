@@ -3,13 +3,13 @@ from logging import Logger
 
 from processor.llm.interface.model import AbstractModel
 from processor.table_store.table_store import AbstractTableStore
-from processor.utils.table_formatter.table_formatter import AbstractTableFormatter
+from processor.utils.table_reader.table_reader import AbstractTableReader
 
 
 @dataclass
-class SystemContext:
+class ConductorState:
     table_store: AbstractTableStore
-    table_formatter: AbstractTableFormatter
+    table_reader: AbstractTableReader
     logger: Logger
     llm: AbstractModel
-    config: None  # May be supported in the future
+    embed_model: AbstractModel

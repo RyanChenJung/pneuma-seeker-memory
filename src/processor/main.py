@@ -7,8 +7,8 @@ from processor.schema_processor.schema_processor import SchemaProcessor
 from processor.table_store.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
 from processor.utils.operation import Operation
-from processor.utils.system_context import SystemContext
-from processor.utils.table_formatter.table_formatter_factory import get_table_formatter
+from processor.utils.conductor_state import ConductorState
+from processor.utils.table_reader.table_reader_factory import get_table_reader
 
 
 class Processor:
@@ -18,7 +18,7 @@ class Processor:
         table_store = table_store_impl()
 
         # Initialize Table Formatter
-        table_formatter_impl = get_table_formatter(table_type=table_type)
+        table_formatter_impl = get_table_reader(table_type=table_type)
         table_formatter = table_formatter_impl()
 
         # Initialize logger
@@ -35,9 +35,9 @@ class Processor:
         llm = model_impl(model_name=model_name)
 
         # Keep track of shared resources as a global context
-        self.ctx = SystemContext(
+        self.ctx = ConductorState(
             table_store=table_store,
-            table_formatter=table_formatter,
+            table_reader=table_formatter,
             logger=logger,
             llm=llm,
         )

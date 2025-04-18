@@ -39,7 +39,7 @@ class DFStore(AbstractTableStore[DataFrame]):
             )
         self.__store[schema][table_id] = df
 
-    def retrieve_table(self, schema: str, table_id: str) -> DataFrame:
+    def get_table(self, schema: str, table_id: str) -> DataFrame:
         """Returns a specific table from a schema. Raises error if not found."""
         try:
             return self.__store[schema][table_id]
@@ -73,7 +73,7 @@ class DFStore(AbstractTableStore[DataFrame]):
         except KeyError:
             raise KeyError(f"Table '{schema}.{table_id}' not found.")
 
-    def retrieve_table_metadata(
+    def get_table_metadata(
         self, schema: str, table_id: str, metadata_id: str
     ) -> str:
         """Returns a specific table metadata from a schema. Raises error if not found."""

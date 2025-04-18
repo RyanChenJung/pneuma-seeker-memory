@@ -25,7 +25,7 @@ class AbstractTableStore(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def retrieve_table(self, schema: str, table_id: str) -> T:
+    def get_table(self, schema: str, table_id: str) -> T:
         """Returns a specific table from a schema. Raises error if not found."""
         pass
 
@@ -44,7 +44,7 @@ class AbstractTableStore(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def retrieve_table_metadata(self, schema: str, table_id: str, metadata_id: str) -> str:
+    def get_table_metadata(self, schema: str, table_id: str, metadata_id: str) -> str:
         """Returns a specific table metadata from a schema. Raises error if not found."""
         pass
 

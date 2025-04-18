@@ -2,11 +2,11 @@ from ast import literal_eval
 from processor.llm.prompts import schema_processor_prompts
 from tqdm import tqdm
 from processor.utils.message import Message
-from processor.utils.system_context import SystemContext
+from processor.utils.conductor_state import ConductorState
 
 
 class SchemaProcessor:
-    def get_target_schema(self, ctx: SystemContext, question: str) -> list[str]:
+    def get_target_schema(self, ctx: ConductorState, question: str) -> list[str]:
         """
         Produces a target schema given a question.
         """
@@ -26,7 +26,7 @@ class SchemaProcessor:
 
     def get_table_descriptions(
         self,
-        ctx: SystemContext,
+        ctx: ConductorState,
         schema: str,
         num_sampling=3,
         num_sampled_rows=3,
@@ -55,7 +55,7 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                        "content": ctx.table_formatter.format_table(
+                        "content": ctx.table_reader.format_table(
                             table, num_sampled_rows, 42 + i
                         ),
                     },
@@ -86,7 +86,7 @@ class SchemaProcessor:
 
     def get_enhanced_schemas(
         self,
-        ctx: SystemContext,
+        ctx: ConductorState,
         schema: str,
         table_descriptions: dict[str, str],
         num_rows=3,
@@ -100,11 +100,11 @@ class SchemaProcessor:
             table_description = table_descriptions[table_id]
             ctx.logger.info(f"=> Table description: {table_description}")
             ctx.logger.info(
-                f"=> Schema before enhancement: {ctx.table_formatter.format_table(table, 0)}"
+                f"=> Schema before enhancement: {ctx.table_reader.format_table(table, 0)}"
             )
 
             new_columns: list[str] = []
-            for col in ctx.table_formatter.get_table_schema(table):
+            for col in ctx.table_reader.get_table_schema(table):
                 ctx.logger.info(f"==> Renaming column {col}")
                 msg: list[Message] = [
                     {
@@ -113,7 +113,7 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                        "content": f"""- Schema: {ctx.table_formatter.format_table(table, num_rows, 42)}
+                        "content": f"""- Schema: {ctx.table_reader.format_table(table, num_rows, 42)}
 
 - Description: {table_description}
 - Column to be renamed: {col}""",

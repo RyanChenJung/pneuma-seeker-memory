@@ -108,7 +108,13 @@ Carefully examine the values. If they are *not exactly equal*, and some interpre
 
 At the end of your reasoning, respond in the following format (for easy parsing):
 
-- Operation classification: standard or semantic"""
+- Operation classification: standard or semantic""",
+    "std_join": """You are a highly skilled data engineer.
+You are given two tables, represented by their IDs, descriptions, schemas, and sample rows.
+
+Your goal is to create a SQL script to join these tables through a given left and right join keys. Refer to the IDs as identifiers in the script.
+
+Output the script directly without any extra formatting or explanation.""",
 }
 
 

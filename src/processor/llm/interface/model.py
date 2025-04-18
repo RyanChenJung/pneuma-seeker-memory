@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from processor.utils.llm_option import LLMOption
 from processor.utils.message import Message
+from numpy import ndarray
 
 
 class AbstractModel(ABC):
@@ -22,4 +23,8 @@ class AbstractModel(ABC):
     @abstractmethod
     def chat(self, messages: list[Message], llm_option: LLMOption = LLMOption()) -> str:
         """Chats with the model."""
+        pass
+
+    def embed(self, text: str) -> ndarray:
+        """Embed texts."""
         pass

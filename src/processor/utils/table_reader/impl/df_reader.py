@@ -1,13 +1,14 @@
+from typing import Any
 from pandas import DataFrame
 import numpy as np
 
-from processor.utils.table_formatter.table_formatter import AbstractTableFormatter
+from processor.utils.table_reader.table_reader import AbstractTableReader
 
 
-class DFFormatter(AbstractTableFormatter[DataFrame]):
+class DFReader(AbstractTableReader[DataFrame]):
     def format_table(
         self, table: DataFrame, num_rows: int, random_seed: int, consecutive=False
-    ):
+    ) -> str:
         """
         Formats a DataFrame, with or without rows.
         """
@@ -34,6 +35,14 @@ class DFFormatter(AbstractTableFormatter[DataFrame]):
             representation += f"\n{'\n'.join(rows)}"
         return representation
 
-    def get_table_schema(self, table: DataFrame):
+    def get_column_values(
+        self, table: DataFrame, column_name: str, num_values: int = None, random_seed=42
+    ) -> list[Any]:
+        """Returns column values of a table."""
+        if num_values is None:
+            return table[column_name].tolist()
+        return table[column_name].sample(num_values, random_state=random_seed).tolist()
+
+    def get_table_schema(self, table: DataFrame) -> list[str]:
         """Returns the schema of a table."""
-        return table.columns
+        return table.columns.tolist()
