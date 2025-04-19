@@ -2,6 +2,7 @@ import sqlite3
 from typing import Any
 
 import pandas as pd
+from processor.table.representation.abstract_table import AbstractTable
 from sentence_transformers import util
 
 from processor.models.prompts import base_table_producer_prompts
@@ -23,7 +24,7 @@ class BaseTableProducer:
         """Returns the IDs of relevant tables within the DB schema for the given
         target schema"""
         relevant_table_ids: list[str] = []
-        table_mapping = ctx.table_store.get_all_tables_in_schema(db_schema)
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema)
 
         for table_id, table in table_mapping.items():
             table_description = ctx.table_store.get_table_metadata(
@@ -38,10 +39,9 @@ class BaseTableProducer:
                 },
                 {
                     "role": "user",
-                    "content": f"""- Table: {ctx.table_reader.format_table(table, num_rows, 42)}
-                    
-- Target schema: {target_schema}
-- Description: {table_description}""",
+                    "content": f"""- Table: ```{table.get_representation(table, num_rows, 42)}```
+- Target schema: ```{target_schema}```
+- Description: ```{table_description}```""",
                 },
             ]
             table_relevancy_output = ctx.llm.chat(msg)
@@ -69,7 +69,7 @@ class BaseTableProducer:
             num_rows=num_rows,
         )
         mapping_results = self.__run_union_tables_operations(
-            table_mappings=ctx.table_store.get_all_tables_in_schema(db_schema),
+            table_mappings=ctx.table_store.get_all_tables_in_db_schema(db_schema),
             operations_json=operations,
         )
         return mapping_results
@@ -169,7 +169,7 @@ class BaseTableProducer:
         join_operations: list[dict[str, str]] = parse_json(join_operations)
 
         ctx.logger.info("Step 2: Execute join operations")
-        table_mapping = ctx.table_store.get_all_tables_in_schema(schema=db_schema)
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema=db_schema)
         for op in join_operations:
             join_table_id: str = op["Join Result"]
             left_table_id: str = op["Left Table"]
@@ -177,15 +177,13 @@ class BaseTableProducer:
             left_join_key: str = op["Left Join Key"]
             right_join_key: str = op["Right Join Key"]
 
-            left_key_samples = ctx.table_reader.get_column_values(
-                table=table_mapping[left_table_id],
-                column_name=left_join_key,
+            left_key_samples = table_mapping[left_table_id].get_attribute_values(
+                attr_name=left_join_key,
                 num_values=num_values,
                 random_seed=42,
             )
-            right_key_samples = ctx.table_reader.get_column_values(
-                table=table_mapping[right_table_id],
-                column_name=right_join_key,
+            right_key_samples = table_mapping[right_table_id].get_attribute_values(
+                attr_name=right_join_key,
                 num_values=num_values,
                 random_seed=42,
             )
@@ -294,8 +292,8 @@ class BaseTableProducer:
         return pd.DataFrame(matches)
 
     def __check_similarity(ctx: ConductorState, a: str, b: str) -> float:
-        a_embed = ctx.embed_model.embed(a)
-        b_embed = ctx.embed_model.embed(b)
+        a_embed = ctx.embedding_model.embed(a)
+        b_embed = ctx.embedding_model.embed(b)
         cos_sim = util.cos_sim(a_embed, b_embed)
         return cos_sim[0].item()
 
@@ -304,8 +302,8 @@ class BaseTableProducer:
         ctx: ConductorState,
         left_table_id: str,
         right_table_id: str,
-        left_table: pd.DataFrame,
-        right_table: pd.DataFrame,
+        left_table: AbstractTable,
+        right_table: AbstractTable,
         left_join_key: str,
         right_join_key: str,
     ):
@@ -317,8 +315,8 @@ class BaseTableProducer:
             },
             {
                 "role": "user",
-                "content": f"""- Left table (ID: {left_table_id}; join key: {left_join_key}): {ctx.table_reader.format_table(left_table, 3, 42)}
-- Right table (ID: {right_table_id}; join key: {right_join_key}): {ctx.table_reader.format_table(right_table, 3, 42)}""",
+                "content": f"""- Left table (ID: {left_table_id}; join key: {left_join_key}): {left_table.get_representation(3, 42)}
+- Right table (ID: {right_table_id}; join key: {right_join_key}): {right_table.get_representation(3, 42)}""",
             },
         ]
         sql_script = parse_code_string(ctx.llm.chat(msg))
@@ -335,7 +333,7 @@ class BaseTableProducer:
         self, ctx: ConductorState, db_schema: str, num_rows: int
     ):
         available_tables_formatted = ""
-        table_mappings = ctx.table_store.get_all_tables_in_schema(db_schema)
+        table_mappings = ctx.table_store.get_all_tables_in_db_schema(db_schema)
         for table_id, table in table_mappings.items():
             table_description = ctx.table_store.get_table_metadata(
                 schema=db_schema,
@@ -343,7 +341,7 @@ class BaseTableProducer:
                 metadata_id=TableMetadataType.TABLE_DESCRIPTION,
             )
             available_tables_formatted += f"""- {table_id} ({table_description}):
-```{ctx.table_reader.format_table(table, num_rows, 42)}```\n"""
+```{table.get_representation(table, num_rows, 42)}```\n"""
 
         available_tables_formatted = available_tables_formatted.strip()
         ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")

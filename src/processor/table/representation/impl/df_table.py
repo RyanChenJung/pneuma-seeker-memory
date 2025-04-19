@@ -6,20 +6,24 @@ from processor.table.representation.abstract_table import AbstractTable
 
 
 class DFTable(AbstractTable[DataFrame]):
-    def __init__(self, id: str, data: DataFrame):
+    def __init__(self, data: DataFrame, name: Optional[str] = None):
         """Initializes a table."""
-        self.id = id
         self.data = data
+        self.name = name
 
     def get_schema(self) -> list[str]:
         """Returns the schema of a table, represented as a list of strings."""
         return list(self.data.columns)
 
+    def get_data(self) -> DataFrame:
+        """Returns the data of the table."""
+        return self.data
+
     def get_representation(
         self,
         num_rows: int,
-        consecutive=False,
         random_seed=42,
+        consecutive=False,
         consecutive_indices: tuple[int, int] = None,
     ) -> str:
         """
@@ -81,3 +85,8 @@ class DFTable(AbstractTable[DataFrame]):
         return (
             self.data[attr_name].sample(num_values, random_state=random_seed).tolist()
         )
+
+    def __eq__(self, value):
+        if not isinstance(value, DFTable):
+            return NotImplemented
+        return self.get_data().equals(value.get_data())

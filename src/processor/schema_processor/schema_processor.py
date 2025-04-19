@@ -38,11 +38,9 @@ class SchemaProcessor:
         - num_sampled_rows (int): Number of rows to sample for each sampling process.
         - redescribe (bool): Redescribe tables that have already been described.
         """
-        table_mapping = ctx.table_store.get_all_tables_in_schema(schema)
-        table_descriptions: dict[str,str] = dict()
-        for table_id, table in tqdm(
-            enumerate(table_mapping.items()), desc="Describing tables"
-        ):
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(schema)
+        table_descriptions: dict[str, str] = dict()
+        for table_id, table in tqdm(table_mapping.items(), desc="Describing tables"):
             ctx.logger.info(
                 "Step 1: Sample rows multiple times to get different perspectives."
             )
@@ -55,8 +53,8 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                        "content": ctx.table_reader.format_table(
-                            table, num_sampled_rows, 42 + i
+                        "content": table.get_representation(
+                            num_rows=num_sampled_rows, random_seed=42 + i
                         ),
                     },
                 ]
@@ -93,14 +91,14 @@ class SchemaProcessor:
     ) -> dict[str, list[str]]:
         """Enhances table schemas."""
         results: dict[str, list[str]] = []
-        table_mapping = ctx.table_store.get_all_tables_in_schema(schema)
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(schema)
 
         for table_id, table in table_mapping.items():
             ctx.logger.info(f"Enhancing schema of table '{table_id}'")
             table_description = table_descriptions[table_id]
             ctx.logger.info(f"=> Table description: {table_description}")
             ctx.logger.info(
-                f"=> Schema before enhancement: {ctx.table_reader.format_table(table, 0)}"
+                f"=> Schema before enhancement: {table.get_representation(0)}"
             )
 
             new_columns: list[str] = []
@@ -113,7 +111,7 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                        "content": f"""- Schema: {ctx.table_reader.format_table(table, num_rows, 42)}
+                    "content": f"""- Schema: {table.get_representation(num_rows, 42)}
 
 - Description: {table_description}
 - Column to be renamed: {col}""",

@@ -7,7 +7,7 @@ T = TypeVar("T")
 
 class AbstractTable(ABC, Generic[T]):
     @abstractmethod
-    def __init__(self, id: str, data: T):
+    def __init__(self, data: T, name: Optional[str] = None):
         """Initializes a table."""
         pass
 
@@ -17,11 +17,16 @@ class AbstractTable(ABC, Generic[T]):
         pass
 
     @abstractmethod
+    def get_data(self) -> T:
+        """Returns the data of the table."""
+        pass
+
+    @abstractmethod
     def get_representation(
         self,
         num_rows: int,
-        consecutive=False,
         random_seed=42,
+        consecutive=False,
         consecutive_indices: Optional[tuple[int, int]] = None,
     ) -> str:
         """
@@ -48,4 +53,9 @@ class AbstractTable(ABC, Generic[T]):
             num_values (int): OPTIONAL - The number of values to include.
             random_seed (int): Seed to randomly sample rows.
         """
+        pass
+
+    @abstractmethod
+    def __eq__(self, value):
+        """Checks if two tables are equal."""
         pass

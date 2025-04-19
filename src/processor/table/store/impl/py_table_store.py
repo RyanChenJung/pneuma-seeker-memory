@@ -1,7 +1,13 @@
 import os
 import pickle
+import sqlite3
 from threading import Lock
+from typing import Optional
+
+import pandas as pd
+
 from processor.table.representation.abstract_table import AbstractTable
+from processor.table.representation.impl.df_table import DFTable
 from processor.table.representation.metadata import Metadata, TableMetadataType
 from processor.table.store.abstract_table_store import AbstractTableStore
 
@@ -159,6 +165,7 @@ class PyTableStore(AbstractTableStore):
                 db_schema=db_schema,
                 table_id=table_id,
                 information=metadata_info,
+                type=metadata_type,
             )
         )
         self.__metadata_store = filtered_metadata_store
@@ -226,3 +233,28 @@ class PyTableStore(AbstractTableStore):
     def get_all_tables_in_db_schema(self, db_schema: str) -> dict[str, AbstractTable]:
         """Returns a dictionary of all tables in a DB schema. Raises error if schema not found."""
         return self.__table_store[db_schema]
+
+    def execute_sql_query(
+        self, sql_query: str, tables_involved: Optional[dict[str, AbstractTable]] = None
+    ) -> AbstractTable:
+        """
+        [EXPERIMENTAL] Executes SQL query
+
+        Args:
+            sql_query (str): SQL query to execute
+            tables_involved (list[AbstractTable]): OPTIONAL - Specify tables to query over (used by, e.g., PyTableStore)
+        """
+        conn = sqlite3.connect(":memory:")
+        if tables_involved is None or len(tables_involved) == 0:
+            raise ValueError(
+                "PyTableStore requires `tables_involved` to execute SQL queries."
+            )
+        if not isinstance(
+            tables_involved[list(tables_involved.keys())[0]], DFTable
+        ):
+            raise ValueError("Only Pandas DataFrame is supported for now.")
+        for table_id, table in tables_involved.items():
+            table.get_data().to_sql(table_id, conn, if_exists="replace", index=False)
+        return DFTable(
+            data = pd.read_sql(sql_query, conn)
+        )

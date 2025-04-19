@@ -3,7 +3,6 @@ from typing import Any
 
 from pandas import DataFrame
 from processor.base_table_reducer.base_table_reducer import BaseTableReducer
-from sentence_transformers import SentenceTransformer
 
 from processor.base_table_producer.base_table_producer import BaseTableProducer
 from processor.computation_graph import ComputationGraph

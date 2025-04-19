@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from processor.table.representation.abstract_table import AbstractTable
 from processor.table.representation.metadata import TableMetadataType
@@ -123,6 +124,17 @@ class AbstractTableStore(ABC):
     @abstractmethod
     def get_all_tables_in_db_schema(self, db_schema: str) -> dict[str, AbstractTable]:
         """Returns a dictionary of all tables in a DB schema. Raises error if schema not found."""
+        pass
+
+    @abstractmethod
+    def execute_sql_query(self, sql_query: str, tables_involved: Optional[dict[str, AbstractTable]] = None) -> AbstractTable:
+        """
+        [EXPERIMENTAL] Executes SQL query
+
+        Args:
+            sql_query (str): SQL query to execute
+            tables_involved (list[AbstractTable]): OPTIONAL - Specify tables to query over (used by, e.g., PyTableStore)
+        """
         pass
 
     def __contains__(self, db_schema: str) -> bool:
