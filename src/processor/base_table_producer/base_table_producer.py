@@ -5,7 +5,7 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer, util
 
 from processor.llm.prompts import base_table_producer_prompts
-from processor.table_store.metadata import TableMetadata
+from processor.table.representation.metadata import TableMetadataType
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
 from processor.llm.message import LLMMessage
@@ -29,7 +29,7 @@ class BaseTableProducer:
             table_description = ctx.table_store.get_table_metadata(
                 schema=db_schema,
                 table_id=table_id,
-                metadata_id=TableMetadata.TABLE_DESCRIPTION,
+                metadata_id=TableMetadataType.TABLE_DESCRIPTION,
             )
             msg: list[LLMMessage] = [
                 {
@@ -83,17 +83,9 @@ class BaseTableProducer:
         """
         Returns a list of operations to extend tables within
         """
-        available_tables_formatted = ""
-        table_mapping = ctx.table_store.get_all_tables_in_schema(db_schema)
-        for table_id, table in table_mapping.items():
-            table_description = ctx.table_store.get_table_metadata(
-                schema=db_schema,
-                table_id=table_id,
-                metadata_id=TableMetadata.TABLE_DESCRIPTION,
-            )
-            available_tables_formatted += f"- {table_id} ({table_description}):\n```{ctx.table_reader.format_table(table, num_rows, 42)}```\n\n"
-        available_tables_formatted = available_tables_formatted.strip()
-        ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")
+        available_tables_formatted = self.__format_available_tables(
+            ctx, db_schema, num_rows
+        )
 
         msg: list[LLMMessage] = [
             {
@@ -218,7 +210,7 @@ class BaseTableProducer:
                 .startswith("semantic")
             ):
                 # joined_table = self.__run_semantic_join_operation()
-                joined_table = self.__fuzzy_inner_join_df(
+                joined_table = self.__run_semantic_join_operation(
                     ctx,
                     table_mapping[left_table_id],
                     table_mapping[right_table_id],
@@ -226,7 +218,7 @@ class BaseTableProducer:
                     right_join_key,
                 )
             else:
-                joined_table = self.__run_std_join_operation_df(
+                joined_table = self.__run_std_join_operation(
                     ctx,
                     left_table_id,
                     right_table_id,
@@ -243,29 +235,18 @@ class BaseTableProducer:
     def __produce_join_operations(
         self, ctx: ConductorState, db_schema: str, num_rows=3
     ):
-        available_tables_formatted = ""
-        table_mappings = ctx.table_store.get_all_tables_in_schema(db_schema)
-        for table_id, table in table_mappings.items():
-            table_description = ctx.table_store.get_table_metadata(
-                schema=db_schema,
-                table_id=table_id,
-                metadata_id=TableMetadata.TABLE_DESCRIPTION,
-            )
-            available_tables_formatted += f"""- {table_id} ({table_description}):
-```{ctx.table_reader.format_table(table, num_rows, 42)}```\n"""
-
-        available_tables_formatted = available_tables_formatted.strip()
-        ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")
-
+        available_tables_formatted = self.__format_available_tables(
+            ctx, db_schema, num_rows
+        )
         msg: list[LLMMessage] = [
             {"role": "system", "content": base_table_producer_prompts["join_planner"]},
             {"role": "user", "content": available_tables_formatted},
         ]
-        plan = ctx.llm.chat(msg)
-        ctx.logger.info(f"=> plan: {plan}")
-        return plan
+        join_operations = ctx.llm.chat(msg)
+        ctx.logger.info(f"=> join_operations: {join_operations}")
+        return join_operations
 
-    def __fuzzy_inner_join_df(
+    def __run_semantic_join_operation(
         self,
         ctx: ConductorState,
         A: pd.DataFrame,
@@ -318,28 +299,7 @@ class BaseTableProducer:
         cos_sim = util.cos_sim(a_embed, b_embed)
         return cos_sim[0].item()
 
-    def __run_semantic_join_operation(
-        self,
-        ctx: ConductorState,
-        left_table_id: str,
-        right_table_id: str,
-        left_table: Any,
-        right_table: Any,
-        left_join_key: str,
-        right_join_key: str,
-    ):
-        """Runs a single semantic join operation."""
-        alpha = 0.5
-        scores = dict()
-
-        left_join_column = ctx.table_reader.get_column_values(
-            left_table, left_join_key, None
-        )
-        right_join_column = ctx.table_reader.get_column_values(
-            right_table, right_join_key, None
-        )
-
-    def __run_std_join_operation_df(
+    def __run_std_join_operation(
         self,
         ctx: ConductorState,
         left_table_id: str,
@@ -370,3 +330,21 @@ class BaseTableProducer:
 
         joined_table = pd.read_sql_query(sql_script, conn)
         return joined_table
+
+    def __format_available_tables(
+        self, ctx: ConductorState, db_schema: str, num_rows: int
+    ):
+        available_tables_formatted = ""
+        table_mappings = ctx.table_store.get_all_tables_in_schema(db_schema)
+        for table_id, table in table_mappings.items():
+            table_description = ctx.table_store.get_table_metadata(
+                schema=db_schema,
+                table_id=table_id,
+                metadata_id=TableMetadataType.TABLE_DESCRIPTION,
+            )
+            available_tables_formatted += f"""- {table_id} ({table_description}):
+```{ctx.table_reader.format_table(table, num_rows, 42)}```\n"""
+
+        available_tables_formatted = available_tables_formatted.strip()
+        ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")
+        return available_tables_formatted

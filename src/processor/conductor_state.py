@@ -3,7 +3,7 @@ from logging import Logger
 
 from processor.computation_graph import ComputationGraph
 from processor.llm.interface.model import AbstractModel
-from processor.table_store.table_store import AbstractTableStore
+from processor.table_store_legacy.table_store import AbstractTableStore
 from processor.table_reader.table_reader import AbstractTableReader
 
 

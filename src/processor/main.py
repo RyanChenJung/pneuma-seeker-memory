@@ -8,7 +8,7 @@ from processor.conductor_state import ConductorState
 from processor.llm.interface.model_factory import get_model
 from processor.schema_processor.schema_processor import SchemaProcessor
 from processor.table_reader.table_reader_factory import get_table_reader
-from processor.table_store.table_store_factory import get_table_store
+from processor.table_store_legacy.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
 
 
