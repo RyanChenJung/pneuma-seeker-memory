@@ -1,14 +1,15 @@
 import logging
 from typing import Any
+
 from pandas import DataFrame
+
 from processor.base_table_producer.base_table_producer import BaseTableProducer
+from processor.conductor_state import ConductorState
 from processor.llm.interface.model_factory import get_model
 from processor.schema_processor.schema_processor import SchemaProcessor
+from processor.table_reader.table_reader_factory import get_table_reader
 from processor.table_store.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
-from processor.utils.operation import Operation
-from processor.utils.conductor_state import ConductorState
-from processor.utils.table_reader.table_reader_factory import get_table_reader
 
 
 class Processor:
@@ -102,14 +103,3 @@ class Processor:
             table_descriptions=table_descriptions,
             num_rows=num_rows,
         )
-
-    def get_transformation_plan(
-        self, question: str, target_schema: str, available_table_schemas: list[str]
-    ) -> list[Operation]:
-        pass
-
-    def execute_plan(plan: list[Operation]):
-        pass
-
-    def classify_operation(operation: Operation):
-        pass

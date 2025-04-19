@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
-from processor.utils.llm_option import LLMOption
-from processor.utils.message import Message
+from processor.llm.option import LLMOption
+from processor.llm.message import LLMMessage
 from processor.llm.interface.model import AbstractModel
 from dotenv import load_dotenv
 
@@ -19,7 +19,7 @@ class GPT(AbstractModel):
         # Tokenizer is handled internally by the API
         pass
 
-    def chat(self, messages: list[Message], llm_option: LLMOption = LLMOption()) -> str:
+    def chat(self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()) -> str:
         response = self.client.chat.completions.create(
             messages=messages,
             model=self.model_name,

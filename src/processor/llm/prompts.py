@@ -112,9 +112,9 @@ At the end of your reasoning, respond in the following format (for easy parsing)
     "std_join": """You are a highly skilled data engineer.
 You are given two tables, represented by their IDs, descriptions, schemas, and sample rows.
 
-Your goal is to create a SQL script to join these tables through a given left and right join keys. Refer to the IDs as identifiers in the script.
+Your goal is to create a SQL script (SQLite) to join these tables through a given left and right join keys. Refer to the IDs as identifiers in the script.
 
-Output the script directly without any extra formatting or explanation.""",
+Output the SQLite script directly without any extra formatting or explanation.""",
 }
 
 
@@ -145,41 +145,47 @@ New column name: ...""",
 }
 
 
-
-
-
-
-
-
-# DEPRECATED
-clear_schema_system_prompt = """You are given a schema of a table, along with some sample row(s), with the pipe character (`|`) as the separator of columns and row values. Your goal is to update the schema to be more explicit and descriptive. For example, the column 'AvgRating' becomes 'Average Rating'. Be careful not to miss any columns (e.g., if there are `ID` and `School ID`, handle them both).
-
-Output your result strictly as a Python list consisting of the new column names, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list."""
-
-clear_schema_system_prompt_neo = """You are given a column of a table, along with a description of what it likely represents. Please rename the column to be more descriptive and easy to understand based on the description while keeping it compact. If there is no description for a column, keep the name as is. Output the name directly without any extra formatting, explanations, or text."""
-
-plan_generator_first_step_system_prompt = """You are a helpful data scientist.
+base_table_reducer_prompts = {
+    "column_projection": """You are a helpful data scientist.
 
 You will be provided with:
-- A question in natural language.
-- A list of available tables, each represented with its schema and a sample row.
-- A target schema, which defines the supposedly relevant table to answer the question.
+- A source table called SRC that is represented by its schema and some sample rows.
+- A target schema that we will transform the source table into in a step-by-step manner.
+- A column from the target schema as the current target column.
 
-Your goal is to determine which table among the available tables consists of the superset or the exact set of the target schema. If the table exists, return "operation": "select_table" and specify the table.
-If table join(s) is **strictly** necessary, then return "operation": "join" and specify the necessary joins.
+Your goal is to determine whether to select a certain column from SRC or extract information from certain column(s) from SRC to form the target column.
 
-The output format for selecting a single table:
+The output format for selecting a certain column:
 {
-    "operation": "select_table",
-    "tables_involved": ["Table_0"],
-    "description": "Select Table_0."
+    "operation": "select_column",
+    "columns_involved": ["Restaurant ID"],
+    "description": "Select SRC.Restaurant ID."
 }
 
-While for joining tables:
+While for extracting information from certain column(s):
 {
-    "operation": "join",
-    "tables_involved": ["Table_0", "Table 1"],
-    "description": "Join Table_0 with Table_1 on Table_0.Department ID and Table_1.DeptID"
+    "operation": "extract_column",
+    "columns_involved": ["City", "ZIP Code"],
+    "description": "Find the country based on SRC.City and SRC.`ZIP Code`."
 }
 
-Output your result strictly as a Python dictionary, without any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary."""
+Output your result strictly as a Python dictionary, without any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary.""",
+    "extract_col": """You are a helpful and knowledgeable data scientist.
+
+You will be provided with:
+- A table represented by its schema and rows.
+- A column to be added to this table whose values depend on the other columns in the table.
+
+Your goal is to determine the values of the new column for all rows. Ensure you consider **all provided columns together** rather than relying on a single column. For example, a city name may exist in multiple locations, but when paired with its corresponding province or county, ambiguity is reduced.
+
+Output your result strictly as a Python list representing the new column values for all rows, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list.""",
+    "reduce_row": """You are a helpful and knowledgeable data scientist.
+
+You will be provided with:
+- A table, identified as target_table, represented by its schema and sample rows.
+- A question over the table.
+
+Your goal is to produce a SQL code (SQLite) containing predicates to reduce the rows of target_table. In other words, you need to eliminate irrelevant rows.
+
+Output your result strictly as a SQL code (SQLite) without any extra formatting, explanations, or text. The output must be directly parseable as a SQL code.""",
+}

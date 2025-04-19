@@ -1,8 +1,8 @@
 from ast import literal_eval
 from processor.llm.prompts import schema_processor_prompts
 from tqdm import tqdm
-from processor.utils.message import Message
-from processor.utils.conductor_state import ConductorState
+from processor.llm.message import LLMMessage
+from processor.conductor_state import ConductorState
 
 
 class SchemaProcessor:
@@ -48,7 +48,7 @@ class SchemaProcessor:
             )
             sample_descriptions: list[str] = []
             for i in range(num_sampling):
-                msg: list[Message] = [
+                msg: list[LLMMessage] = [
                     {
                         "role": "system",
                         "content": schema_processor_prompts["table_descriptor"],
@@ -69,7 +69,7 @@ class SchemaProcessor:
             for j in range(len(sample_descriptions)):
                 all_descs += f"Description {j}: {sample_descriptions[j]}\n"
             all_descs = all_descs.strip()
-            msg: list[Message] = [
+            msg: list[LLMMessage] = [
                 {
                     "role": "system",
                     "content": schema_processor_prompts["description_combinator"],
@@ -106,7 +106,7 @@ class SchemaProcessor:
             new_columns: list[str] = []
             for col in ctx.table_reader.get_table_schema(table):
                 ctx.logger.info(f"==> Renaming column {col}")
-                msg: list[Message] = [
+                msg: list[LLMMessage] = [
                     {
                         "role": "system",
                         "content": schema_processor_prompts["column_renamer"],

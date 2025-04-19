@@ -7,7 +7,12 @@ from processor.utils.table_reader.table_reader import AbstractTableReader
 
 class DFReader(AbstractTableReader[DataFrame]):
     def format_table(
-        self, table: DataFrame, num_rows: int, random_seed: int, consecutive=False
+        self,
+        table: DataFrame,
+        num_rows: int,
+        random_seed: int,
+        consecutive=False,
+        consecutive_indices: tuple[int, int] = None
     ) -> str:
         """
         Formats a DataFrame, with or without rows.
@@ -29,7 +34,13 @@ class DFReader(AbstractTableReader[DataFrame]):
                     )
                     rows.append(row_str)
             else:
-                for idx, i in enumerate(range(min(num_rows, len(table)))):
+                low_idx = 0
+                high_idx = min(num_rows, len(table))
+                if consecutive_indices:
+                    low_idx = consecutive_indices[0]
+                    high_idx = consecutive_indices[1]
+
+                for idx, i in enumerate(range(low_idx, high_idx)):
                     row_str = f"row {idx+1}: " + " | ".join(table.iloc[i].astype(str))
                     rows.append(row_str)
             representation += f"\n{'\n'.join(rows)}"

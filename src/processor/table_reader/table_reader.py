@@ -7,7 +7,12 @@ T = TypeVar("T")
 class AbstractTableReader(ABC, Generic[T]):
     @abstractmethod
     def format_table(
-        self, table: T, num_rows: int, random_seed: int, consecutive=False
+        self,
+        table: T,
+        num_rows: int,
+        random_seed: int,
+        consecutive=False,
+        consecutive_indices: tuple[int, int] = None
     ) -> str:
         """
         Formats a table, with or without rows.

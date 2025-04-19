@@ -1,6 +1,6 @@
 from typing import TypedDict
 
 
-class Message(TypedDict):
+class LLMMessage(TypedDict):
     role: str
     content: str

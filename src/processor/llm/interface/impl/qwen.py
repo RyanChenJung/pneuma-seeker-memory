@@ -1,7 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 from processor.llm.interface.model import AbstractModel
-from processor.utils.llm_option import LLMOption
+from processor.llm.option import LLMOption
 
 
 class Qwen(AbstractModel):

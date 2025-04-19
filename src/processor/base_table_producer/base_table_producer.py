@@ -6,9 +6,9 @@ from sentence_transformers import SentenceTransformer, util
 
 from processor.llm.prompts import base_table_producer_prompts
 from processor.table_store.metadata import TableMetadata
-from processor.utils.conductor_state import ConductorState
+from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
-from processor.utils.message import Message
+from processor.llm.message import LLMMessage
 from processor.utils.string_processor import parse_code_string
 
 
@@ -31,7 +31,7 @@ class BaseTableProducer:
                 table_id=table_id,
                 metadata_id=TableMetadata.TABLE_DESCRIPTION,
             )
-            msg: list[Message] = [
+            msg: list[LLMMessage] = [
                 {
                     "role": "system",
                     "content": base_table_producer_prompts["tables_selector"],
@@ -95,7 +95,7 @@ class BaseTableProducer:
         available_tables_formatted = available_tables_formatted.strip()
         ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")
 
-        msg: list[Message] = [
+        msg: list[LLMMessage] = [
             {
                 "role": "system",
                 "content": base_table_producer_prompts["row_extender_step_1"],
@@ -104,7 +104,7 @@ class BaseTableProducer:
         ]
         reasoning = ctx.llm.chat(msg)
         ctx.logger.info(f"=> reasoning: {reasoning}")
-        msg: list[Message] = [
+        msg: list[LLMMessage] = [
             {
                 "role": "system",
                 "content": base_table_producer_prompts["row_extender_step_2"],
@@ -257,7 +257,7 @@ class BaseTableProducer:
         available_tables_formatted = available_tables_formatted.strip()
         ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")
 
-        msg: list[Message] = [
+        msg: list[LLMMessage] = [
             {"role": "system", "content": base_table_producer_prompts["join_planner"]},
             {"role": "user", "content": available_tables_formatted},
         ]
