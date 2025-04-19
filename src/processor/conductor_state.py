@@ -2,16 +2,14 @@ from dataclasses import dataclass
 from logging import Logger
 
 from processor.computation_graph import ComputationGraph
-from processor.llm.interface.model import AbstractModel
-from processor.table_store_legacy.table_store import AbstractTableStore
-from processor.table_reader.table_reader import AbstractTableReader
+from processor.models.interface.abstract_model import AbstractModel
+from processor.table.store.abstract_table_store import AbstractTableStore
 
 
 @dataclass
 class ConductorState:
     table_store: AbstractTableStore
-    table_reader: AbstractTableReader
     logger: Logger
     llm: AbstractModel
-    embed_model: AbstractModel
+    embedding_model: AbstractModel
     computation_graph: ComputationGraph

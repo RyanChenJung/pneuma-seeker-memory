@@ -2,25 +2,23 @@ import logging
 from typing import Any
 
 from pandas import DataFrame
+from processor.base_table_reducer.base_table_reducer import BaseTableReducer
+from sentence_transformers import SentenceTransformer
 
 from processor.base_table_producer.base_table_producer import BaseTableProducer
+from processor.computation_graph import ComputationGraph
 from processor.conductor_state import ConductorState
-from processor.llm.interface.model_factory import get_model
+from processor.models.interface.model_factory import get_embed_model, get_llm
 from processor.schema_processor.schema_processor import SchemaProcessor
-from processor.table_reader.table_reader_factory import get_table_reader
-from processor.table_store_legacy.table_store_factory import get_table_store
+from processor.table.store.table_store_factory import get_table_store
 from processor.utils.logger import setup_logger
 
 
 class Processor:
-    def __init__(self, model_name: str, table_type: Any = DataFrame):
+    def __init__(self, llm_path: str, embed_path: str, table_type: Any = DataFrame):
         # Initialize Table Store
         table_store_impl = get_table_store(impl=table_type)
         table_store = table_store_impl()
-
-        # Initialize Table Formatter
-        table_formatter_impl = get_table_reader(table_type=table_type)
-        table_formatter = table_formatter_impl()
 
         # Initialize logger
         logger = setup_logger(
@@ -32,20 +30,29 @@ class Processor:
         )
 
         # Initialize LLM
-        model_impl = get_model(model_name=model_name)
-        llm = model_impl(model_name=model_name)
+        llm_impl = get_llm(model_path=llm_path)
+        llm = llm_impl(model_name=llm_path)
+
+        # Initialize embedding model
+        embed_impl = get_embed_model()
+        embed_model = embed_impl(embed_path)
+
+        # Initialize computation graph
+        computation_graph = ComputationGraph()
 
         # Keep track of shared resources as a global context
         self.ctx = ConductorState(
             table_store=table_store,
-            table_reader=table_formatter,
             logger=logger,
             llm=llm,
+            embedding_model=embed_model,
+            table_reader=computation_graph,
         )
 
         # Initialize core services
         self.schema_processor = SchemaProcessor()
         self.base_table_producer = BaseTableProducer()
+        self.base_table_reducer = BaseTableReducer()
 
     def get_target_schema(self, question: str):
         """

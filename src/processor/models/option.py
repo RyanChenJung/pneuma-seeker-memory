@@ -10,3 +10,7 @@ class LLMOption:
     top_p: float = None
     top_k: int = None
     penalty_alpha: float = None
+
+@dataclass
+class EmbeddingModelOption:
+    batch_size: int = 32

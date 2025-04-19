@@ -1,14 +1,16 @@
 import os
+from numpy import ndarray
 from openai import OpenAI
-from processor.llm.option import LLMOption
-from processor.llm.message import LLMMessage
-from processor.llm.interface.model import AbstractModel
+from processor.models.option import EmbeddingModelOption, LLMOption
+from processor.models.message import LLMMessage
+from processor.models.interface.abstract_model import AbstractModel
 from dotenv import load_dotenv
+
 
 class GPT(AbstractModel):
     def __init__(self, model_name: str = "gpt-4o-mini"):
         load_dotenv()
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model_name = model_name
 
     def load_model(self):
@@ -19,7 +21,9 @@ class GPT(AbstractModel):
         # Tokenizer is handled internally by the API
         pass
 
-    def chat(self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()) -> str:
+    def chat(
+        self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()
+    ) -> str:
         response = self.client.chat.completions.create(
             messages=messages,
             model=self.model_name,
@@ -29,3 +33,11 @@ class GPT(AbstractModel):
             max_completion_tokens=llm_option.max_new_tokens,
         )
         return response.choices[0].message.content
+
+    def embed(
+        self,
+        texts: str | list[str],
+        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+    ) -> ndarray:
+        """Embed texts."""
+        raise NotImplementedError("GPT does not support embedding texts.")

@@ -1,7 +1,9 @@
+from numpy import ndarray
+from processor.models.option import EmbeddingModelOption
 from torch import bfloat16
 from transformers import pipeline
 
-from processor.llm.interface.model import AbstractModel
+from processor.models.interface.abstract_model import AbstractModel
 
 
 class Llama(AbstractModel):
@@ -31,3 +33,11 @@ class Llama(AbstractModel):
             do_sample=False,
         )
         return outputs[0]["generated_text"][-1]
+    
+    def embed(
+        self,
+        texts: str | list[str],
+        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+    ) -> ndarray:
+        """Embed texts."""
+        raise NotImplementedError("Llama does not support embedding texts.")

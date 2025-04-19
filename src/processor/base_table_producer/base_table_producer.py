@@ -2,13 +2,13 @@ import sqlite3
 from typing import Any
 
 import pandas as pd
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util
 
-from processor.llm.prompts import base_table_producer_prompts
+from processor.models.prompts import base_table_producer_prompts
 from processor.table.representation.metadata import TableMetadataType
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
-from processor.llm.message import LLMMessage
+from processor.models.message import LLMMessage
 from processor.utils.string_processor import parse_code_string
 
 

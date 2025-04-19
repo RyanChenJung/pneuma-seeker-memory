@@ -1,7 +1,8 @@
+from numpy import ndarray
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
-from processor.llm.interface.model import AbstractModel
-from processor.llm.option import LLMOption
+from processor.models.interface.abstract_model import AbstractModel
+from processor.models.option import EmbeddingModelOption, LLMOption
 
 
 class Qwen(AbstractModel):
@@ -49,3 +50,11 @@ class Qwen(AbstractModel):
             0
         ]
         return response
+    
+    def embed(
+        self,
+        texts: str | list[str],
+        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+    ) -> ndarray:
+        """Embed texts."""
+        raise NotImplementedError("Qwen does not support embedding texts.")

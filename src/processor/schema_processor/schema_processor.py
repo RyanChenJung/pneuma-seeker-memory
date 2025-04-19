@@ -1,7 +1,7 @@
 from ast import literal_eval
-from processor.llm.prompts import schema_processor_prompts
+from processor.models.prompts import schema_processor_prompts
 from tqdm import tqdm
-from processor.llm.message import LLMMessage
+from processor.models.message import LLMMessage
 from processor.conductor_state import ConductorState
 
 

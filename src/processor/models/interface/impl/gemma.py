@@ -1,4 +1,6 @@
-from processor.llm.interface.model import AbstractModel
+from numpy import ndarray
+from processor.models.interface.abstract_model import AbstractModel
+from processor.models.option import EmbeddingModelOption
 from torch import bfloat16
 from transformers import AutoTokenizer, Gemma3ForCausalLM
 
@@ -38,3 +40,11 @@ class Gemma(AbstractModel):
 
         decoded = self.tokenizer.decode(generation, skip_special_tokens=True)
         return decoded
+    
+    def embed(
+        self,
+        texts: str | list[str],
+        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+    ) -> ndarray:
+        """Embed texts."""
+        raise NotImplementedError("Gemma does not support embedding texts.")

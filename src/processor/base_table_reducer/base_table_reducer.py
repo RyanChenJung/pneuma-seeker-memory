@@ -4,9 +4,9 @@ from typing import Any
 
 from pandas import DataFrame
 from tqdm import tqdm
-from processor.llm.message import LLMMessage
+from processor.models.message import LLMMessage
 from processor.conductor_state import ConductorState
-from processor.llm.prompts import base_table_reducer_prompts
+from processor.models.prompts import base_table_reducer_prompts
 from processor.utils.string_processor import parse_code_string
 
 
