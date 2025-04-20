@@ -8,3 +8,11 @@ conda create --name processor python=3.12
 pip install -r requirements.txt
 fastapi dev src/processor/processor.py
 ```
+
+## Test
+
+```bash
+cd ./tests/processor
+python -m coverage run -m unittest discover
+python -m coverage html
+```

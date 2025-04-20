@@ -6,3 +6,6 @@ pandas>=2.2.2
 textdistance>=4.6.3
 sentence-transformers>=3.4.1
 openai>=1.63.2
+
+# Test-related
+# coverage>=7.8.0
