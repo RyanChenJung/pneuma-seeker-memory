@@ -1,6 +1,6 @@
 from typing import Any, Optional
 from numpy.random import default_rng
-from pandas import DataFrame
+from pandas import DataFrame, concat
 
 from processor.table.representation.abstract_table import AbstractTable
 
@@ -14,6 +14,14 @@ class DFTable(AbstractTable[DataFrame]):
     def get_schema(self) -> list[str]:
         """Returns the schema of a table, represented as a list of strings."""
         return list(self.data.columns)
+
+    def set_schema(self, new_schema: list[str]):
+        """Set the schema of a table."""
+        self.data.columns = new_schema
+
+    def rename_schema(self, schema_mapping: dict[str, str]):
+        """Renames the schema of a table."""
+        self.data.rename(columns=schema_mapping, inplace=True)
 
     def get_data(self) -> DataFrame:
         """Returns the data of the table."""
@@ -90,3 +98,17 @@ class DFTable(AbstractTable[DataFrame]):
         if not isinstance(value, DFTable):
             return NotImplemented
         return self.get_data().equals(value.get_data())
+
+    def select_columns(self, columns: list[str]) -> "DFTable":
+        return DFTable(self.data[columns].copy(), name=self.name)
+
+    def add_missing_columns(self, columns: list[str], default_value: Any = None):
+        for col in columns:
+            if col not in self.data.columns:
+                self.data[col] = default_value
+
+    @staticmethod
+    def concat(tables: list["DFTable"]) -> "DFTable":
+        dfs = [table.get_data() for table in tables]
+        combined_df = concat(dfs, ignore_index=True)
+        return DFTable(combined_df)

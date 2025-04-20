@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import copy
 from typing import Any, Optional, TypeVar, Generic
 
 
@@ -14,6 +15,16 @@ class AbstractTable(ABC, Generic[T]):
     @abstractmethod
     def get_schema(self) -> list[str]:
         """Returns the schema of a table, represented as a list of strings."""
+        pass
+
+    @abstractmethod
+    def set_schema(self, new_schema: list[str]):
+        """Set the schema of a table."""
+        pass
+
+    @abstractmethod
+    def rename_schema(self, schema_mapping: dict[str,str]):
+        """Renames the schema of a table."""
         pass
 
     @abstractmethod
@@ -59,3 +70,22 @@ class AbstractTable(ABC, Generic[T]):
     def __eq__(self, value):
         """Checks if two tables are equal."""
         pass
+
+    @abstractmethod
+    def select_columns(self, columns: list[str]) -> "AbstractTable":
+        """Returns a new table with only the selected columns."""
+        pass
+
+    @abstractmethod
+    def add_missing_columns(self, columns: list[str], default_value: Any = None):
+        """Adds missing columns with default values."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def concat(tables: list["AbstractTable"]) -> "AbstractTable":
+        """Concatenates a list of tables into one."""
+        pass
+
+    def copy(self):
+        return copy.deepcopy(self)

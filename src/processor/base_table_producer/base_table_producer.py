@@ -2,11 +2,11 @@ import sqlite3
 from typing import Any
 
 import pandas as pd
+from processor.computation_graph import Node
 from processor.table.representation.abstract_table import AbstractTable
-from sentence_transformers import util
+from sentence_transformers.util import cos_sim
 
 from processor.models.prompts import base_table_producer_prompts
-from processor.table.representation.metadata import TableMetadataType
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
 from processor.models.message import LLMMessage
@@ -14,24 +14,40 @@ from processor.utils.string_processor import parse_code_string
 
 
 class BaseTableProducer:
-    def select_relevant_tables(
+    """
+    BaseTableProducer is a core service of Processor. It provides methods for
+    producing a base table, which is a table that contains the table defined using
+    the target schema produced by SchemaProcessor.
+    """
+
+    def select_relevant_table_ids(
         self,
         ctx: ConductorState,
         db_schema: str,
         target_schema: list[str],
+        table_descriptions: dict[str, str],
         num_rows=3,
+        input_computation_nodes: list[Node] = [],
     ):
-        """Returns the IDs of relevant tables within the DB schema for the given
-        target schema"""
+        """
+        Returns the IDs of relevant tables within the DB schema for the given
+        target schema.
+
+        Args:
+            ctx (ConductorState): Conductor state object.
+            db_schema (str): The DB schema to get the tables from.
+            target_schema (list[str]): The target schema to choose the tables.
+            table_descriptions (dict[str,str]): The descriptions of the tables.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[list[str]]): Computation node consisting of list of strings as the IDs of the relevant tables.
+        """
         relevant_table_ids: list[str] = []
         table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema)
 
         for table_id, table in table_mapping.items():
-            table_description = ctx.table_store.get_table_metadata(
-                schema=db_schema,
-                table_id=table_id,
-                metadata_id=TableMetadataType.TABLE_DESCRIPTION,
-            )
+            ctx.logger.info(f"Checking the relevance of table `{table_id}`")
+            table_description = table_descriptions[table_id]
             msg: list[LLMMessage] = [
                 {
                     "role": "system",
@@ -39,52 +55,50 @@ class BaseTableProducer:
                 },
                 {
                     "role": "user",
-                    "content": f"""- Table: ```{table.get_representation(table, num_rows, 42)}```
+                    "content": f"""- Table: ```{table.get_representation(num_rows, 42)}```
 - Target schema: ```{target_schema}```
 - Description: ```{table_description}```""",
                 },
             ]
             table_relevancy_output = ctx.llm.chat(msg)
-            ctx.logger.info(f"=> table_relevancy_output: {table_relevancy_output}")
+            ctx.logger.info(f"=> Table relevancy output: {table_relevancy_output}")
             table_relevance = (
                 table_relevancy_output.split("Relevant: ")[-1].lower().strip()
             )
             if table_relevance.startswith("yes"):
-                ctx.logger.info(f"==> Yes, this table is relevant!")
+                ctx.logger.info(f"==> Conclusion: The table is considered relevant!")
                 relevant_table_ids.append(table_id)
-        return relevant_table_ids
+        return ctx.computation_graph.create_node(
+            computation_description="Selected relevant table IDs for the given target schema.",
+            computation_output=relevant_table_ids,
+            input_nodes=input_computation_nodes,
+        )
 
-    def union_tables(
+    def produce_union_table_operations(
         self,
         ctx: ConductorState,
         db_schema: str,
+        table_descriptions: dict[str, str],
         num_rows=3,
-    ):
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
         """
-        Unions tables within the DB schema.
-        """
-        operations = self.__produce_union_tables_operations(
-            ctx=ctx,
-            db_schema=db_schema,
-            num_rows=num_rows,
-        )
-        mapping_results = self.__run_union_tables_operations(
-            table_mappings=ctx.table_store.get_all_tables_in_db_schema(db_schema),
-            operations_json=operations,
-        )
-        return mapping_results
+        Returns a list of operations to union tables (if any) within the DB schema.
 
-    def __produce_union_tables_operations(
-        self,
-        ctx: ConductorState,
-        db_schema: str,
-        num_rows=3,
-    ):
-        """
-        Returns a list of operations to extend tables within
+        Args:
+            ctx (ConductorState): Conductor state object.
+            db_schema (str): The DB schema to get the tables from.
+            table_descriptions (dict[str,str]): The descriptions of the tables.
+            num_rows (int): Number of rows to sample from each table.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[Any]): Computation node consisting of the union operations.
         """
         available_tables_formatted = self.__format_available_tables(
-            ctx, db_schema, num_rows
+            ctx,
+            db_schema,
+            num_rows,
+            table_descriptions,
         )
 
         msg: list[LLMMessage] = [
@@ -106,51 +120,58 @@ class BaseTableProducer:
                 "content": f"- Tables: {available_tables_formatted}\n\n- Reasoning: {reasoning}",
             },
         ]
-        operations = ctx.llm.chat(msg)
+        operations: list[dict[str, Any]] = parse_code_string(ctx.llm.chat(msg))
         ctx.logger.info(f"=> operations: {operations}")
-        return operations
+        return ctx.computation_graph.create_node(
+            computation_description="Produced union operations.",
+            computation_output=operations,
+            input_nodes=input_computation_nodes,
+        )
 
-    def __run_union_tables_operations(
+    def run_union_table_operations(
         self,
-        table_mappings: dict[str, Any],
-        operations_json: str,
-    ):
+        ctx: ConductorState,
+        table_mappings: dict[str, AbstractTable],
+        operations: list[dict[str, Any]],
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
+        """
+        Returns a list of operations to union tables (if any) within the DB schema.
+
+        Args:
+            ctx (ConductorState): Conductor state object.
+            table_mappings (dict[str,AbstractTable]): The mapping between table IDs and table objects.
+            operations (list[dict[str, Any]]): The union operations.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[dict[str, AbstractTable]]): Computation node consisting of the table mappings after the operations have been applied.
+        """
+
         # Ensure non-mutability of the original object
         table_mappings_copy = {k: v.copy() for k, v in table_mappings.items()}
 
-        # Parse the operations
-        operations: list[dict[str, str]] = parse_json(operations_json)
-
-        if operations_json.startswith("```"):
-            operations_json = operations_json[3:]
-        if operations_json.endswith("```"):
-            operations_json = operations_json[:-3]
-        if operations_json.startswith("json"):
-            operations_json = operations_json[4:]
-
-        # Execute the operations
-        extended_dfs = []
-        last_table_mappings_idx = 1
         for operation in operations:
-            normalized_tables = []
+            normalized_tables: list[AbstractTable] = []
+            union_table_id: str = operation["Output Table ID"]
             for table_name in operation["Tables"]:
-                df = table_mappings_copy[table_name]
-                mapping = operation["Mappings"][table_name]
+                table = table_mappings_copy[table_name]
+                mapping: dict[str, str] = operation["Mappings"][table_name]
 
-                renamed_df = df.rename(columns=mapping)
-                schema = operation["Unified Schema"]
-                for col in schema:
-                    if col not in renamed_df.columns:
-                        renamed_df[col] = None
+                table.rename_schema(mapping)
+                unified_schema: list[str] = operation["Unified Schema"]
+                table.add_missing_columns(unified_schema, default_value=None)
+                table = table.select_columns(unified_schema)
 
-                renamed_df = renamed_df[schema]
-                normalized_tables.append(renamed_df)
-            extended_df = pd.concat(normalized_tables, ignore_index=True)
-            extended_dfs.append(extended_df)
-        for extended_df in extended_dfs:
-            table_mappings_copy[f"Table_{last_table_mappings_idx+1}"] = extended_df
-            last_table_mappings_idx += 1
-        return extended_dfs
+                normalized_tables.append(table)
+                del table_mappings_copy[table_name]
+
+            extended_table = type(normalized_tables[0]).concat(normalized_tables)
+            table_mappings_copy[union_table_id] = extended_table
+        return ctx.computation_graph.create_node(
+            computation_description="Ran the union table operations",
+            computation_output=table_mappings_copy,
+            input_nodes=input_computation_nodes,
+        )
 
     def join_tables(
         self,
@@ -231,10 +252,10 @@ class BaseTableProducer:
             del table_mapping[right_table_id]
 
     def __produce_join_operations(
-        self, ctx: ConductorState, db_schema: str, num_rows=3
+        self, ctx: ConductorState, db_schema: str, table_descriptions: dict[str, str], num_rows=3
     ):
         available_tables_formatted = self.__format_available_tables(
-            ctx, db_schema, num_rows
+            ctx, db_schema, num_rows, table_descriptions
         )
         msg: list[LLMMessage] = [
             {"role": "system", "content": base_table_producer_prompts["join_planner"]},
@@ -294,8 +315,7 @@ class BaseTableProducer:
     def __check_similarity(ctx: ConductorState, a: str, b: str) -> float:
         a_embed = ctx.embedding_model.embed(a)
         b_embed = ctx.embedding_model.embed(b)
-        cos_sim = util.cos_sim(a_embed, b_embed)
-        return cos_sim[0].item()
+        return cos_sim(a_embed, b_embed).item()
 
     def __run_std_join_operation(
         self,
@@ -330,18 +350,18 @@ class BaseTableProducer:
         return joined_table
 
     def __format_available_tables(
-        self, ctx: ConductorState, db_schema: str, num_rows: int
+        self,
+        ctx: ConductorState,
+        db_schema: str,
+        num_rows: int,
+        table_descriptions: dict[str, str],
     ):
         available_tables_formatted = ""
         table_mappings = ctx.table_store.get_all_tables_in_db_schema(db_schema)
         for table_id, table in table_mappings.items():
-            table_description = ctx.table_store.get_table_metadata(
-                schema=db_schema,
-                table_id=table_id,
-                metadata_id=TableMetadataType.TABLE_DESCRIPTION,
-            )
+            table_description = table_descriptions[table_id]
             available_tables_formatted += f"""- {table_id} ({table_description}):
-```{table.get_representation(table, num_rows, 42)}```\n"""
+```{table.get_representation(num_rows, 42)}```\n"""
 
         available_tables_formatted = available_tables_formatted.strip()
         ctx.logger.info(f"=> available_tables_formatted: {available_tables_formatted}")

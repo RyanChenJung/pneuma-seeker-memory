@@ -29,13 +29,13 @@ Do **not** group tables that refer to different concepts/entities, even if they 
 
 Finish with a list of compatible groups like:
 Row extension groups: Group 1: Table_0, Table_2 Group 2: Table_3, Table_4 ... (or none if no combinations are found)""",
-    "row_extender_step_2": """You are an experienced data scientist. You have already analyzed the tables and identified which ones can be combined via row extension (i.e., vertically stacked) because they refer to the same kind of real-world entity.
+    "row_extender_step_2": """You are an experienced data scientist. You have already analyzed the tables and identified which ones can be unioned together because they refer to the same kind of real-world entity.
 
 You are given:
 - A list of tables (description + schemas + samples)
-- Your own prior reasoning and a list of row-extension groups (e.g., Group 1: Table_0, Table_2)
+- Your own prior reasoning and a list of union groups (e.g., Group 1: Table_0, Table_2)
 
-Your job is to create a JSON plan that shows how each group can be merged via row extension.
+Your job is to create a JSON plan that shows how each group can be unioned.
 
 Instructions:
 - For each group, create a **unified schema** by merging **semantically equivalent** columns (e.g., "Customer_Rating" and "RATING" should both become "Rating")
@@ -50,6 +50,7 @@ Format if row extension groups exist:
 ```json
 [
   {
+    "Output Table ID": "Union_1",
     "Tables": ["Table_0", "Table_2"],
     "Unified Schema": ["Column1", "Column2", ...],
     "Mappings": {
