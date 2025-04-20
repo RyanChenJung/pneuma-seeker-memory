@@ -42,7 +42,7 @@ class ComputationGraph:
         computation_description: str,
         computation_output: Any,
         input_nodes: Optional[list["Node"]] = None,
-    ):
+    ) -> Node:
         # Grab the caller info using inspect
         frame = currentframe()
         caller_frame = frame.f_back
@@ -51,15 +51,16 @@ class ComputationGraph:
         if "self" in caller_frame.f_locals:
             class_name = type(caller_frame.f_locals["self"]).__name__
 
-        self.nodes.append(
-            Node(
-                computation_description,
-                computation_output,
-                function_name,
-                class_name,
-                input_nodes,
-            )
+        new_node = Node(
+            computation_description,
+            computation_output,
+            function_name,
+            class_name,
+            input_nodes,
         )
+
+        self.nodes.append(new_node)
+        return new_node
 
     def to_json(self):
         return {"nodes": [node.to_dict() for node in self.nodes]}
