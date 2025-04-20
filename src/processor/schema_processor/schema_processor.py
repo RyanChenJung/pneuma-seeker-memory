@@ -1,15 +1,37 @@
+# schema_processor.py
 from ast import literal_eval
-from processor.models.prompts import schema_processor_prompts
+
 from tqdm import tqdm
-from processor.models.message import LLMMessage
+
+from processor.computation_graph import Node
 from processor.conductor_state import ConductorState
+from processor.models.message import LLMMessage
+from processor.models.prompts import schema_processor_prompts
+from processor.utils.string_processor import parse_code_string
 
 
 class SchemaProcessor:
-    def get_target_schema(self, ctx: ConductorState, question: str) -> list[str]:
+    """
+    SchemaProcessor is a core service of Processor. It provides methods for
+    producing target schema for a given question and enhancing the schemas of
+    tables related to the question (e.g., output of data discovery system).
+    """
+
+    def get_target_schema(
+        self,
+        ctx: ConductorState,
+        question: str,
+        input_computation_nodes: list[Node] = [],
+    ) -> list[str]:
         """
         Produces a target schema given a question.
+
+        Args:
+            ctx (ConductorState): Conductor state object.
+            question (str): The question posed to based the target schema on.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
         """
+        ctx.logger.info(f"Getting target schema for the question {question}")
         messages = [
             {
                 "role": "system",
@@ -18,10 +40,19 @@ class SchemaProcessor:
             {"role": "user", "content": f"Question: {question}"},
         ]
         target_schema = ctx.llm.chat(messages=messages)
+        ctx.logger.info(f"=> Target schema: {target_schema}")
         try:
-            target_schema = literal_eval(target_schema)
+            target_schema = parse_code_string(target_schema)
+            ctx.computation_graph.create_node(
+                computation_description="Produce target schema for the given question.",
+                computation_output=target_schema,
+                input_nodes=input_computation_nodes,
+            )
             return target_schema
-        except:
+        except ValueError:
+            ctx.logger.error(
+                "Error encountered during target schema parsing, returning `[]`"
+            )
             return []
 
     def get_table_descriptions(
@@ -111,7 +142,7 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                    "content": f"""- Schema: {table.get_representation(num_rows, 42)}
+                        "content": f"""- Schema: {table.get_representation(num_rows, 42)}
 
 - Description: {table_description}
 - Column to be renamed: {col}""",
