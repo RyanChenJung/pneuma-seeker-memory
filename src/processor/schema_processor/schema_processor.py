@@ -1,6 +1,3 @@
-# schema_processor.py
-from ast import literal_eval
-
 from tqdm import tqdm
 
 from processor.computation_graph import Node
@@ -22,7 +19,7 @@ class SchemaProcessor:
         ctx: ConductorState,
         question: str,
         input_computation_nodes: list[Node] = [],
-    ) -> list[str]:
+    ) -> Node:
         """
         Produces a target schema given a question.
 
@@ -30,6 +27,8 @@ class SchemaProcessor:
             ctx (ConductorState): Conductor state object.
             question (str): The question posed to based the target schema on.
             input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[list[str]]): Computation node consisting of list of strings as the target schema.
         """
         ctx.logger.info(f"Getting target schema for the question {question}")
         messages = [
@@ -43,12 +42,11 @@ class SchemaProcessor:
         ctx.logger.info(f"=> Target schema: {target_schema}")
         try:
             target_schema = parse_code_string(target_schema)
-            ctx.computation_graph.create_node(
-                computation_description="Produce target schema for the given question.",
+            return ctx.computation_graph.create_node(
+                computation_description="Produced target schema for the given question.",
                 computation_output=target_schema,
                 input_nodes=input_computation_nodes,
             )
-            return target_schema
         except ValueError:
             ctx.logger.error(
                 "Error encountered during target schema parsing, returning `[]`"
@@ -58,18 +56,24 @@ class SchemaProcessor:
     def get_table_descriptions(
         self,
         ctx: ConductorState,
-        schema: str,
+        db_schema: str,
         num_sampling=3,
         num_sampled_rows=3,
-    ) -> dict[str, str]:
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
         """
         Describes all tables within a schema.
 
-        - num_sampling (int): Number of different samples to consider.
-        - num_sampled_rows (int): Number of rows to sample for each sampling process.
-        - redescribe (bool): Redescribe tables that have already been described.
+        Args:
+            ctx (ConductorState): Conductor state object.
+            db_schema (str): The db_schema of the tables to be described.
+            num_sampling (int): Number of different row samples to consider.
+            num_sampled_rows (int): Number of rows to sample for each sampling process.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[dict[str,str]]): Computation node consisting of dictionary of string keys and values as table descriptions.
         """
-        table_mapping = ctx.table_store.get_all_tables_in_db_schema(schema)
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema)
         table_descriptions: dict[str, str] = dict()
         for table_id, table in tqdm(table_mapping.items(), desc="Describing tables"):
             ctx.logger.info(
@@ -107,25 +111,41 @@ class SchemaProcessor:
             ]
             table_description = ctx.llm.chat(msg)
             ctx.logger.info(
-                f"Overall description of table '{table_id}': {table_description}"
+                f"=> Overall description of table '{table_id}': {table_description}"
             )
             table_descriptions[table_id] = table_description
 
-        return table_descriptions
+        return ctx.computation_graph.create_node(
+            computation_description=f"Described tables in DB schema `{db_schema}`",
+            computation_output=table_descriptions,
+            input_nodes=input_computation_nodes,
+        )
 
     def get_enhanced_schemas(
         self,
         ctx: ConductorState,
-        schema: str,
+        db_schema: str,
         table_descriptions: dict[str, str],
-        num_rows=3,
-    ) -> dict[str, list[str]]:
-        """Enhances table schemas."""
-        results: dict[str, list[str]] = []
-        table_mapping = ctx.table_store.get_all_tables_in_db_schema(schema)
+        num_sampled_rows=3,
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
+        """
+        Enhances table schemas.
+
+        Args:
+            ctx (ConductorState): Conductor state object.
+            db_schema (str): The db_schema of the tables to be enhanced.
+            table_descriptions (str): The descriptions of the tables in `db_schema`.
+            num_sampled_rows (int): Number of rows to sample for each sampling process.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[dict[str,str]]): Computation node consisting of dictionary of string keys and values as enhanced schemas of the tables.
+        """
+        results: dict[str, list[str]] = dict()
+        table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema)
 
         for table_id, table in table_mapping.items():
-            ctx.logger.info(f"Enhancing schema of table '{table_id}'")
+            ctx.logger.info(f"Enhancing the schema of table '{table_id}'")
             table_description = table_descriptions[table_id]
             ctx.logger.info(f"=> Table description: {table_description}")
             ctx.logger.info(
@@ -133,8 +153,8 @@ class SchemaProcessor:
             )
 
             new_columns: list[str] = []
-            for col in ctx.table_reader.get_table_schema(table):
-                ctx.logger.info(f"==> Renaming column {col}")
+            for col in table.get_schema():
+                ctx.logger.info(f"==> Renaming column `{col}`")
                 msg: list[LLMMessage] = [
                     {
                         "role": "system",
@@ -142,7 +162,7 @@ class SchemaProcessor:
                     },
                     {
                         "role": "user",
-                        "content": f"""- Schema: {table.get_representation(num_rows, 42)}
+                        "content": f"""- Schema: {table.get_representation(num_sampled_rows, 42)}
 
 - Description: {table_description}
 - Column to be renamed: {col}""",
@@ -157,4 +177,9 @@ class SchemaProcessor:
                 ctx.logger.info(f"==> New column name {new_col_name}")
                 new_columns.append(new_col_name)
             results[table_id] = new_columns
-        return results
+
+        return ctx.computation_graph.create_node(
+            computation_description=f"Enhanced tables in DB schema `{db_schema}`",
+            computation_output=results,
+            input_nodes=input_computation_nodes,
+        )
