@@ -112,3 +112,26 @@ class DFTable(AbstractTable[DataFrame]):
         dfs = [table.get_data() for table in tables]
         combined_df = concat(dfs, ignore_index=True)
         return DFTable(combined_df)
+
+    def __getitem__(self, key: str):
+        return self.data[key]
+
+    def __setitem__(self, key: str, value):
+        self.data[key] = value
+
+    def get_row(self, idx: Any):
+        """Retrieves the whole row of the given index."""
+        return self.data.loc[idx]
+
+    def merge_rows(self, rows: list[dict[str, Any]]) -> "DFTable":
+        """
+        Creates a new DFTable by merging rows.
+
+        Args:
+            rows (list[dict[str, Any]]): A list of rows, where each row is represented as a dictionary.
+
+        Returns:
+            DFTable: A new table containing the merged rows.
+        """
+        merged_data = DataFrame(rows)
+        return DFTable(merged_data, name=self.name)

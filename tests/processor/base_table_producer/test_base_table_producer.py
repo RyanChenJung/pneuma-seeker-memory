@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 from pandas import DataFrame
 
 
-
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
@@ -99,6 +98,16 @@ class TestBaseTableProducer(unittest.TestCase):
             ),
         )
 
+        self.join_operations = """[
+            {
+                "Join Result": "Join_1",
+                "Left Table": "test_table_1",
+                "Right Table": "test_table_2",
+                "Left Join Key": "id",
+                "Right Join Key": "school_id"
+            }
+        ]"""
+
         self.union_operations = """[
             {
                 "Output Table ID": "Union_1",
@@ -167,9 +176,9 @@ class TestBaseTableProducer(unittest.TestCase):
         self.assertTrue(output_node.function_name, "get_relevant_table_ids")
         self.assertTrue(output_node.class_name, "BaseTableProducer")
 
-    def test_produce_union_table_operations(self):
+    def test_produce_union_operations(self):
         self.conductor_state.llm.chat = MagicMock(return_value=self.union_operations)
-        output_node = self.base_table_producer.produce_union_table_operations(
+        output_node = self.base_table_producer.produce_union_operations(
             ctx=self.conductor_state,
             db_schema=self.db_schema,
             table_descriptions=self.table_descriptions,
@@ -190,11 +199,11 @@ class TestBaseTableProducer(unittest.TestCase):
         computation_graph_nodes = self.conductor_state.computation_graph.nodes
         self.assertTrue(len(computation_graph_nodes), 1)
         self.assertEqual(union_operations, expected_operations)
-        self.assertTrue(output_node.function_name, "produce_union_table_operations")
+        self.assertTrue(output_node.function_name, "produce_union_operations")
         self.assertTrue(output_node.class_name, "BaseTableProducer")
 
-    def test_run_union_table_operations(self):
-        output_node = self.base_table_producer.run_union_table_operations(
+    def test_run_union_operations(self):
+        output_node = self.base_table_producer.run_union_operations(
             ctx=self.conductor_state,
             table_mappings=self.table_store.get_all_tables_in_db_schema(self.db_schema),
             operations=[
@@ -225,9 +234,94 @@ class TestBaseTableProducer(unittest.TestCase):
 
         computation_graph_nodes = self.conductor_state.computation_graph.nodes
         self.assertTrue(len(computation_graph_nodes), 1)
-        self.assertEqual(list(actual_table_mappings.keys()), list(expected_table_mappings.keys()))
-        self.assertEqual(actual_table_mappings['Union_1'], expected_table_mappings['Union_1'])
-        self.assertTrue(output_node.function_name, "run_union_table_operations")
+        self.assertEqual(
+            list(actual_table_mappings.keys()), list(expected_table_mappings.keys())
+        )
+        self.assertEqual(
+            actual_table_mappings["Union_1"], expected_table_mappings["Union_1"]
+        )
+        self.assertTrue(output_node.function_name, "run_union_operations")
+        self.assertTrue(output_node.class_name, "BaseTableProducer")
+
+    def test_produce_join_operations(self):
+        self.conductor_state.llm.chat = MagicMock(return_value=self.join_operations)
+        output_node = self.base_table_producer.produce_join_operations(
+            ctx=self.conductor_state,
+            db_schema=self.db_schema,
+            table_descriptions=self.table_descriptions,
+        )
+        join_operations: list[dict[str, Any]] = output_node.computation_output
+        expected_operations = [
+            {
+                "Join Result": "Join_1",
+                "Left Table": "test_table_1",
+                "Right Table": "test_table_2",
+                "Left Join Key": "id",
+                "Right Join Key": "school_id",
+            }
+        ]
+
+        computation_graph_nodes = self.conductor_state.computation_graph.nodes
+        self.assertTrue(len(computation_graph_nodes), 1)
+        self.assertEqual(join_operations, expected_operations)
+        self.assertTrue(output_node.function_name, "produce_join_operations")
+        self.assertTrue(output_node.class_name, "BaseTableProducer")
+
+    def test_run_join_operations(self):
+        self.conductor_state.llm.chat = MagicMock(
+            return_value="""SELECT * FROM test_table_1 JOIN test_table_2 ON test_table_1.id = test_table_2.school_id"""
+        )
+        output_node = self.base_table_producer.run_join_operations(
+            ctx=self.conductor_state,
+            table_mapping=self.table_store.get_all_tables_in_db_schema(self.db_schema),
+            operations=[
+                {
+                    "Join Result": "Join_1",
+                    "Left Table": "test_table_1",
+                    "Right Table": "test_table_2",
+                    "Left Join Key": "id",
+                    "Right Join Key": "school_id",
+                }
+            ],
+        )
+        actual_table_mapping: dict[str, AbstractTable] = output_node.computation_output
+        expected_table_mapping = {
+            self.table_id_3: self.conductor_state.table_store.get_table(
+                self.db_schema, self.table_id_3
+            ),
+            "Join_1": DFTable(
+                data=DataFrame(
+                    {
+                        "id": [1, 2, 3, 4, 5],
+                        "school_name": [
+                            "school 1",
+                            "school 2",
+                            "school 3",
+                            "school 4",
+                            "school 5",
+                        ],
+                        "school_id": [1, 2, 3, 4, 5],
+                        "city": [
+                            "New York City",
+                            "Los Angeles",
+                            "Chicago",
+                            "Seattle",
+                            "San Fransisco",
+                        ],
+                    }
+                )
+            ),
+        }
+
+        computation_graph_nodes = self.conductor_state.computation_graph.nodes
+        self.assertTrue(len(computation_graph_nodes), 2)
+        self.assertEqual(
+            list(actual_table_mapping.keys()), list(expected_table_mapping.keys())
+        )
+        self.assertEqual(
+            actual_table_mapping["Join_1"], expected_table_mapping["Join_1"]
+        )
+        self.assertTrue(output_node.function_name, "run_join_operations")
         self.assertTrue(output_node.class_name, "BaseTableProducer")
 
 

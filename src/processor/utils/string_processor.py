@@ -16,3 +16,12 @@ def parse_code_string(code: str):
     elif code.startswith("json"):
         code = code[4:]
     return literal_eval(code)
+
+def parse_sql_string(code: str):
+    if code.startswith("```"):
+        code = code[3:]
+    if code.endswith("```"):
+        code = code[:-3]
+    elif code.startswith("sql"):
+        code = code[3:]
+    return code

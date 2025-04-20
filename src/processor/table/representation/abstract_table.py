@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 import copy
 from typing import Any, Optional, TypeVar, Generic
 
+from pandas import Series
+
 
 T = TypeVar("T")
 
@@ -23,7 +25,7 @@ class AbstractTable(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def rename_schema(self, schema_mapping: dict[str,str]):
+    def rename_schema(self, schema_mapping: dict[str, str]):
         """Renames the schema of a table."""
         pass
 
@@ -85,6 +87,33 @@ class AbstractTable(ABC, Generic[T]):
     @abstractmethod
     def concat(tables: list["AbstractTable"]) -> "AbstractTable":
         """Concatenates a list of tables into one."""
+        pass
+
+    @abstractmethod
+    def __getitem__(self, key: str) -> Series:
+        pass
+
+    @abstractmethod
+    def __setitem__(self, key: str, value):
+        pass
+
+    @abstractmethod
+    def get_row(self, idx: Any):
+        """Retrieves the whole row of the given index."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def merge_rows(rows: list[dict[str, Any]]) -> "AbstractTable":
+        """
+        Creates a new table by merging rows.
+
+        Args:
+            rows (list[dict[str, Any]]): A list of rows, where each row is represented as a dictionary.
+
+        Returns:
+            AbstractTable: A new table containing the merged rows.
+        """
         pass
 
     def copy(self):

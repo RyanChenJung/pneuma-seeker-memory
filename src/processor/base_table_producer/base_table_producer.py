@@ -10,7 +10,7 @@ from processor.models.prompts import base_table_producer_prompts
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
 from processor.models.message import LLMMessage
-from processor.utils.string_processor import parse_code_string
+from processor.utils.string_processor import parse_code_string, parse_sql_string
 
 
 class BaseTableProducer:
@@ -74,7 +74,7 @@ class BaseTableProducer:
             input_nodes=input_computation_nodes,
         )
 
-    def produce_union_table_operations(
+    def produce_union_operations(
         self,
         ctx: ConductorState,
         db_schema: str,
@@ -128,7 +128,7 @@ class BaseTableProducer:
             input_nodes=input_computation_nodes,
         )
 
-    def run_union_table_operations(
+    def run_union_operations(
         self,
         ctx: ConductorState,
         table_mappings: dict[str, AbstractTable],
@@ -173,37 +173,78 @@ class BaseTableProducer:
             input_nodes=input_computation_nodes,
         )
 
-    def join_tables(
+    def produce_join_operations(
         self,
         ctx: ConductorState,
         db_schema: str,
+        table_descriptions: dict[str, str],
         num_rows=3,
-        num_values=5,
-    ):
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
         """
-        Returns a list of tables in the schema, some of which may have been merged.
+        Returns a list of operations to union tables (if any) within the DB schema.
+
+        Args:
+            ctx (ConductorState): Conductor state object.
+            db_schema (str): The DB schema to get the tables from.
+            table_descriptions (dict[str,str]): The descriptions of the tables.
+            num_rows (int): The number of rows to sample.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[list[dict[str,str]]]): Computation node consisting of the join operations.
         """
-        ctx.logger.info("Step 1: Produce join operations")
-        join_operations = self.__produce_join_operations(
-            ctx, db_schema=db_schema, num_rows=num_rows
+        available_tables_formatted = self.__format_available_tables(
+            ctx, db_schema, num_rows, table_descriptions
         )
-        join_operations: list[dict[str, str]] = parse_json(join_operations)
+        msg: list[LLMMessage] = [
+            {"role": "system", "content": base_table_producer_prompts["join_planner"]},
+            {"role": "user", "content": available_tables_formatted},
+        ]
+        join_operations: list[dict[str, str]] = parse_code_string(ctx.llm.chat(msg))
+        ctx.logger.info(f"Join operations: {join_operations}")
+        return ctx.computation_graph.create_node(
+            computation_description="Produced join operations",
+            computation_output=join_operations,
+            input_nodes=input_computation_nodes,
+        )
 
-        ctx.logger.info("Step 2: Execute join operations")
-        table_mapping = ctx.table_store.get_all_tables_in_db_schema(db_schema=db_schema)
-        for op in join_operations:
-            join_table_id: str = op["Join Result"]
-            left_table_id: str = op["Left Table"]
-            right_table_id: str = op["Right Table"]
-            left_join_key: str = op["Left Join Key"]
-            right_join_key: str = op["Right Join Key"]
+    def run_join_operations(
+        self,
+        ctx: ConductorState,
+        table_mapping: dict[str, AbstractTable],
+        operations: list[dict[str, str]],
+        num_values=3,
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
+        """
+        Returns a list of operations to join tables (if any) within the DB schema.
 
-            left_key_samples = table_mapping[left_table_id].get_attribute_values(
+        Args:
+            ctx (ConductorState): Conductor state object.
+            table_mappings (dict[str,AbstractTable]): The mapping between table IDs and table objects.
+            operations (list[dict[str, Any]]): The join operations.
+            num_values (int): Number of rows to sample for each table.
+            input_computation_nodes (Node): A list of input nodes to keep track of computation.
+        Returns:
+            Output (Node[dict[str, AbstractTable]]): Computation node consisting of the table mappings after the operations have been applied.
+        """
+
+        # Ensure non-mutability of the original object
+        table_mapping_copy = {k: v.copy() for k, v in table_mapping.items()}
+        extra_input_nodes: list[Node] = []
+        for operation in operations:
+            join_table_id: str = operation["Join Result"]
+            left_table_id: str = operation["Left Table"]
+            right_table_id: str = operation["Right Table"]
+            left_join_key: str = operation["Left Join Key"]
+            right_join_key: str = operation["Right Join Key"]
+
+            left_key_samples = table_mapping_copy[left_table_id].get_attribute_values(
                 attr_name=left_join_key,
                 num_values=num_values,
                 random_seed=42,
             )
-            right_key_samples = table_mapping[right_table_id].get_attribute_values(
+            right_key_samples = table_mapping_copy[right_table_id].get_attribute_values(
                 attr_name=right_join_key,
                 num_values=num_values,
                 random_seed=42,
@@ -228,52 +269,46 @@ class BaseTableProducer:
                 .split("classification: ")[-1]
                 .startswith("semantic")
             ):
-                # joined_table = self.__run_semantic_join_operation()
-                joined_table = self.__run_semantic_join_operation(
+                join_node = self.__run_semantic_join_operation(
                     ctx,
-                    table_mapping[left_table_id],
-                    table_mapping[right_table_id],
+                    table_mapping_copy[left_table_id],
+                    table_mapping_copy[right_table_id],
                     left_join_key,
                     right_join_key,
+                    input_computation_nodes,
                 )
             else:
-                joined_table = self.__run_std_join_operation(
+                join_node = self.__run_std_join_operation(
                     ctx,
                     left_table_id,
                     right_table_id,
-                    table_mapping[left_table_id],
-                    table_mapping[right_table_id],
+                    table_mapping_copy[left_table_id],
+                    table_mapping_copy[right_table_id],
                     left_join_key,
                     right_join_key,
+                    input_computation_nodes,
                 )
-
-            table_mapping[join_table_id] = joined_table
-            del table_mapping[left_table_id]
-            del table_mapping[right_table_id]
-
-    def __produce_join_operations(
-        self, ctx: ConductorState, db_schema: str, table_descriptions: dict[str, str], num_rows=3
-    ):
-        available_tables_formatted = self.__format_available_tables(
-            ctx, db_schema, num_rows, table_descriptions
+            extra_input_nodes.append(join_node)
+            joined_table = join_node.computation_output
+            table_mapping_copy[join_table_id] = joined_table
+            del table_mapping_copy[left_table_id]
+            del table_mapping_copy[right_table_id]
+        return ctx.computation_graph.create_node(
+            "Ran join operations over the tabless",
+            table_mapping_copy,
+            input_computation_nodes + extra_input_nodes,
         )
-        msg: list[LLMMessage] = [
-            {"role": "system", "content": base_table_producer_prompts["join_planner"]},
-            {"role": "user", "content": available_tables_formatted},
-        ]
-        join_operations = ctx.llm.chat(msg)
-        ctx.logger.info(f"=> join_operations: {join_operations}")
-        return join_operations
 
     def __run_semantic_join_operation(
         self,
         ctx: ConductorState,
-        A: pd.DataFrame,
-        B: pd.DataFrame,
+        A: AbstractTable,
+        B: AbstractTable,
         keyA: str,
         keyB: str,
+        input_nodes: list[Node] = [],
         alpha=0.9,
-    ):
+    ) -> Node:
         # Store best matches for A -> B
         best_match_from_A = dict()
         for idx_a, val_a in A[keyA].items():
@@ -301,16 +336,20 @@ class BaseTableProducer:
                 best_match_from_B[idx_b] = (best_idx_a, best_score)
 
         # Keep mutual best matches only
-        matches = []
+        matches: list[Any] = []
         for idx_a, (idx_b, score_ab) in best_match_from_A.items():
             if idx_b in best_match_from_B and best_match_from_B[idx_b][0] == idx_a:
-                row_a = A.loc[idx_a]
-                row_b = B.loc[idx_b]
+                row_a = A.get_row(idx_a)
+                row_b = B.get_row(idx_b)
                 merged_row = pd.concat([row_a, row_b], axis=0)
                 merged_row["similarity_score"] = score_ab
                 matches.append(merged_row)
-
-        return pd.DataFrame(matches)
+        merged_table = type(A).merge_rows(matches)
+        return ctx.computation_graph.create_node(
+            "Ran semantic join operation.",
+            merged_table,
+            input_nodes,
+        )
 
     def __check_similarity(ctx: ConductorState, a: str, b: str) -> float:
         a_embed = ctx.embedding_model.embed(a)
@@ -326,6 +365,7 @@ class BaseTableProducer:
         right_table: AbstractTable,
         left_join_key: str,
         right_join_key: str,
+        input_nodes: list[Node] = [],
     ):
         """Runs a single standard join operation."""
         msg = [
@@ -339,15 +379,21 @@ class BaseTableProducer:
 - Right table (ID: {right_table_id}; join key: {right_join_key}): {right_table.get_representation(3, 42)}""",
             },
         ]
-        sql_script = parse_code_string(ctx.llm.chat(msg))
+        sql_script = parse_sql_string(ctx.llm.chat(msg))
 
-        ctx.logger.info("=> Executing SQL")
-        conn = sqlite3.connect(":memory:")
-        left_table.to_sql(left_table_id, conn, index=False, if_exists="replace")
-        right_table.to_sql(right_table_id, conn, index=False, if_exists="replace")
-
-        joined_table = pd.read_sql_query(sql_script, conn)
-        return joined_table
+        ctx.logger.info(f"=> Executing SQL: {sql_script}")
+        joined_table = ctx.table_store.execute_sql_query(
+            sql_query=sql_script,
+            tables_involved={
+                left_table_id: left_table,
+                right_table_id: right_table,
+            },
+        )
+        return ctx.computation_graph.create_node(
+            f"Executing this SQL script for a standard join operation:\n{sql_script}",
+            joined_table,
+            input_nodes,
+        )
 
     def __format_available_tables(
         self,
