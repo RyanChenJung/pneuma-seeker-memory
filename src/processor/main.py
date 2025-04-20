@@ -5,7 +5,7 @@ from pandas import DataFrame
 from processor.base_table_reducer.base_table_reducer import BaseTableReducer
 
 from processor.base_table_producer.base_table_producer import BaseTableProducer
-from processor.computation_graph import ComputationGraph
+from processor.computation_graph import ComputationGraph, Node
 from processor.conductor_state import ConductorState
 from processor.models.interface.model_factory import get_embed_model, get_llm
 from processor.schema_processor.schema_processor import SchemaProcessor
@@ -53,7 +53,7 @@ class Processor:
         self.base_table_producer = BaseTableProducer()
         self.base_table_reducer = BaseTableReducer()
 
-    def get_target_schema(self, question: str):
+    def get_target_schema(self, question: str) -> Node:
         """
         Given a question over tables, retrieves the target schema of a table that
         can answer the question.
@@ -74,13 +74,9 @@ class Processor:
         schema: str,
         num_sampling=3,
         num_sampled_rows=3,
-    ):
+    ) -> Node:
         """
         Describes all tables within a schema.
-
-        - num_sampling (int): Number of different samples to consider.
-        - num_sampled_rows (int): Number of rows to sample for each sampling process.
-        - redescribe (bool): Redescribe tables that have already been described.
         """
         return self.schema_processor.get_table_descriptions(
             ctx=self.ctx,
@@ -91,17 +87,9 @@ class Processor:
 
     def get_enhanced_schemas(
         self, schema: str, table_descriptions: dict[str, str], num_rows=3
-    ) -> dict[str, list[str]]:
+    ) -> Node:
         """
         Given a list of tables, produces enhanced schemas of the tables.
-
-        ## Attributes
-        - tables (list[DataFrame]): The tables whose schemas are to be enhanced by the Processor.
-
-        ## Returns
-        - list[str]: The enhanced schema of the tables.
-
-        Produces a target schema given a question.
         """
         return self.schema_processor.get_enhanced_schemas(
             ctx=self.ctx,
