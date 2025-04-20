@@ -116,5 +116,34 @@ class AbstractTable(ABC, Generic[T]):
         """
         pass
 
+    @staticmethod
+    @abstractmethod
+    def merge_columns(columns: dict[str, list[Any]]) -> "AbstractTable":
+        """
+        Creates a new table by merging columns.
+
+        Args:
+            columns (dict[str, list[Any]]): A dictionary of columns.
+
+        Returns:
+            AbstractTable: A new table containing the merged columns.
+        """
+        pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """Returns the number of rows in a table."""
+        pass
+
+    @abstractmethod
+    def drop_duplicates(self) -> "AbstractTable":
+        """Drops duplicates in the rows of a table and resets the index."""
+        pass
+
+    @abstractmethod
+    def iterrows(self) -> tuple[Any, Any]:
+        """Returns the rows of a table, along with the index."""
+        pass
+
     def copy(self):
         return copy.deepcopy(self)

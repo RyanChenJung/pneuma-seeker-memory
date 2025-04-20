@@ -1,6 +1,6 @@
-from typing import Any, Optional
+from typing import Any, Hashable, Optional
 from numpy.random import default_rng
-from pandas import DataFrame, concat
+from pandas import DataFrame, Series, concat
 
 from processor.table.representation.abstract_table import AbstractTable
 
@@ -123,7 +123,8 @@ class DFTable(AbstractTable[DataFrame]):
         """Retrieves the whole row of the given index."""
         return self.data.loc[idx]
 
-    def merge_rows(self, rows: list[dict[str, Any]]) -> "DFTable":
+    @staticmethod
+    def merge_rows(rows: list[dict[str, Any]]) -> "DFTable":
         """
         Creates a new DFTable by merging rows.
 
@@ -134,4 +135,33 @@ class DFTable(AbstractTable[DataFrame]):
             DFTable: A new table containing the merged rows.
         """
         merged_data = DataFrame(rows)
-        return DFTable(merged_data, name=self.name)
+        return DFTable(merged_data)
+    
+    @staticmethod
+    def merge_columns(columns: dict[str, list[Any]]) -> "DFTable":
+        """
+        Creates a new table by merging columns.
+
+        Args:
+            columns (dict[str, list[Any]]): A dictionary of columns.
+
+        Returns:
+            AbstractTable: A new table containing the merged columns.
+        """
+        print(f"DEBUGGY: columns: {columns}")
+        merged_data = DataFrame(columns)
+        return DFTable(merged_data)
+    
+    def drop_duplicates(self) -> "DFTable":
+        """Drops duplicates in the rows of a table and resets the index."""
+        return DFTable(
+            data=self.data.drop_duplicates().reset_index(drop=True)
+        )
+    
+    def iterrows(self) -> tuple[Hashable, Series]:
+        """Returns the rows of a table, along with the index."""
+        return self.data.iterrows()
+
+    def __len__(self) -> int:
+        """Returns the number of rows in a table."""
+        return len(self.data)

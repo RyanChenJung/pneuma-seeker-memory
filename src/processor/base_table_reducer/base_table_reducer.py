@@ -1,12 +1,13 @@
 import sqlite3
-import pandas as pd
 from typing import Any
+import pandas as pd
 
-from pandas import DataFrame
 from tqdm import tqdm
+from processor.computation_graph import Node
 from processor.models.message import LLMMessage
 from processor.conductor_state import ConductorState
 from processor.models.prompts import base_table_reducer_prompts
+from processor.table.representation.abstract_table import AbstractTable
 from processor.utils.string_processor import parse_code_string
 
 
@@ -14,11 +15,13 @@ class BaseTableReducer:
     def project_columns(
         self,
         ctx: ConductorState,
-        base_table: DataFrame,
+        base_table: AbstractTable,
         target_schema: list[str],
         num_rows=3,
-    ):
-        target_table = DataFrame()
+        input_nodes: list[Node] = [],
+    ) -> Node:
+        target_table_cols: dict[str, list[Any]] = dict()
+        extra_input_nodes: list[Node] = []
         for col in target_schema:
             msg = [
                 {
@@ -27,59 +30,72 @@ class BaseTableReducer:
                 },
                 {
                     "role": "user",
-                    "content": f"Source table: ```{ctx.table_reader.format_table(base_table, num_rows, 42)}```\nTarget Schema: {target_schema}\nTarget Column: `{col}`",
+                    "content": f"Source table: ```{base_table.get_representation(num_rows, 42)}```\nTarget Schema: {target_schema}\nTarget Column: `{col}`",
                 },
             ]
             operation: dict[str, str] = parse_code_string(ctx.llm.chat(msg))
             if operation["operation"] == "select_column":
-                target_table[col] = base_table[operation["columns_involved"]]
-            else:
-                target_table[col] = self.__extract_column(
-                    ctx, base_table, operation["columns_involved"], col
+                operation_node = ctx.computation_graph.create_node(
+                    "Mapped a column directly.",
+                    list(base_table[operation["columns_involved"][0]]),
+                    input_nodes,
                 )
-        return target_table
+            else:
+                operation_node = self.__extract_column(
+                    ctx, base_table, operation["columns_involved"], col, 10, input_nodes,
+                )
+            extra_input_nodes.append(operation_node)
+            target_table_cols[col] = operation_node.computation_output
+        target_table = type(base_table).merge_columns(target_table_cols)
+        return ctx.computation_graph.create_node(
+            "Projected columns from base table to target table.",
+            target_table,
+            input_nodes + extra_input_nodes,
+        )
 
     def __extract_column(
         self,
         ctx: ConductorState,
-        base_table: DataFrame,
+        base_table: AbstractTable,
         columns_involved: list[str],
         target_column: str,
         row_batch=10,
-    ) -> list[str]:
-        conn = sqlite3.connect(":memory:")
-        base_table.to_sql("base_table", conn, if_exists="replace", index=False)
-
+        input_nodes: list[Node] = [],
+    ) -> Node:
         sql_script = "SELECT "
         for col in columns_involved:
             sql_script += f'"{col}", '
         sql_script = sql_script[:-2] + "FROM base table;"
 
-        columns_involved_table = pd.read_sql(sql_script, conn)
+        columns_involved_table = ctx.table_store.execute_sql_query(
+            sql_script, {
+                "base_table": base_table,
+            }
+        )
         unique_columns_involved_table = (
-            columns_involved_table.drop_duplicates().reset_index(drop=True)
+            columns_involved_table.drop_duplicates()
         )
 
         # Keep track of how many rows to process at once
-        rows = []
+        rows: list[tuple[int, int]] = []
         for i in range(0, len(unique_columns_involved_table), row_batch):
             rows.append((i, i + row_batch))
         rows[-1] = (rows[-1][0], len(unique_columns_involved_table))
 
-        new_col_values = []
+        new_col_values: list[str] = []
         for row in tqdm(rows, desc="Processing column extraction"):
             msg = [
                 {"role": "system", "content": base_table_reducer_prompts['extract_col']},
                 {
                     "role": "user",
-                    "content": f"Table ({row[1]-row[0]} rows): ```{ctx.table_reader.format_table(unique_columns_involved_table, row[1]-row[0], None, True, row)}```\nOverall Schema: {list(base_table.columns)}\nNew Column: `{target_column}`",
+                    "content": f"Table ({row[1]-row[0]} rows): ```{unique_columns_involved_table.get_representation(row[1]-row[0], None, True, row)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
                 },
             ]
             extracted_values = ctx.llm.chat(msg)
             new_col_values.extend(parse_code_string(extracted_values))
 
-        results_cache = dict()
-        columns = unique_columns_involved_table.columns
+        results_cache: dict[str, str] = dict()
+        columns = unique_columns_involved_table.get_schema()
         for idx, row in unique_columns_involved_table.iterrows():
             vals = []
             for col in columns:
@@ -87,14 +103,19 @@ class BaseTableReducer:
             key = "_SEP_".join(vals)
             results_cache[key] = new_col_values[idx]
 
-        actual_values = []
+        actual_values: list[str] = []
         for idx, row in columns_involved_table.iterrows():
             vals = []
             for col in columns:
                 vals.append(row[col])
             key = "_SEP_".join(vals)
             actual_values.append(results_cache[key])
-        return actual_values
+        
+        return ctx.computation_graph.create_node(
+            "Extraced column values from existing columns in the base table.",
+            actual_values,
+            input_nodes,
+        )
 
     def apply_predicate_to_rows(
         self,
