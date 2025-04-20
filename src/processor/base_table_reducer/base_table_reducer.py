@@ -1,6 +1,4 @@
-import sqlite3
 from typing import Any
-import pandas as pd
 
 from tqdm import tqdm
 from processor.computation_graph import Node
@@ -8,7 +6,7 @@ from processor.models.message import LLMMessage
 from processor.conductor_state import ConductorState
 from processor.models.prompts import base_table_reducer_prompts
 from processor.table.representation.abstract_table import AbstractTable
-from processor.utils.string_processor import parse_code_string
+from processor.utils.string_processor import parse_code_string, parse_sql_string
 
 
 class BaseTableReducer:
@@ -42,7 +40,12 @@ class BaseTableReducer:
                 )
             else:
                 operation_node = self.__extract_column(
-                    ctx, base_table, operation["columns_involved"], col, 10, input_nodes,
+                    ctx,
+                    base_table,
+                    operation["columns_involved"],
+                    col,
+                    10,
+                    input_nodes,
                 )
             extra_input_nodes.append(operation_node)
             target_table_cols[col] = operation_node.computation_output
@@ -68,13 +71,12 @@ class BaseTableReducer:
         sql_script = sql_script[:-2] + "FROM base table;"
 
         columns_involved_table = ctx.table_store.execute_sql_query(
-            sql_script, {
+            sql_script,
+            {
                 "base_table": base_table,
-            }
+            },
         )
-        unique_columns_involved_table = (
-            columns_involved_table.drop_duplicates()
-        )
+        unique_columns_involved_table = columns_involved_table.drop_duplicates()
 
         # Keep track of how many rows to process at once
         rows: list[tuple[int, int]] = []
@@ -85,7 +87,10 @@ class BaseTableReducer:
         new_col_values: list[str] = []
         for row in tqdm(rows, desc="Processing column extraction"):
             msg = [
-                {"role": "system", "content": base_table_reducer_prompts['extract_col']},
+                {
+                    "role": "system",
+                    "content": base_table_reducer_prompts["extract_col"],
+                },
                 {
                     "role": "user",
                     "content": f"Table ({row[1]-row[0]} rows): ```{unique_columns_involved_table.get_representation(row[1]-row[0], None, True, row)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
@@ -110,7 +115,7 @@ class BaseTableReducer:
                 vals.append(row[col])
             key = "_SEP_".join(vals)
             actual_values.append(results_cache[key])
-        
+
         return ctx.computation_graph.create_node(
             "Extraced column values from existing columns in the base table.",
             actual_values,
@@ -120,20 +125,27 @@ class BaseTableReducer:
     def apply_predicate_to_rows(
         self,
         ctx: ConductorState,
-        target_table: pd.DataFrame,
+        target_table: AbstractTable,
         question: str,
-        num_rows = 3,
-    ) -> pd.DataFrame:
+        num_rows=3,
+        input_nodes: list[Node] = [],
+    ) -> Node:
         msg: list[LLMMessage] = [
-            {'role': 'system', 'content': base_table_reducer_prompts['reduce_row']},
-            {'role': 'user', 'content': f"""- Table: ```{ctx.table_reader.format_table(target_table, num_rows, 42)}```
-- Question: {question}"""}
+            {"role": "system", "content": base_table_reducer_prompts["reduce_row"]},
+            {
+                "role": "user",
+                "content": f"""- Table: ```{target_table.get_representation(num_rows, 42)}```
+- Question: {question}""",
+            },
         ]
         llm_output = ctx.llm.chat(msg)
-        sql_query = parse_code_string(llm_output)
-
+        sql_query = parse_sql_string(llm_output)
         ctx.logger.info(f"SQL Query: {sql_query}")
-        conn = sqlite3.connect(":memory:")
-        target_table.to_sql('target_table', conn, index=False, if_exists="replace")
-        final_table = pd.read_sql(sql_query, conn)
-        return final_table
+        final_table = ctx.table_store.execute_sql_query(
+            sql_query, {"target_table": target_table}
+        )
+        return ctx.computation_graph.create_node(
+            f"Applied this predicate to the rows of target table: {sql_query}",
+            final_table,
+            input_nodes,
+        )

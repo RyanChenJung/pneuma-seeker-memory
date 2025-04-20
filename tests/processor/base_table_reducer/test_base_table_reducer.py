@@ -107,6 +107,21 @@ class TestBaseTableReducer(unittest.TestCase):
         self.assertTrue(output_node.function_name, "project_columns")
         self.assertTrue(output_node.class_name, "BaseTableReducer")
 
+    def test_apply_predicate_to_rows(self):
+        mock_return_value = """SELECT * FROM target_table;"""
+        self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
+        output_node = self.base_table_reducer.apply_predicate_to_rows(
+            self.conductor_state,
+            self.table_store.get_table(self.db_schema, self.table_id),
+            self.question,
+        )
+        final_table = output_node.computation_output
+        self.assertEqual(
+            final_table, self.table_store.get_table(self.db_schema, self.table_id)
+        )
+        self.assertTrue(output_node.function_name, "apply_predicate_to_rows")
+        self.assertTrue(output_node.class_name, "BaseTableReducer")
+
 
 if __name__ == "__main__":
     unittest.main()
