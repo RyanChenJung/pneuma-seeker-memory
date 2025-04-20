@@ -84,7 +84,7 @@ class Processor:
         """
         return self.schema_processor.get_table_descriptions(
             ctx=self.ctx,
-            schema=schema,
+            db_schema=schema,
             num_sampling=num_sampling,
             num_sampled_rows=num_sampled_rows,
         )
@@ -105,7 +105,7 @@ class Processor:
         """
         return self.schema_processor.get_enhanced_schemas(
             ctx=self.ctx,
-            schema=schema,
+            db_schema=schema,
             table_descriptions=table_descriptions,
-            num_rows=num_rows,
+            num_sampled_rows=num_rows,
         )
