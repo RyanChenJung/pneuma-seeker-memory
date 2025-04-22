@@ -21,9 +21,26 @@ class PyTableStore(AbstractTableStore):
         self.__metadata_store: list[Metadata] = []
         self.__lock = Lock()
         self.db_path = db_path
-        self.__checkpoint()
 
-    def __checkpoint(self):
+        try:
+            self.load_checkpoint()
+        except RuntimeError:
+            self.checkpoint()
+    
+    def load_checkpoint(self, db_path: str = None):
+        """Loads a table store."""
+        if db_path is None:
+            db_path = self.db_path
+        with self.__lock:
+            try:
+                with open(os.path.join(db_path, "table_store.pkl"), "rb") as f:
+                    self.__table_store = pickle.load(f)
+                with open(os.path.join(db_path, "metadata_store.pkl"), "rb") as f:
+                    self.__metadata_store = pickle.load(f)
+            except (OSError, IOError, pickle.UnpicklingError) as e:
+                raise RuntimeError(f"Failed to load checkpoint: {e}")
+
+    def checkpoint(self):
         with self.__lock:
             try:
                 with open(os.path.join(self.db_path, "table_store.pkl"), "wb") as f:
@@ -43,7 +60,7 @@ class PyTableStore(AbstractTableStore):
         if db_schema_name in self.__table_store:
             raise ValueError(f"DB schema `{db_schema_name}` already exists.")
         self.__table_store[db_schema_name] = dict()
-        self.__checkpoint()
+        self.checkpoint()
 
     def rename_db_schema(self, db_schema_name: str, new_db_schema_name: str) -> None:
         """
@@ -60,7 +77,7 @@ class PyTableStore(AbstractTableStore):
             db_schema_name
         ].copy()
         del self.__table_store[db_schema_name]
-        self.__checkpoint()
+        self.checkpoint()
 
     def delete_db_schema(self, db_schema_name: str) -> None:
         """
@@ -72,14 +89,15 @@ class PyTableStore(AbstractTableStore):
         if db_schema_name not in self.__table_store:
             raise ValueError(f"DB schema `{db_schema_name}` does not exist.")
         del self.__table_store[db_schema_name]
-        self.__checkpoint()
+        self.checkpoint()
 
     def add_table(
         self,
         db_schema: str,
         table_id: str,
         table: AbstractTable,
-        overwrite: bool = False,
+        overwrite = False,
+        checkpoint = False,
     ) -> None:
         """
         Adds or updates a table in a schema. If overwrite is False and table exists, raises error.
@@ -97,7 +115,8 @@ class PyTableStore(AbstractTableStore):
                 f"Table `{table_id}` already exists in the DB schema. To overwrite, set `overwrite=True`."
             )
         self.__table_store[db_schema][table_id] = table
-        self.__checkpoint()
+        if checkpoint:
+            self.checkpoint()
 
     def get_table(self, db_schema: str, table_id: str) -> AbstractTable:
         """
@@ -122,7 +141,7 @@ class PyTableStore(AbstractTableStore):
         if table_id not in self.__table_store[db_schema]:
             raise ValueError(f"Table `{table_id}` does not exist.")
         del self.__table_store[db_schema][table_id]
-        self.__checkpoint()
+        self.checkpoint()
 
     def add_table_metadata(
         self,
@@ -169,7 +188,7 @@ class PyTableStore(AbstractTableStore):
             )
         )
         self.__metadata_store = filtered_metadata_store
-        self.__checkpoint()
+        self.checkpoint()
 
     def get_table_metadata(
         self, db_schema: str, table_id: str, metadata_type: TableMetadataType
@@ -213,7 +232,7 @@ class PyTableStore(AbstractTableStore):
         if len(filtered_metadata_store) == len(self.__metadata_store):
             raise ValueError("Metadata does not exists.")
         self.__metadata_store = filtered_metadata_store
-        self.__checkpoint()
+        self.checkpoint()
 
     def get_all_db_schemas(self) -> list[str]:
         """Returns a list of all schema names."""

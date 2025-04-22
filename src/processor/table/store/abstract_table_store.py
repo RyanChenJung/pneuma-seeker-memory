@@ -9,6 +9,17 @@ class AbstractTableStore(ABC):
     @abstractmethod
     def __init__(self, db_path: str):
         """Initializes a table store using an underlying database system."""
+        pass
+
+    @abstractmethod
+    def checkpoint(self):
+        """Checkpoints data."""
+        pass
+    
+    @abstractmethod
+    def load_checkpoint(self, db_path: str = None):
+        """Loads a table store."""
+        pass
 
     @abstractmethod
     def create_db_schema(self, db_schema_name: str) -> None:
@@ -47,7 +58,8 @@ class AbstractTableStore(ABC):
         db_schema: str,
         table_id: str,
         table: AbstractTable,
-        overwrite: bool = False,
+        overwrite = False,
+        checkpoint = False,
     ) -> None:
         """
         Adds or updates a table in a schema. If overwrite is False and table exists, raises error.
