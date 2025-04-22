@@ -31,7 +31,7 @@ class Processor:
         # Initialize logger
         logger = setup_logger(
             name="processor_logger",
-            log_file=os.path.join(output_path, "log"),
+            log_path=os.path.join(output_path, "log"),
             level=logging.INFO,
             max_bytes=10_000_000,
             backup_count=5,
