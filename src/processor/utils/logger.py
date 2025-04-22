@@ -1,18 +1,19 @@
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 import sys
 from typing import Optional
 
 
 def setup_logger(
     name: str = "processor_logger",
-    log_file: Optional[str] = None,
+    log_path: Optional[str] = None,
     level: int = logging.INFO,
     max_bytes: int = 10_000_000,
     backup_count: int = 5,
 ) -> logging.Logger:
     """
-    Sets up a centralized logger. If `log_file` is specified, logs will be written
+    Sets up a centralized logger. If `log_path` is specified, logs will be written
     to a rotating file. Otherwise, logs will be printed to stdout.
     """
     logger = logging.getLogger(name)
@@ -29,10 +30,12 @@ def setup_logger(
         stream_handler.setFormatter(formatter)
         logger.addHandler(stream_handler)
 
-        if log_file:
+        if log_path:
             # File handler with rotation
             file_handler = RotatingFileHandler(
-                log_file, maxBytes=max_bytes, backupCount=backup_count
+                os.path.join(log_path, "processor.log"),
+                maxBytes=max_bytes,
+                backupCount=backup_count,
             )
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
