@@ -132,8 +132,8 @@ Output:
 ['Restaurant ID', 'Restaurant Name', 'Rating', 'Location']
 
 This ensures that a data scientist can efficiently filter and interpret the dataset.""",
-    "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Output your guess directly without any extra formatting.",
-    "table_descriptor_with_initial_description": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. You are also given an initial description of what the table represents. Your goal is to enhance the initial description about what the table reprsents based on what you observed on the data. Output your description directly without any extra formatting.",
+    "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Synthesize the description; do not simply enumerate the columns. Output your guess directly without any extra formatting.",
+    "table_descriptor_with_initial_description": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. You are also given an initial description of what the table represents. Your goal is to enhance the initial description about what the table reprsents based on what you observed on the data while keeping it general (not too focused on specific row values). Synthesize the description; do not simply enumerate the columns. Output your description directly without any extra formatting.",
     "column_renamer": """You are an experienced data scientist. You are given:
 
 - The schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values.
@@ -172,6 +172,21 @@ While for extracting information from certain column(s):
 }
 
 Output your result strictly as a Python dictionary, without any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary.""",
+    "extract_mode": """You are a data scientist working with structured tables.
+
+You will be given:
+- A table (schema and sample rows).
+- A new column to generate.
+
+Your job is to decide:
+1. Should the values of the new column be extracted row-by-row using language reasoning?
+2. Or, can the values be generated using a single Python function that processes the other column(s)?
+
+Output one of:
+- 'rowwise_extraction'
+- 'python_code'
+
+Output ONLY the keyword, without quotes, explanations, or formatting.""",
     "extract_col": """You are a helpful and knowledgeable data scientist.
 
 You will be provided with:
