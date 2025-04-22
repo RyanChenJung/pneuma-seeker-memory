@@ -82,16 +82,21 @@ class SchemaProcessor:
             )
             sample_descriptions: list[str] = []
             for i in range(num_sampling):
+                system_prompt = schema_processor_prompts["table_descriptor"]
+                user_prompt = table.get_representation(
+                    num_rows=num_sampled_rows, random_seed=42 + i
+                )
+                if existing_descriptions.get(table_id):
+                    system_prompt = schema_processor_prompts["table_descriptor_with_initial_description"]
+                    user_prompt = f"- Initial Description: ```{existing_descriptions.get(table_id, '')}```\n- Table Data: {user_prompt}"
                 msg: list[LLMMessage] = [
                     {
                         "role": "system",
-                        "content": schema_processor_prompts["table_descriptor"],
+                        "content": system_prompt,
                     },
                     {
                         "role": "user",
-                        "content": table.get_representation(
-                            num_rows=num_sampled_rows, random_seed=42 + i
-                        ),
+                        "content": user_prompt,
                     },
                 ]
                 sample_description = ctx.llm.chat(msg)

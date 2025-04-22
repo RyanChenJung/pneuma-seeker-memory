@@ -133,6 +133,7 @@ Output:
 
 This ensures that a data scientist can efficiently filter and interpret the dataset.""",
     "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Output your guess directly without any extra formatting.",
+    "table_descriptor_with_initial_description": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. You are also given an initial description of what the table represents. Your goal is to enhance the initial description about what the table reprsents based on what you observed on the data. Output your description directly without any extra formatting.",
     "column_renamer": """You are an experienced data scientist. You are given:
 
 - The schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values.

@@ -10,7 +10,7 @@ from processor.utils.string_processor import parse_code_string, parse_sql_string
 
 
 class BaseTableReducer:
-    def project_columns(
+    def compute_target_table(
         self,
         ctx: ConductorState,
         base_table: AbstractTable,
@@ -18,6 +18,10 @@ class BaseTableReducer:
         num_rows=3,
         input_nodes: list[Node] = [],
     ) -> Node:
+        """
+        Projects `base_table`, specifically its schema, to the `target_schema`,
+        resulting in `target_table`.
+        """
         target_table_cols: dict[str, list[Any]] = dict()
         extra_input_nodes: list[Node] = []
         for col in target_schema:
@@ -122,7 +126,7 @@ class BaseTableReducer:
             input_nodes,
         )
 
-    def apply_predicate_to_rows(
+    def apply_predicate_to_target_table(
         self,
         ctx: ConductorState,
         target_table: AbstractTable,
@@ -130,6 +134,9 @@ class BaseTableReducer:
         num_rows=3,
         input_nodes: list[Node] = [],
     ) -> Node:
+        """
+        Applies a natural-language predicate to target table.
+        """
         msg: list[LLMMessage] = [
             {"role": "system", "content": base_table_reducer_prompts["reduce_row"]},
             {

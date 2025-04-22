@@ -83,14 +83,14 @@ class TestBaseTableReducer(unittest.TestCase):
 
         self.temp_dir_2.cleanup()
 
-    def test_project_columns(self):
+    def test_compute_target_table(self):
         mock_return_value = """{
             "operation": "select_column",
             "columns_involved": ["school_name"],
             "description": "Select SRC.school_name."
         }"""
         self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
-        output_node = self.base_table_reducer.project_columns(
+        output_node = self.base_table_reducer.compute_target_table(
             ctx=self.conductor_state,
             base_table=self.conductor_state.table_store.get_table(
                 self.db_schema, self.table_id
@@ -110,7 +110,7 @@ class TestBaseTableReducer(unittest.TestCase):
     def test_apply_predicate_to_rows(self):
         mock_return_value = """SELECT * FROM target_table;"""
         self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
-        output_node = self.base_table_reducer.apply_predicate_to_rows(
+        output_node = self.base_table_reducer.apply_predicate_to_target_table(
             self.conductor_state,
             self.table_store.get_table(self.db_schema, self.table_id),
             self.question,
