@@ -1,4 +1,5 @@
 from typing import Type
+from processor.models.interface.impl.embed import EmbeddingModel
 from processor.models.interface.impl.qwen import Qwen
 from processor.models.interface.impl.gpt import GPT
 from processor.models.interface.impl.gemma import Gemma
@@ -22,3 +23,4 @@ def get_llm(model_path: str) -> Type[AbstractModel]:
 
 def get_embed_model() -> Type[AbstractModel]:
     """Factory function to return the correct embedding model class."""
+    return EmbeddingModel
