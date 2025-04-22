@@ -18,7 +18,7 @@ from processor.base_table_reducer.base_table_reducer import BaseTableReducer
 from processor.table.representation.abstract_table import AbstractTable
 from processor.table.representation.impl.df_table import DFTable
 from processor.computation_graph import ComputationGraph
-from processor.models.interface.impl.gpt import GPT
+from processor.model.interface.impl.gpt import GPT
 from processor.utils.logger import setup_logger
 from processor.table.store.impl.py_table_store import PyTableStore
 

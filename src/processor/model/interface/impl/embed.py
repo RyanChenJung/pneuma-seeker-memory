@@ -1,9 +1,9 @@
 from numpy import ndarray
 from sentence_transformers import SentenceTransformer
 
-from processor.models.option import EmbeddingModelOption, LLMOption
-from processor.models.message import LLMMessage
-from processor.models.interface.abstract_model import AbstractModel
+from processor.model.option import EmbeddingModelOption, LLMOption
+from processor.model.message import LLMMessage
+from processor.model.interface.abstract_model import AbstractModel
 
 
 class EmbeddingModel(AbstractModel):

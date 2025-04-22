@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from processor.models.option import EmbeddingModelOption, LLMOption
-from processor.models.message import LLMMessage
+from processor.model.option import EmbeddingModelOption, LLMOption
+from processor.model.message import LLMMessage
 from numpy import ndarray
 
 

@@ -1,8 +1,8 @@
 from numpy import ndarray
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
-from processor.models.interface.abstract_model import AbstractModel
-from processor.models.option import EmbeddingModelOption, LLMOption
+from processor.model.interface.abstract_model import AbstractModel
+from processor.model.option import EmbeddingModelOption, LLMOption
 
 
 class Qwen(AbstractModel):

@@ -2,8 +2,8 @@ from tqdm import tqdm
 
 from processor.computation_graph import Node
 from processor.conductor_state import ConductorState
-from processor.models.message import LLMMessage
-from processor.models.prompts import schema_processor_prompts
+from processor.model.message import LLMMessage
+from processor.model.prompts import schema_processor_prompts
 from processor.utils.string_processor import parse_code_string
 
 
@@ -59,6 +59,7 @@ class SchemaProcessor:
         db_schema: str,
         num_sampling=3,
         num_sampled_rows=3,
+        existing_descriptions: dict[str,str] = dict(),
         input_computation_nodes: list[Node] = [],
     ) -> Node:
         """

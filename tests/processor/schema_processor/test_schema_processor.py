@@ -16,7 +16,7 @@ from processor.conductor_state import ConductorState
 from processor.schema_processor.schema_processor import SchemaProcessor
 from processor.table.representation.impl.df_table import DFTable
 from processor.computation_graph import ComputationGraph, Node
-from processor.models.interface.impl.gpt import GPT
+from processor.model.interface.impl.gpt import GPT
 from processor.utils.string_processor import parse_code_string
 from processor.utils.logger import setup_logger
 from processor.table.store.impl.py_table_store import PyTableStore

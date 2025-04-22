@@ -1,6 +1,6 @@
 from numpy import ndarray
-from processor.models.interface.abstract_model import AbstractModel
-from processor.models.option import EmbeddingModelOption
+from processor.model.interface.abstract_model import AbstractModel
+from processor.model.option import EmbeddingModelOption
 from torch import bfloat16
 from transformers import AutoTokenizer, Gemma3ForCausalLM
 

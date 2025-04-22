@@ -1,28 +1,35 @@
 import logging
-from typing import Any
-
-from pandas import DataFrame
-from processor.base_table_reducer.base_table_reducer import BaseTableReducer
+import os
 
 from processor.base_table_producer.base_table_producer import BaseTableProducer
+from processor.base_table_reducer.base_table_reducer import BaseTableReducer
 from processor.computation_graph import ComputationGraph, Node
 from processor.conductor_state import ConductorState
-from processor.models.interface.model_factory import get_embed_model, get_llm
+from processor.model.interface.model_factory import get_embed_model, get_llm
 from processor.schema_processor.schema_processor import SchemaProcessor
-from processor.table.store.table_store_factory import get_table_store
+from processor.table.store.table_store_factory import (
+    ImplementedTableStore,
+    get_table_store,
+)
 from processor.utils.logger import setup_logger
 
 
 class Processor:
-    def __init__(self, llm_path: str, embed_path: str, table_type: Any = DataFrame):
+    def __init__(
+        self,
+        llm_path: str,
+        embed_path: str,
+        table_type: ImplementedTableStore,
+        output_path: str,
+    ):
         # Initialize Table Store
-        table_store_impl = get_table_store(impl=table_type)
-        table_store = table_store_impl()
+        table_store_impl = get_table_store(table_type)
+        table_store = table_store_impl(os.path.join(output_path, "db"))
 
         # Initialize logger
         logger = setup_logger(
             name="processor_logger",
-            log_file="logs/processor.log",
+            log_file=os.path.join(output_path, "log"),
             level=logging.INFO,
             max_bytes=10_000_000,
             backup_count=5,
@@ -45,7 +52,7 @@ class Processor:
             logger=logger,
             llm=llm,
             embedding_model=embed_model,
-            table_reader=computation_graph,
+            computation_graph=computation_graph,
         )
 
         # Initialize core services
@@ -86,7 +93,11 @@ class Processor:
         )
 
     def get_enhanced_schemas(
-        self, schema: str, table_descriptions: dict[str, str], num_rows=3
+        self,
+        schema: str,
+        table_descriptions: dict[str, str],
+        num_rows=3,
+        input_computation_nodes: list[Node] = [],
     ) -> Node:
         """
         Given a list of tables, produces enhanced schemas of the tables.
@@ -96,4 +107,7 @@ class Processor:
             db_schema=schema,
             table_descriptions=table_descriptions,
             num_sampled_rows=num_rows,
+            input_computation_nodes=input_computation_nodes,
         )
+
+

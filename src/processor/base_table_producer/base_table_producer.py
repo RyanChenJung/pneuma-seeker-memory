@@ -6,10 +6,10 @@ from processor.computation_graph import Node
 from processor.table.representation.abstract_table import AbstractTable
 from sentence_transformers.util import cos_sim
 
-from processor.models.prompts import base_table_producer_prompts
+from processor.model.prompts import base_table_producer_prompts
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
-from processor.models.message import LLMMessage
+from processor.model.message import LLMMessage
 from processor.utils.string_processor import parse_code_string, parse_sql_string
 
 

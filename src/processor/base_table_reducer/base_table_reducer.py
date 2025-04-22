@@ -2,9 +2,9 @@ from typing import Any
 
 from tqdm import tqdm
 from processor.computation_graph import Node
-from processor.models.message import LLMMessage
+from processor.model.message import LLMMessage
 from processor.conductor_state import ConductorState
-from processor.models.prompts import base_table_reducer_prompts
+from processor.model.prompts import base_table_reducer_prompts
 from processor.table.representation.abstract_table import AbstractTable
 from processor.utils.string_processor import parse_code_string, parse_sql_string
 

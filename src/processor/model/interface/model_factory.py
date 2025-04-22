@@ -1,10 +1,10 @@
 from typing import Type
-from processor.models.interface.impl.embed import EmbeddingModel
-from processor.models.interface.impl.qwen import Qwen
-from processor.models.interface.impl.gpt import GPT
-from processor.models.interface.impl.gemma import Gemma
-from processor.models.interface.impl.llama import Llama
-from processor.models.interface.abstract_model import AbstractModel
+from processor.model.interface.impl.embed import EmbeddingModel
+from processor.model.interface.impl.qwen import Qwen
+from processor.model.interface.impl.gpt import GPT
+from processor.model.interface.impl.gemma import Gemma
+from processor.model.interface.impl.llama import Llama
+from processor.model.interface.abstract_model import AbstractModel
 
 
 def get_llm(model_path: str) -> Type[AbstractModel]:
