@@ -7,5 +7,11 @@ textdistance>=4.6.3
 sentence-transformers>=3.4.1
 openai>=1.63.2
 
+# Visualization-related
+# graphviz>=0.20.3
+# matplotlib>=3.10.1
+# plotly>=6.0.1
+# pyvis>=0.3.2
+
 # Test-related
 # coverage>=7.8.0
