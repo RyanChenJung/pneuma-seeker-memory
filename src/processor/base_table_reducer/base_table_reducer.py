@@ -82,43 +82,80 @@ class BaseTableReducer:
         )
         unique_columns_involved_table = columns_involved_table.drop_duplicates()
 
-        # Keep track of how many rows to process at once
-        rows: list[tuple[int, int]] = []
-        for i in range(0, len(unique_columns_involved_table), row_batch):
-            rows.append((i, i + row_batch))
-        rows[-1] = (rows[-1][0], len(unique_columns_involved_table))
-
-        new_col_values: list[str] = []
-        for row in tqdm(rows, desc="Processing column extraction"):
-            msg = [
+        # Ask LLM whether to use row-wise extraction or Python code
+        msg = [
+            {
+                "role": "system",
+                "content": base_table_reducer_prompts["extract_mode"],
+            },
+            {
+                "role": "user",
+                "content": f"Table ({min(5, len(unique_columns_involved_table))} rows): ```{unique_columns_involved_table.get_representation(5)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
+            },
+        ]
+        extraction_mode = ctx.llm.chat(msg).strip()
+        actual_values: list[str] = []
+        if extraction_mode == "python_code":
+            # Generate code from the LLM
+            code_gen_msg = [
                 {
                     "role": "system",
-                    "content": base_table_reducer_prompts["extract_col"],
+                    "content": "You are a data scientist. Given a table and a new column name, write a Python function called generate_column that takes a pandas DataFrame and returns a list representing the new column. Only use columns present in the table.",
                 },
                 {
                     "role": "user",
-                    "content": f"Table ({row[1]-row[0]} rows): ```{unique_columns_involved_table.get_representation(row[1]-row[0], None, True, row)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
+                    "content": f"Schema: {list(base_table.get_schema())}\nTarget column: {target_column}\nSample rows:\n{unique_columns_involved_table.get_representation(5)}",
                 },
             ]
-            extracted_values = ctx.llm.chat(msg)
-            new_col_values.extend(parse_code_string(extracted_values))
+            code_str = parse_code_string(ctx.llm.chat(code_gen_msg))
+            ctx.logger.info(f"Python code to extract: {code_str}")
+            exec_globals = {}
+            exec(code_str, exec_globals)
 
-        results_cache: dict[str, str] = dict()
-        columns = unique_columns_involved_table.get_schema()
-        for idx, row in unique_columns_involved_table.iterrows():
-            vals = []
-            for col in columns:
-                vals.append(row[col])
-            key = "_SEP_".join(vals)
-            results_cache[key] = new_col_values[idx]
+            ctx.logger.info(f"exec_globals: {exec_globals}")
+            generated_func = exec_globals.get("generate_column")
 
-        actual_values: list[str] = []
-        for idx, row in columns_involved_table.iterrows():
-            vals = []
-            for col in columns:
-                vals.append(row[col])
-            key = "_SEP_".join(vals)
-            actual_values.append(results_cache[key])
+            if not generated_func:
+                raise ValueError("LLM did not return a valid 'generate_column' function.")
+
+            actual_values = generated_func(columns_involved_table.get_data())
+        else:
+            # Keep track of how many rows to process at once
+            rows: list[tuple[int, int]] = []
+            for i in range(0, len(unique_columns_involved_table), row_batch):
+                rows.append((i, i + row_batch))
+            rows[-1] = (rows[-1][0], len(unique_columns_involved_table))
+
+            new_col_values: list[str] = []
+            for row in tqdm(rows, desc="Processing column extraction"):
+                msg = [
+                    {
+                        "role": "system",
+                        "content": base_table_reducer_prompts["extract_col"],
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Table ({row[1]-row[0]} rows): ```{unique_columns_involved_table.get_representation(row[1]-row[0], None, True, row)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
+                    },
+                ]
+                extracted_values = ctx.llm.chat(msg)
+                new_col_values.extend(parse_code_string(extracted_values))
+
+            results_cache: dict[str, str] = dict()
+            columns = unique_columns_involved_table.get_schema()
+            for idx, row in unique_columns_involved_table.iterrows():
+                vals = []
+                for col in columns:
+                    vals.append(row[col])
+                key = "_SEP_".join(vals)
+                results_cache[key] = new_col_values[idx]
+
+            for idx, row in columns_involved_table.iterrows():
+                vals = []
+                for col in columns:
+                    vals.append(row[col])
+                key = "_SEP_".join(vals)
+                actual_values.append(results_cache[key])
 
         return ctx.computation_graph.create_node(
             "Extraced column values from existing columns in the base table.",
