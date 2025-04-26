@@ -248,6 +248,7 @@ class Processor:
     
     def compute_target_table(
         self,
+        question: str,
         base_table: AbstractTable,
         target_schema: list[str],
         num_rows=3,
@@ -259,6 +260,7 @@ class Processor:
         """
         return self.base_table_reducer.compute_target_table(
             self.ctx,
+            question,
             base_table,
             target_schema,
             num_rows,
