@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class LLMOption:
     seed: int = None
-    max_new_tokens: int = 100
+    max_new_tokens: int = None
     do_sample: bool = False
     temperature: float = None
     top_p: float = None
