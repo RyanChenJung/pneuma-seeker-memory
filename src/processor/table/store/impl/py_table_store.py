@@ -26,7 +26,7 @@ class PyTableStore(AbstractTableStore):
             self.load_checkpoint()
         except RuntimeError:
             self.checkpoint()
-    
+
     def load_checkpoint(self, db_path: str = None):
         """Loads a table store."""
         if db_path is None:
@@ -96,8 +96,8 @@ class PyTableStore(AbstractTableStore):
         db_schema: str,
         table_id: str,
         table: AbstractTable,
-        overwrite = False,
-        checkpoint = False,
+        overwrite=False,
+        checkpoint=False,
     ) -> None:
         """
         Adds or updates a table in a schema. If overwrite is False and table exists, raises error.
@@ -263,17 +263,24 @@ class PyTableStore(AbstractTableStore):
             sql_query (str): SQL query to execute
             tables_involved (list[AbstractTable]): OPTIONAL - Specify tables to query over (used by, e.g., PyTableStore)
         """
-        conn = sqlite3.connect(":memory:")
+        import duckdb
+
+        # Create an in-memory DuckDB connection
+        conn = duckdb.connect(database=":memory:")
+
+        # Make sure you pass a dictionary of DFTable
         if tables_involved is None or len(tables_involved) == 0:
             raise ValueError(
                 "PyTableStore requires `tables_involved` to execute SQL queries."
             )
-        if not isinstance(
-            tables_involved[list(tables_involved.keys())[0]], DFTable
-        ):
+
+        if not isinstance(tables_involved[list(tables_involved.keys())[0]], DFTable):
             raise ValueError("Only Pandas DataFrame is supported for now.")
+
+        # Register each DataFrame as a DuckDB view
         for table_id, table in tables_involved.items():
-            table.get_data().to_sql(table_id, conn, if_exists="replace", index=False)
-        return DFTable(
-            data = pd.read_sql(sql_query, conn)
-        )
+            conn.register(table_id.lower(), table.get_data())
+
+        # Run your SQL query
+        data = conn.execute(sql_query).fetchdf()
+        return DFTable(data)

@@ -12,8 +12,7 @@ Err on the side of inclusion: if you think even **one** column might help, mark 
 
 End your reasoning with the following exact format, to ease parsing:
 
-Relevant: yes/no
-""",
+Relevant: yes/no""",
     "row_extender_step_1": """You are an experienced data scientist. You are given:
 - A list of tables, each with its schema, a short description, and a few sample rows.
 - The pipe character (`|`) is used to separate both column names and values.
@@ -120,16 +119,21 @@ Output the SQLite script directly without any extra formatting or explanation.""
 
 
 schema_processor_prompts = {
-    "schema_generator_system_prompt": """You are an expert in data integration. Your task is to determine the minimum target schema---the smallest set of necessary columns required to directly answer a given question without having to perform separate aggregate operations (e.g., performing average on a column). The first column must always be the ID (primary key).
+    "schema_generator_system_prompt": """You are an expert in data integration. Your task is to determine the minimum target schema—the smallest set of necessary columns required to directly answer a given question without having to perform separate aggregate operations (e.g., performing average on a column). The first column must always be the ID (primary key).
 
 However, the target schema must be self-sufficient: all essential attributes must be included so that the question can be answered without requiring joins or additional lookups. For example, restaurant names must be included, not just their IDs, as data scientists need them for interpretation.
 
-Output your schema strictly as a Python list, without any extra formatting, explanations, or text. The output must be directly parseable as a Python list.
+Output your schema strictly as a **Python dictionary**, where **keys are column names** and **values are descriptions** of what the columns represent. Do **not** include any extra formatting, explanations, or text. The output must be directly parseable as a Python dictionary.
 
-Example:
-Input: "What are the best restaurants in Chicago with ratings above 3.5?"
-Output:
-['Restaurant ID', 'Restaurant Name', 'Rating', 'Location']
+Example:  
+Input: `"What are the best restaurants in Chicago with ratings above 3.5?"`  
+Output:  
+{
+  "Restaurant ID": "Unique identifier for each restaurant",
+  "Restaurant Name": "Name of the restaurant",
+  "Rating": "Average rating given by customers",
+  "Location": "City or neighborhood where the restaurant is located"
+}
 
 This ensures that a data scientist can efficiently filter and interpret the dataset.""",
     "table_descriptor": "You are an experienced data scientist. You are given the schema of a table, along with some sample row(s), with the pipe character (`|`) as the separators of columns and row values. Your goal is to briefly guess what the table likely represents. Synthesize the description; do not simply enumerate the columns. Output your guess directly without any extra formatting.",
@@ -148,14 +152,24 @@ New column name: ...""",
 
 
 base_table_reducer_prompts = {
+    "python_column_extractor": """You are an experienced data scientist. Given a table represented as a Pandas DataFrame, your task is to write a Python function named generate_column that returns a list representing the values of the new column based on this table. You are also given a question user has, which will help you determine what kind of computations that need to be done (e.g., adding time delta to the row values). Each element of the list should correspond to a row in the DataFrame.
+
+Constraints:
+- Only use columns that are present in the input DataFrame.
+- To be safe, you should convert data types of the columns in your code before performing computation.
+- Handle missing (null) values carefully and appropriately.
+
+Output the function directly without any extra explanations or formattings.""",
     "column_projection": """You are a helpful data scientist.
 
 You will be provided with:
 - A source table called SRC that is represented by its schema and some sample rows.
-- A target schema that we will transform the source table into in a step-by-step manner.
+- A target schema that we will transform the schema of source table into it in a step-by-step manner.
+- A question that we want to answer, which was used to form the target schema.
 - A column from the target schema as the current target column.
 
-Your goal is to determine whether to select a certain column from SRC or extract information from certain column(s) from SRC to form the target column.
+Your goal is to determine whether to select a certain column from SRC or extract information from certain column(s) from SRC to form the target column (even as simple as adding time delta to each row).
+Extract_column can relies on external tools such as Python code interpreter, SQL processor, or LLM.
 
 The output format for selecting a certain column:
 {

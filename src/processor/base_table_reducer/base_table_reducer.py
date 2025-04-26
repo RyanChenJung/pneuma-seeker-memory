@@ -6,15 +6,20 @@ from processor.model.message import LLMMessage
 from processor.conductor_state import ConductorState
 from processor.model.prompts import base_table_reducer_prompts
 from processor.table.representation.abstract_table import AbstractTable
-from processor.utils.string_processor import parse_code_string, parse_sql_string
+from processor.utils.string_processor import (
+    clean_code_string,
+    parse_code_string,
+    parse_sql_string,
+)
 
 
 class BaseTableReducer:
     def compute_target_table(
         self,
         ctx: ConductorState,
+        question: str,
         base_table: AbstractTable,
-        target_schema: list[str],
+        target_schema: dict[str, str],
         num_rows=3,
         input_nodes: list[Node] = [],
     ) -> Node:
@@ -22,9 +27,11 @@ class BaseTableReducer:
         Projects `base_table`, specifically its schema, to the `target_schema`,
         resulting in `target_table`.
         """
+        ctx.logger.info("Computing target table")
         target_table_cols: dict[str, list[Any]] = dict()
         extra_input_nodes: list[Node] = []
         for col in target_schema:
+            ctx.logger.info(f"=> Processing column {col}")
             msg = [
                 {
                     "role": "system",
@@ -32,10 +39,11 @@ class BaseTableReducer:
                 },
                 {
                     "role": "user",
-                    "content": f"Source table: ```{base_table.get_representation(num_rows, 42)}```\nTarget Schema: {target_schema}\nTarget Column: `{col}`",
+                    "content": f"Source table: ```{base_table.get_representation(num_rows, 42)}```\nTarget Schema: ```{target_schema}```\n- Question: ```{question}```\n- Target Column: ```{col}: {target_schema[col]}```",
                 },
             ]
             operation: dict[str, str] = parse_code_string(ctx.llm.chat(msg))
+            ctx.logger.info(f"==> Operation: {operation}")
             if operation["operation"] == "select_column":
                 operation_node = ctx.computation_graph.create_node(
                     "Mapped a column directly.",
@@ -43,12 +51,15 @@ class BaseTableReducer:
                     input_nodes,
                 )
             else:
+                ctx.logger.info("WARNING: ENTERING EXTRACT_COLUMN")
                 operation_node = self.__extract_column(
                     ctx,
+                    question,
                     base_table,
                     operation["columns_involved"],
-                    col,
+                    f"{col}: {target_schema[col]}",
                     10,
+                    num_rows,
                     input_nodes,
                 )
             extra_input_nodes.append(operation_node)
@@ -63,16 +74,21 @@ class BaseTableReducer:
     def __extract_column(
         self,
         ctx: ConductorState,
+        question: str,
         base_table: AbstractTable,
         columns_involved: list[str],
         target_column: str,
         row_batch=10,
+        num_rows=3,
         input_nodes: list[Node] = [],
     ) -> Node:
+        ctx.logger.info(f"===> Operation extract_column")
         sql_script = "SELECT "
         for col in columns_involved:
             sql_script += f'"{col}", '
-        sql_script = sql_script[:-2] + "FROM base table;"
+        sql_script = sql_script[:-2] + " FROM base_table;"
+
+        ctx.logger.info(f"===> sql_script: {sql_script}")
 
         columns_involved_table = ctx.table_store.execute_sql_query(
             sql_script,
@@ -90,25 +106,27 @@ class BaseTableReducer:
             },
             {
                 "role": "user",
-                "content": f"Table ({min(5, len(unique_columns_involved_table))} rows): ```{unique_columns_involved_table.get_representation(5)}```\nOverall Schema: {list(base_table.get_schema())}\nNew Column: `{target_column}`",
+                "content": f"- Table: ```{unique_columns_involved_table.get_representation(num_rows)}```\n- Overall Schema: ```{list(base_table.get_schema())}```\n- New Column: ```{target_column}```",
             },
         ]
         extraction_mode = ctx.llm.chat(msg).strip()
+        ctx.logger.info(f"===> extraction_mode: {extraction_mode}")
         actual_values: list[str] = []
         if extraction_mode == "python_code":
             # Generate code from the LLM
             code_gen_msg = [
                 {
                     "role": "system",
-                    "content": "You are a data scientist. Given a table and a new column name, write a Python function called generate_column that takes a pandas DataFrame and returns a list representing the new column. Only use columns present in the table.",
+                    "content": base_table_reducer_prompts["python_column_extractor"],
                 },
                 {
                     "role": "user",
-                    "content": f"Schema: {list(base_table.get_schema())}\nTarget column: {target_column}\nSample rows:\n{unique_columns_involved_table.get_representation(5)}",
+                    "content": f"- Table: ```{unique_columns_involved_table.get_representation(num_rows)}```\n- Target column: ```{target_column}```\n- User's question:\n```{question}```",
                 },
             ]
-            code_str = parse_code_string(ctx.llm.chat(code_gen_msg))
+            code_str = ctx.llm.chat(code_gen_msg)
             ctx.logger.info(f"Python code to extract: {code_str}")
+            code_str = clean_code_string(code_str)
             exec_globals = {}
             exec(code_str, exec_globals)
 
@@ -116,7 +134,9 @@ class BaseTableReducer:
             generated_func = exec_globals.get("generate_column")
 
             if not generated_func:
-                raise ValueError("LLM did not return a valid 'generate_column' function.")
+                raise ValueError(
+                    "LLM did not return a valid 'generate_column' function."
+                )
 
             actual_values = generated_func(columns_involved_table.get_data())
         else:

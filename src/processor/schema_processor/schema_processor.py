@@ -28,7 +28,7 @@ class SchemaProcessor:
             question (str): The question posed to based the target schema on.
             input_computation_nodes (Node): A list of input nodes to keep track of computation.
         Returns:
-            Output (Node[list[str]]): Computation node consisting of list of strings as the target schema.
+            Output (Node[dict[str,str]]): Computation node consisting of list of strings as the target schema.
         """
         ctx.logger.info(f"Getting target schema for the question {question}")
         messages = [
@@ -49,9 +49,9 @@ class SchemaProcessor:
             )
         except ValueError:
             ctx.logger.error(
-                "Error encountered during target schema parsing, returning `[]`"
+                "Error encountered during target schema parsing, returning `{}`"
             )
-            return []
+            return dict()
 
     def get_table_descriptions(
         self,
