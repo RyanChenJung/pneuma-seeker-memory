@@ -1,5 +1,6 @@
 from typing import Any, Hashable, Optional
 from numpy.random import default_rng
+from numpy import nan
 from pandas import DataFrame, Series, concat
 
 from processor.table.representation.abstract_table import AbstractTable
@@ -161,6 +162,41 @@ class DFTable(AbstractTable[DataFrame]):
     def iterrows(self) -> tuple[Hashable, Series]:
         """Returns the rows of a table, along with the index."""
         return self.data.iterrows()
+    
+    def merge_rows_with_duplicate_ids(self, id_col: Optional[str] = None) -> None:
+        """Merges rows with duplicate IDs (default to first column as ID column)."""
+        if id_col is None:
+            id_col = self.get_schema()[0]
+        df = self.data.copy()
+        non_id_cols = [col for col in df.columns if col != id_col]
+
+        grouped = df.groupby(id_col)
+        cleaned_rows = []
+
+        for id_val, group in grouped:
+            if len(group) == 1:
+                cleaned_rows.append(group.iloc[0].to_dict())
+                continue
+
+            misalign_count = 0
+            total_checks = 0
+            combined = {}
+
+            for col in non_id_cols:
+                non_null_vals = group[col].dropna().unique()
+                if len(non_null_vals) > 1:
+                    misalign_count += 1
+                if len(non_null_vals) >= 1:
+                    total_checks += 1
+                combined[col] = non_null_vals[0] if len(non_null_vals) > 0 else nan
+
+            if total_checks > 0 and misalign_count == total_checks:
+                cleaned_rows.extend(group.to_dict(orient='records'))
+                continue
+
+            combined[id_col] = id_val
+            cleaned_rows.append(combined)
+        self.data = DataFrame(cleaned_rows)[df.columns].reset_index(drop=True)
 
     def __len__(self) -> int:
         """Returns the number of rows in a table."""

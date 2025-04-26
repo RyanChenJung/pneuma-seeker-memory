@@ -145,5 +145,10 @@ class AbstractTable(ABC, Generic[T]):
         """Returns the rows of a table, along with the index."""
         pass
 
+    @abstractmethod
+    def merge_rows_with_duplicate_ids(self, id_col: Optional[str] = None):
+        """Merges rows with duplicate IDs (default to first column as ID column)."""
+        pass
+
     def copy(self):
         return copy.deepcopy(self)
