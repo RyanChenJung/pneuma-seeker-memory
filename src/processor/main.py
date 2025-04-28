@@ -21,11 +21,11 @@ class Processor:
         self,
         llm_path: str,
         embed_path: str,
-        table_type: ImplementedTableStore,
+        table_store_type: ImplementedTableStore,
         output_path: str,
     ):
         # Initialize Table Store
-        table_store_impl = get_table_store(table_type)
+        table_store_impl = get_table_store(table_store_type)
         table_store = table_store_impl(os.path.join(output_path, "db"))
 
         # Initialize logger
