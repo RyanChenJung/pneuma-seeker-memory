@@ -35,7 +35,7 @@ class Qwen(AbstractModel):
 
         generated_ids = self.model.generate(
             **model_inputs,
-            max_new_tokens=512,
+            max_new_tokens=10000,
             do_sample=llm_option.do_sample,
             temperature=llm_option.temperature,
             top_p=llm_option.top_p,

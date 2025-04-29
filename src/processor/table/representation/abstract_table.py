@@ -41,6 +41,7 @@ class AbstractTable(ABC, Generic[T]):
         random_seed=42,
         consecutive=False,
         consecutive_indices: Optional[tuple[int, int]] = None,
+        show_unique_values=False,
     ) -> str:
         """
         Returns a string representation of a table.

@@ -34,6 +34,7 @@ class DFTable(AbstractTable[DataFrame]):
         random_seed=42,
         consecutive=False,
         consecutive_indices: tuple[int, int] = None,
+        show_unique_values=False,
     ) -> str:
         """
         Returns a string representation of a table.
@@ -106,7 +107,11 @@ class DFTable(AbstractTable[DataFrame]):
     def add_missing_columns(self, columns: list[str], default_value: Any = None):
         for col in columns:
             if col not in self.data.columns:
-                self.data[col] = default_value
+                if default_value is None:
+                    # Create a nullable Int64 (or object if truly no info)
+                    self.data[col] = Series([None] * len(self.data), dtype="Int64")
+                else:
+                    self.data[col] = default_value
 
     @staticmethod
     def concat(tables: list["DFTable"]) -> "DFTable":
