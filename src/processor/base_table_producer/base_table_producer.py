@@ -1,4 +1,3 @@
-import sqlite3
 from typing import Any
 
 import pandas as pd
@@ -6,7 +5,12 @@ from processor.computation_graph import Node
 from processor.table.representation.abstract_table import AbstractTable
 from sentence_transformers.util import cos_sim
 
-from processor.model.prompts import base_table_producer_prompts
+from processor.model.prompts import (
+    base_table_producer_prompts,
+    tables_selector_system_prompt,
+    row_extender_step_1_system_prompt,
+    row_extender_step_2_system_prompt,
+)
 from processor.conductor_state import ConductorState
 from processor.utils.json_processor import parse_json
 from processor.model.message import LLMMessage
@@ -24,6 +28,7 @@ class BaseTableProducer:
         self,
         ctx: ConductorState,
         db_schema: str,
+        sql_query: str,
         target_schema: list[str],
         table_descriptions: dict[str, str],
         num_rows=3,
@@ -51,12 +56,13 @@ class BaseTableProducer:
             msg: list[LLMMessage] = [
                 {
                     "role": "system",
-                    "content": base_table_producer_prompts["tables_selector"],
+                    "content": tables_selector_system_prompt,  # type: ignore
                 },
                 {
                     "role": "user",
                     "content": f"""- Table: ```{table.get_representation(num_rows, 42)}```
 - Target schema: ```{target_schema}```
+- SQL: ```{sql_query}```
 - Description: ```{table_description}```""",
                 },
             ]
@@ -104,7 +110,7 @@ class BaseTableProducer:
         msg: list[LLMMessage] = [
             {
                 "role": "system",
-                "content": base_table_producer_prompts["row_extender_step_1"],
+                "content": row_extender_step_1_system_prompt,
             },
             {"role": "user", "content": available_tables_formatted},
         ]
@@ -113,14 +119,15 @@ class BaseTableProducer:
         msg: list[LLMMessage] = [
             {
                 "role": "system",
-                "content": base_table_producer_prompts["row_extender_step_2"],
+                "content": row_extender_step_2_system_prompt,
             },
             {
                 "role": "user",
                 "content": f"- Tables: {available_tables_formatted}\n\n- Reasoning: {reasoning}",
             },
         ]
-        operations: list[dict[str, Any]] = parse_code_string(ctx.llm.chat(msg))
+        llm_output = ctx.llm.chat(msg)
+        operations = parse_code_string(llm_output)
         ctx.logger.info(f"=> operations: {operations}")
         return ctx.computation_graph.create_node(
             computation_description="Produced union operations.",

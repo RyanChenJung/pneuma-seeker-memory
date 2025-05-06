@@ -62,7 +62,12 @@ class Processor:
         self.base_table_producer = BaseTableProducer()
         self.base_table_reducer = BaseTableReducer()
 
-    def get_target_schema(self, question: str) -> Node:
+    def get_target_schema(
+        self,
+        question: str,
+        schemas_to_produce: int = 1,
+        input_computation_nodes: list[Node] = [],
+    ) -> Node:
         """
         Given a question over tables, retrieves the target schema of a table that
         can answer the question.
@@ -76,6 +81,8 @@ class Processor:
         return self.schema_processor.get_target_schema(
             ctx=self.ctx,
             question=question,
+            schemas_to_produce=schemas_to_produce,
+            input_computation_nodes=input_computation_nodes,
         )
 
     def get_table_descriptions(
@@ -83,7 +90,7 @@ class Processor:
         schema: str,
         num_sampling=3,
         num_sampled_rows=3,
-        existing_descriptions: dict[str,str] = dict(),
+        existing_descriptions: dict[str, str] = dict(),
         input_computation_nodes: list[Node] = [],
     ) -> Node:
         """
@@ -115,10 +122,11 @@ class Processor:
             num_sampled_rows=num_rows,
             input_computation_nodes=input_computation_nodes,
         )
-    
+
     def select_relevant_table_ids(
         self,
         db_schema: str,
+        sql_query: str,
         target_schema: list[str],
         table_descriptions: dict[str, str],
         num_rows=3,
@@ -139,12 +147,13 @@ class Processor:
         return self.base_table_producer.select_relevant_table_ids(
             self.ctx,
             db_schema,
+            sql_query,
             target_schema,
             table_descriptions,
             num_rows,
             input_computation_nodes,
         )
-    
+
     def produce_union_operations(
         self,
         db_schema: str,
@@ -170,7 +179,7 @@ class Processor:
             num_rows,
             input_computation_nodes,
         )
-    
+
     def run_union_operations(
         self,
         table_mappings: dict[str, AbstractTable],
@@ -219,7 +228,7 @@ class Processor:
             num_rows,
             input_computation_nodes,
         )
-    
+
     def run_join_operations(
         self,
         table_mapping: dict[str, AbstractTable],
@@ -245,7 +254,7 @@ class Processor:
             num_values,
             input_computation_nodes,
         )
-    
+
     def compute_target_table(
         self,
         question: str,
@@ -266,7 +275,7 @@ class Processor:
             num_rows,
             input_nodes,
         )
-    
+
     def apply_predicate_to_target_table(
         self,
         target_table: AbstractTable,
