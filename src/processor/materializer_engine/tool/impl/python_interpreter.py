@@ -1,0 +1,4 @@
+from processor.materializer_engine.tool.abstract_tool import AbstractTool
+
+class PythonInterpreter(AbstractTool):
+    pass
