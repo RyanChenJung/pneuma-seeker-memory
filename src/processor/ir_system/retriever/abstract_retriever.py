@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from processor.ir_system.state import AbstractDocument
+from processor.ir_system.ir_state import AbstractDocument
 from processor.ir_system.retriever.retriever_factory import RetrieverType
 
 
