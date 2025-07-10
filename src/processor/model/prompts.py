@@ -31,6 +31,23 @@ Important:
 - Ensure the output is strictly parseable as a Python dictionary with valid SQL.
 """
 
+sanity_check_system_prompt_prior = """You are an expert data scientist. Your task is to check whether the following table schema and SQL statement over the schema is sufficient to answer the given question. If not, please adjust output the corrected schema and/or SQL statement using the same exact format:
+Output format:
+{
+    "schema": {
+        "Column Name 1": {
+            "description": "Description of column 1",
+            "type": "DataType (e.g., INTEGER, VARCHAR, FLOAT)"
+        },
+        ...
+    },
+    "sql_query": "SQL query using only the schema above"
+}
+
+Important:
+- Do not include any explanations or extra text outside the dictionary.
+- Your output must be directly parseable as a Python dictionary."""
+
 
 sanity_check_system_prompt = """You are an expert data scientist. Your task is to evaluate whether the provided table schema and SQL statement are sufficient and appropriate for answering the given natural language question. If not, revise the schema and/or SQL query so they are minimally sufficient — no more, no less.
 
@@ -272,29 +289,31 @@ Assumptions:
 Your task:
 - Construct a step-by-step join plan as a **list of operations**, where each operation joins two tables (or previous join results).
 - Each step should specify:
-  - The two input tables, one of which may be a join result from the prior step.
-  - The columns being used for the join
-  - The resulting table name for that step (e.g., "Join_1", "Join_2", etc.)
+    - The two input tables, one of which may be a join result from the prior step.
+    - The columns being used for the join
+    - The resulting table name for that step (e.g., "Join_1", "Join_2", etc.)
 
 Output your answer directly as a JSON object with the following format without any extra explanations or formatting:
 
 ```json
 [
-  {
-    "Join Result": "Join_1",
-    "Left Table": "Table_A",
-    "Right Table": "Table_B",
-    "Left Join Key": "Column_X",
-    "Right Join Key": "Column_Y"
-  },
-  {
-    "Join Result": "Join_2",
-    "Left Table": "Join_1",
-    "Right Table": "Table_C",
-    "Left Join Key": "UserID",
-    "Right Join Key": "Customer_ID"
-  }
-]```""",
+    {
+        "Join Result": "Join_1",
+        "Left Table": "Table_A",
+        "Right Table": "Table_B",
+        "Left Join Key": "Column_X",
+        "Right Join Key": "Column_Y"
+    },
+    {
+        "Join Result": "Join_2",
+        "Left Table": "Join_1",
+        "Right Table": "Table_C",
+        "Left Join Key": "UserID",
+        "Right Join Key": "Customer_ID"
+    }
+]```
+
+Remember, no comments, extra explanations, or formatting.""",
     "classification_prompt": """You are a highly skilled data engineer. You are given:
 - A description of a join operation between two tables.
 - Sample values for each join key column from both tables.
