@@ -1,12 +1,15 @@
+from pandas import DataFrame
+
+
 class ICState:
     def __init__(self) -> None:
         """
         Initializes the session state with empty SQLs and target schemas.
         """
         self.sqls: list[str] = []
-        self.target_schemas: list[str] = []
+        self.target_schemas: list[DataFrame] = []
     
-    def set_state(self, new_sqls: list[str], new_target_schemas: list[str]) -> None:
+    def set_state(self, new_sqls: list[str], new_target_schemas: list[DataFrame]) -> None:
         """
         Sets new values for SQLs and Target Schemas
         """
@@ -20,7 +23,7 @@ class ICState:
         self.sqls = []
         self.target_schemas = []
 
-    def get_state(self) -> dict[str, list[str]]:
+    def get_state(self) -> dict[str, list[str | DataFrame]]:
         """
         Returns the current SQLs and Target Schemas.
         """
