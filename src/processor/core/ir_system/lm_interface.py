@@ -1,5 +1,5 @@
-from processor.ir_system.ir_state import IRState
-from processor.ir_system.prompts.ir_prompt_factory import IRPromptFactory
+from processor.core.ir_system.ir_state import IRState
+from processor.core.ir_system.prompts.ir_prompt_factory import IRPromptFactory
 from processor.model.interface.abstract_model import AbstractModel
 
 
@@ -13,7 +13,7 @@ class LMInterface:
         self.llm.load_model()
         self.llm.load_tokenizer()
 
-    def retrieve(self, prompt: str):
+    def retrieve(self, prompt: str) -> str:
         """
         Retrieves documents from the retrievers in an intelligent manner.
 
