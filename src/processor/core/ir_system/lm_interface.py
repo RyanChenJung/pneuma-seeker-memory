@@ -8,10 +8,6 @@ class LMInterface:
         self.state = IRState()
         self.prompt_factory = IRPromptFactory()
         self.llm = llm
-    
-    def load_llm(self):
-        self.llm.load_model()
-        self.llm.load_tokenizer()
 
     def retrieve(self, prompt: str) -> str:
         """
@@ -20,7 +16,6 @@ class LMInterface:
         - prompt (str): First the initial query, subsequently feedback to improve
         the results by adjusting the initial query.
         """
-        self.load_llm()
         # Step 1: Consider which retrievers to use.
         pass
         
