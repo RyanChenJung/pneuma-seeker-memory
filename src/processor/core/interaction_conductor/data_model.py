@@ -1,6 +1,5 @@
 from enum import Enum
-from typing import TypedDict, get_type_hints
-from pandas import DataFrame
+from typing import Optional, TypedDict, get_type_hints
 
 
 class ToolType(Enum):
@@ -10,23 +9,18 @@ class ToolType(Enum):
 
 
 class LLMConductorOutputType(TypedDict):
-    is_direct_response: bool
-    is_tool_calling: bool
-    tool: ToolType
+    is_direct_response: bool  # Either direct response or tool calling
+    direct_response: Optional[str]
+    tool: Optional[ToolType]
 
 
 class IRSystemToolCallingType(LLMConductorOutputType):
     prompt: str
 
 
-class MaterializerEngineToolCallingType(LLMConductorOutputType):
-    sqls: list[str]
-    materialized_target_schemas: list[DataFrame]
-
-
 class StateManipulationToolCallingType(LLMConductorOutputType):
     new_sqls: list[str]
-    new_target_schemas: list[DataFrame]
+    new_target_schemas: list[str]
 
 
 def typed_dict_to_str(typed_dict_cls: type) -> str:
