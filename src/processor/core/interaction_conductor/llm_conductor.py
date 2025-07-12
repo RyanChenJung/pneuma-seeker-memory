@@ -1,56 +1,31 @@
-from dataclasses import dataclass
-from processor.interaction_conductor.state import ICState
-from processor.ir_system.lm_interface import LMInterface
-from processor.materializer_engine.materializer_engine import MaterializerEngine
-from enum import Enum
+import json
 
+from processor.core.interaction_conductor.ic_prompt_engineer import ICPromptEngineer
+from processor.core.interaction_conductor.ic_state import ICState
+from processor.core.interaction_conductor.data_model import ToolType, IRSystemToolCallingType, MaterializerEngineToolCallingType, StateManipulationToolCallingType
+from processor.core.ir_system.lm_interface import LMInterface
+from processor.core.materializer_engine.llm_planner import LLMPlanner
+from processor.core.interaction_conductor.data_model import ToolType
+from processor.model.interface.model_factory import get_llm
+from processor.model.llm_message import LLMMessage, Role
 
-class Role(Enum):
-    USER = 'user'
-    ASSISTANT = 'assistant'
-
-class Tool(Enum):
-    IR_SYSTEM = 'IR System'
-    MATERIALIZER_ENGINE = 'Materializer Engine'
-
-@dataclass
-class DummyMessage:
-    """
-    Class for representing LLM messages
-    """
-    text: str
-    role: Role
-    invoke_tool: bool
-    tool: Tool
-
-class DummyLLM:
-    def chat(self, conversation: list[DummyMessage]):
-        """
-        Returns the conversation appended with an output message.
-        """
-        output = ""
-        return conversation + [DummyMessage(
-            text=output,
-            role=Role.ASSISTANT,
-        )]
 
 class LLMConductor:
-    def __init__(self, ir_system: LMInterface, materializer: MaterializerEngine):
+    def __init__(self, llm_path: str, ir_system: LMInterface, materializer: LLMPlanner):
         """
         Initializes the LLM Conductor with a state, IR system, and materializer.
         """
         self.state = ICState()
-        self.llm = DummyLLM()
-        self.chat_history = list[DummyMessage]
-        self.sys_prompt_engineer = SystemPromptEngineer()
+        self.llm = get_llm(llm_path)()
+        self.chat_history: list[LLMMessage] = []
+        self.prompt_engineer = ICPromptEngineer()
 
-        # Available tools
         self.ir_system = ir_system
         self.materializer = materializer
 
     def process_input(self, user_input: str) -> str:
         """
-        Processes the user input, possibly calling tools and adjusting the state
+        Processes the user input, possibly calling tools and adjusting the state.
         """
         model_output = self.llm.chat(
             self.chat_history + [DummyMessage(
