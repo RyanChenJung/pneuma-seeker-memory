@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import json
 from processor.model.option import EmbeddingModelOption, LLMOption
 from processor.model.llm_message import LLMMessage
 from numpy import ndarray
@@ -22,7 +23,7 @@ class AbstractModel(ABC):
 
     @abstractmethod
     def chat(
-        self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()
+        self, messages: list[LLMMessage], llm_option: LLMOption = None
     ) -> str:
         """Chats with the model."""
         pass
@@ -35,3 +36,10 @@ class AbstractModel(ABC):
     ) -> ndarray:
         """Embed texts."""
         pass
+
+    def is_valid_json(self, text: str):
+        try:
+            json.loads(text)
+            return True
+        except json.JSONDecodeError:
+            return False

@@ -2,6 +2,7 @@ from numpy import ndarray
 from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 from processor.model.interface.abstract_model import AbstractModel
+from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import EmbeddingModelOption, LLMOption
 
 
@@ -19,7 +20,9 @@ class Qwen(AbstractModel):
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
-    def chat(self, messages, llm_option: LLMOption = LLMOption()):
+    def chat(self, messages: list[LLMMessage], llm_option: LLMOption = None) -> str:
+        if llm_option is None:
+            llm_option = LLMOption()
         if self.model is None:
             self.load_model()
         if self.tokenizer is None:
@@ -49,8 +52,14 @@ class Qwen(AbstractModel):
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
             0
         ]
+        if llm_option.json_mode:
+            fixing_iteration = 0
+            while not self.is_valid_json(response) and fixing_iteration <= 5:
+                appended_messages = messages + [LLMMessage(role=Role.USER, content="The JSON is invalid and hence cannot be parsed. Please fix it.")]
+                response = self.chat(appended_messages)
+                fixing_iteration += 1
         return response
-    
+
     def embed(
         self,
         texts: str | list[str],
