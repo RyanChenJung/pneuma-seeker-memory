@@ -10,6 +10,7 @@ class LLMOption:
     top_p: float = None
     top_k: int = None
     penalty_alpha: float = None
+    json_mode: bool = False
 
 @dataclass
 class EmbeddingModelOption:
