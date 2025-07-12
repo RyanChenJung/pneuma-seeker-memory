@@ -1,5 +1,7 @@
+from processor.core.interaction_conductor.llm_conductor import LLMConductor
+
 class ChatInterface:
-    def __init__(self, llm_conductor):
+    def __init__(self, llm_conductor: LLMConductor):
         """
         Initializes the Chat Interface with access to the LLM Conductor.
         """
