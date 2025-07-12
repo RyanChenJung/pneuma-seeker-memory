@@ -12,19 +12,18 @@ from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.data_model import ToolType
 from processor.model.interface.model_factory import get_llm
 from processor.model.llm_message import LLMMessage, Role
+from processor.model.option import LLMOption
 
 
 class LLMConductor:
-    def __init__(self, llm_path: str, ir_system: LMInterface, materializer: LLMPlanner):
+    def __init__(self, llm_path: str, materializer: LLMPlanner):
         """
-        Initializes the LLM Conductor with a state, IR system, and materializer.
+        Initializes the LLM Conductor with a state, and materializer.
         """
         self.state = ICState()
         self.llm = get_llm(llm_path)()
         self.chat_history: list[LLMMessage] = []
         self.prompt_engineer = ICPromptEngineer()
-
-        self.ir_system = ir_system
         self.materializer = materializer
 
     def process_input(self, user_input: str) -> str:
@@ -40,7 +39,7 @@ class LLMConductor:
             )
         )
         while not is_thinking_done:
-            model_output = self.llm.chat(self.chat_history)
+            model_output = self.llm.chat(self.chat_history, LLMOption(json_mode=True))
             json_output: LLMConductorOutputType = json.loads(model_output)
             if json_output["is_direct_response"] and json_output["direct_response"]:
                 final_response = json_output["direct_response"]
@@ -84,24 +83,23 @@ class LLMConductor:
 
     def retrieve_context(self, prompt: str) -> str:
         """
-        Retrieves context from the IR system.
+        Retrieves context from the IR system with auto sanity check mechanism.
         """
         # TODO: Handle provenance information!
-        context = self.ir_system.retrieve_context(prompt)
+        ir_system = LMInterface(self.llm)
+        context = ir_system.retrieve(prompt)
+        is_make_sense = False
+        total_sanity_check_iteration = 0
+        sanity_check_messages = [
+            LLMMessage(role=Role.USER, content=self.prompt_engineer.get_ir_sanity_check_prompt(prompt, context))
+        ]
+        while not is_make_sense and total_sanity_check_iteration <= 5:
+            sanity_check_result = self.llm.chat(sanity_check_messages).strip().lower()
+            if sanity_check_result.startswith("yes"):
+                is_make_sense = True
+                break
+            else:
+                context = ir_system.retrieve(sanity_check_result)
+                sanity_check_messages[0]["content"] = self.prompt_engineer.get_ir_sanity_check_prompt(prompt, context)
+            total_sanity_check_iteration += 1
         return context
-
-    def check_state_convergence(self) -> bool:
-        """
-        Checks if the current state is ready to be materialized.
-        """
-        pass
-
-    def materialize_state(self) -> str:
-        """
-        Sends the state to the Materializer Engine for execution.
-        """
-        current_state = self.state.get_state()
-        self.materializer.materialize(
-            current_state["sqls"],
-            current_state["target_schemas"],
-        )
