@@ -1,6 +1,6 @@
 from abc import ABC
 from typing import Any
-from processor.ir_system.retriever.retriever_factory import RetrieverType
+from processor.core.ir_system.retriever.retriever_factory import RetrieverType
 
 
 class AbstractDocument(ABC):

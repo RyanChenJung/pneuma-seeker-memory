@@ -5,6 +5,7 @@ from typing import TypedDict
 class Role(Enum):
     USER = "user"
     ASSISTANT = "assistant"
+    SYSTEM = "system"
 
 
 class LLMMessage(TypedDict):

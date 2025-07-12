@@ -7,6 +7,7 @@ from pandas import DataFrame
 from processor.core.interaction_conductor.ic_prompt_engineer import ICPromptEngineer
 from processor.core.interaction_conductor.ic_state import ICState
 from processor.core.interaction_conductor.data_model import LLMConductorOutputType, ToolType, IRSystemToolCallingType, StateManipulationToolCallingType
+from processor.core.ir_system.ir_state import AbstractDocument
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.data_model import ToolType
@@ -49,6 +50,7 @@ class LLMConductor:
                 if tool == ToolType.IR_SYSTEM:
                     ir_system_instructions = cast(IRSystemToolCallingType, json_output)
                     retrieval_prompt = ir_system_instructions["prompt"]
+                    # TODO: Serialize the output!
                     context = self.retrieve_context(retrieval_prompt)
                     self.chat_history.append(LLMMessage(
                         role=Role.ASSISTANT, content=f"The context requested: {context}"
@@ -81,7 +83,7 @@ class LLMConductor:
 
         return final_response
 
-    def retrieve_context(self, prompt: str) -> str:
+    def retrieve_context(self, prompt: str) -> list[AbstractDocument]:
         """
         Retrieves context from the IR system with auto sanity check mechanism.
         """

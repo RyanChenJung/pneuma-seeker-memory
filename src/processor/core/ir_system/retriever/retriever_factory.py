@@ -12,13 +12,14 @@ class RetrieverType(Enum):
     WEB_SEARCH = "Web Search"
 
 
-def get_retriever(retriever_type: RetrieverType) -> Type[AbstractRetriever]:
-    """Factory function to return the correct Retriever instance."""
-    if retriever_type == RetrieverType.PNEUMA:
-        return Pneuma
-    elif retriever_type == RetrieverType.KNOWLEDGE_BASE:
-        return KnowledgeBase
-    elif retriever_type == RetrieverType.WEB_SEARCH:
-        return WebSearch
-    else:
-        raise ValueError(f"No retriever is of type {retriever_type}.")
+class RetrieverFactory:
+    def __init__(self):
+        self.retriever_instances = {
+            RetrieverType.PNEUMA: Pneuma(),
+            RetrieverType.KNOWLEDGE_BASE: KnowledgeBase(),
+            RetrieverType.WEB_SEARCH: WebSearch(),
+        }
+
+    def get_retriever(self, retriever_type: RetrieverType) -> AbstractRetriever:
+        """Factory function to return the correct Retriever instance."""
+        return self.retriever_instances[retriever_type]

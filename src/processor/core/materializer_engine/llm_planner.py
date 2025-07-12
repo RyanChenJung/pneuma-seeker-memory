@@ -1,5 +1,6 @@
+from pandas import DataFrame
 from processor.model.interface.model_factory import get_llm
-from processor.materializer_engine.operation.operation_factory import OperationFactory
+from processor.core.materializer_engine.operation.operation_factory import OperationFactory
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.interface.model_factory import get_llm
 
@@ -18,9 +19,8 @@ class LLMPlanner:
         if self.llm is None:
             self.llm = get_llm(self.llm_path)()
     
-    def materialize_target_schemas(self, target_schemas: list, sqls: list[str]):
+    def materialize_target_schemas(self, target_schemas: list[DataFrame], sqls: list[str]) -> list[DataFrame]:
         """
         Materializes the given Target Schemas subject to SQLs over them.
         """
-        while True:
-            pass
+        pass
