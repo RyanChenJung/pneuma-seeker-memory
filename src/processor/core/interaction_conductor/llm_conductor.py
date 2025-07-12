@@ -1,8 +1,12 @@
+from ast import literal_eval
 import json
+from typing import cast
+
+from pandas import DataFrame
 
 from processor.core.interaction_conductor.ic_prompt_engineer import ICPromptEngineer
 from processor.core.interaction_conductor.ic_state import ICState
-from processor.core.interaction_conductor.data_model import ToolType, IRSystemToolCallingType, MaterializerEngineToolCallingType, StateManipulationToolCallingType
+from processor.core.interaction_conductor.data_model import LLMConductorOutputType, ToolType, IRSystemToolCallingType, StateManipulationToolCallingType
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.data_model import ToolType
@@ -25,42 +29,65 @@ class LLMConductor:
 
     def process_input(self, user_input: str) -> str:
         """
-        Processes the user input, possibly calling tools and adjusting the state.
+        Processes the user input, possibly calling tools.
         """
-        model_output = self.llm.chat(
-            self.chat_history + [DummyMessage(
-                user_input, Role.USER,
-            )]
+        is_thinking_done = False
+        final_response = ""
+        self.chat_history.append(
+            LLMMessage(
+                user_input,
+                Role.USER,
+            )
         )
-        self.chat_history = model_output
+        while not is_thinking_done:
+            model_output = self.llm.chat(self.chat_history)
+            json_output: LLMConductorOutputType = json.loads(model_output)
+            if json_output["is_direct_response"] and json_output["direct_response"]:
+                final_response = json_output["direct_response"]
+                is_thinking_done = True
+            elif json_output["tool"]:
+                tool = json_output["tool"]
+                if tool == ToolType.IR_SYSTEM:
+                    ir_system_instructions = cast(IRSystemToolCallingType, json_output)
+                    retrieval_prompt = ir_system_instructions["prompt"]
+                    context = self.retrieve_context(retrieval_prompt)
+                    self.chat_history.append(LLMMessage(
+                        role=Role.ASSISTANT, content=f"The context requested: {context}"
+                    ))
+                elif tool == ToolType.MATERIALIZER_ENGINE:
+                    current_state = self.state.get_state()
+                    materialized_target_schemas = self.materializer.materialize_target_schemas(
+                        current_state["target_schemas"], current_state["sqls"]
+                    )
+                    self.state.set_state(current_state["sqls"], materialized_target_schemas)
+                    self.chat_history.append(LLMMessage(
+                        role=Role.ASSISTANT, content="The target schema has been materialized. You can ask the user if they want to execute the SQL statements to get the answer to their information need."
+                    ))
+                elif tool == ToolType.STATE_MANIPULATION:
+                    state_manipulation_instructions = cast(StateManipulationToolCallingType, json_output)
+                    new_sqls = state_manipulation_instructions["new_sqls"]
+                    new_target_schemas = state_manipulation_instructions["new_target_schemas"]
+                    new_target_schemas_df = []
+                    for i in new_target_schemas:
+                        # Assume i is a list of column names
+                        new_target_schemas_df.append(
+                            DataFrame(columns=literal_eval(i))
+                        )
+                    self.state.set_state(new_sqls, new_target_schemas_df)
+                    self.chat_history.append(LLMMessage(
+                        role=Role.ASSISTANT, content="The state has been adjusted as requested."
+                    ))
+            else:
+                raise ValueError("The JSON output is invalid.")
 
-        # TODO: better handle tool calling (refer to best practices from HF for example)
-        last_message = self.chat_history[-1]
-        if last_message.invoke_tool:
-            tool = last_message.tool
-            if tool == Tool.IR_SYSTEM:
-                context = self.retrieve_context(last_message.text)
-                self.process_input(
-                    f"Context from IR: {context}"
-                )
-            elif tool == Tool.MATERIALIZER_ENGINE:
-                materialized_target_schemas = self.materialize_state()
-                # TODO: what's next?
+        return final_response
 
-    def update_state(self, sqls: list[str] = None, target_schemas: list[str] = None) -> None:
-        """
-        Updates the current state.
-        """
-        self.state.set_state(sqls, target_schemas)
-    
     def retrieve_context(self, prompt: str) -> str:
         """
         Retrieves context from the IR system.
         """
         # TODO: Handle provenance information!
-        context = self.ir_system.retrieve_context(
-            prompt
-        )
+        context = self.ir_system.retrieve_context(prompt)
         return context
 
     def check_state_convergence(self) -> bool:
@@ -75,21 +102,6 @@ class LLMConductor:
         """
         current_state = self.state.get_state()
         self.materializer.materialize(
-            current_state['sqls'], current_state['target_schemas'],
+            current_state["sqls"],
+            current_state["target_schemas"],
         )
-
-class SystemPromptEngineer:
-    def get_general_prompt():
-        """
-        Returns prompt for general chat.
-        """
-
-    def get_ir_prompt():
-        """
-        Returns prompt for the IR system.
-        """
-    
-    def get_materializer_prompt():
-        """
-        Returns prompt for the materializer engine.
-        """
