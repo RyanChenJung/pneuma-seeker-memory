@@ -13,7 +13,7 @@ RETRIEVER_INFO = [
     {"name": RetrieverType.PNEUMA, "description": "Retrieves relevant tabular data."},
     {
         "name": RetrieverType.KNOWLEDGE_BASE,
-        "description": "Retrieves domain knowledge and user preferences captured from the users.",
+        "description": "Retrieves domain knowledge and user preferences (for a specific user) captured from the users.",
     },
     {
         "name": RetrieverType.WEB_SEARCH,
@@ -24,15 +24,11 @@ RETRIEVER_INFO = [
 
 class LMInterface:
     def __init__(self, llm: AbstractModel, models: dict[str, str]):
-        self.state = IRState()
         self.prompt_factory = IRPromptFactory()
-        self.llm = llm
-        self.relevant_retrievers = []
-        self.llm_messages: list[LLMMessage] = []
         self.retriever_factory = RetrieverFactory(models)
-        self.current_prompt = (
-            ""  # May be refined along the way if the caller provides any feedback
-        )
+
+        self.state = IRState()
+        self.llm = llm
 
     def index_documents(
         self, retriever_type: RetrieverType, documents: AbstractDocument
@@ -52,7 +48,7 @@ class LMInterface:
         the results by adjusting the initial query.
         """
         # Assume the retrievers to be used are only determined once in the beginning
-        if len(self.relevant_retrievers) == 0:
+        if len(self.state.relevant_retrievers) == 0:
             # Consider which retrievers to use.
             # Future-TODO: Parallelization
             for i in RETRIEVER_INFO:
@@ -68,27 +64,28 @@ class LMInterface:
                 ]
                 classification_output = self.llm.chat(messages).strip().lower()
                 if classification_output.startswith("yes"):
-                    self.relevant_retrievers.append(i["name"])
+                    self.state.relevant_retrievers.append(i["name"])
 
-        if len(self.relevant_retrievers) == 0:
+        if len(self.state.relevant_retrievers) == 0:
             # By default, use all retrievers if none is considered relevant by the LLM
-            self.relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
+            self.state.relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
 
         # Step 1: Create/adjust the prompt
+        # Future-TODO: More granular adjustments for each retriever
         sys_prompt = self.prompt_factory.get_new_retrieve_prompt(requirements)
-        if self.current_prompt != "":
+        if self.state.current_query != "":
             sys_prompt = self.prompt_factory.get_refine_retrieval_prompt(
-                self.current_prompt, requirements
+                self.state.current_query, requirements
             )
 
         actual_retrieval_prompt = self.llm.chat(
             [LLMMessage(role=Role.SYSTEM, content=sys_prompt)]
         )
-        self.current_prompt = actual_retrieval_prompt
+        self.state.current_query = actual_retrieval_prompt
 
         # Step 2: Call the retrievers and return the results
         documents = []
-        for retriever_name in self.relevant_retrievers:
+        for retriever_name in self.state.relevant_retrievers:
             retriever = self.retriever_factory.get_retriever(retriever_name)
             documents.extend(retriever.retrieve(actual_retrieval_prompt))
         return documents
