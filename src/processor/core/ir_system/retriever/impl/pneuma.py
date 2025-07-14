@@ -1,12 +1,14 @@
 from collections import defaultdict
+from enum import Enum
 import gc
 from math import ceil
-from os import listdir
+from bm25s.tokenization import convert_tokenized_to_string_list
 import time
 import Stemmer
 import bm25s
 import chromadb_deterministic as chromadb
 import pandas as pd
+from scipy.spatial.distance import cosine
 from sentence_transformers import SentenceTransformer
 from torch import cuda
 
@@ -20,7 +22,9 @@ from processor.core.ir_system.ir_data_model import AbstractDocument
 from processor.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from tqdm import tqdm
 from chromadb_deterministic.api.client import Client
+from chromadb_deterministic.api.models.Collection import Collection
 
+from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import LLMOption
 
@@ -33,6 +37,11 @@ class Pneuma(AbstractRetriever):
         self.llm = models["llm"]
         self.embed_model = models["embed_model"]
         self.EMBEDDING_MAX_TOKENS = 768
+        self.hybrid_retriever = HybridRetriever(
+            self.llm,
+            RerankingMode.LLM,
+        )
+        self.stemmer = Stemmer.Stemmer("english")
 
     def retriever_type(self) -> RetrieverType:
         """
@@ -46,11 +55,60 @@ class Pneuma(AbstractRetriever):
         """
         pass
 
-    def retrieve(self, query: str) -> list[AbstractDocument]:
+    def retrieve(self, query: str, sources: list[str], k: int) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
         """
-        return []
+        retrieval_results: list[AbstractDocument] = []
+        increased_k = k * 5
+        for dataset in sources:
+            client = chromadb.PersistentClient(
+                f"indices/pneuma/vector-index-{dataset}"
+            )
+            collection = client.get_collection("benchmark")
+            retriever = bm25s.BM25.load(
+                f"indices/pneuma/fulltext-index-{dataset}",
+                load_corpus=True,
+            )
+
+            dictionary_id_bm25 = {
+                datum["metadata"]["table"]: datum_idx
+                for datum_idx, datum in enumerate(retriever.corpus)
+            }
+            question_embedding = self.embed_model.embed(query).tolist()
+            query_tokens = bm25s.tokenize(
+                query, stemmer=self.stemmer, show_progress=False
+            )
+
+            results, scores = retriever.retrieve(
+                query_tokens, k=increased_k, show_progress=False
+            )
+            bm25_res = (results, scores)
+            vec_res = collection.query(
+                query_embeddings=[question_embedding], n_results=increased_k
+            )
+
+            all_nodes = self.hybrid_retriever.retrieve(
+                retriever,
+                collection,
+                bm25_res,
+                vec_res,
+                increased_k,
+                query,
+                0.5,
+                query_tokens,
+                question_embedding,
+                dictionary_id_bm25,
+            )
+            for table, _, _ in all_nodes[:k]:
+                table = table.split("_SEP_")[0]
+                retrieval_results.append(
+                    AbstractDocument(
+                        retriever_type=RetrieverType.PNEUMA,
+                        content=table,
+                    )
+                )
+        return retrieval_results
 
     def index(self, documents: list[AbstractDocument]):
         """
@@ -487,7 +545,9 @@ Describe very briefly what the {column} column represents. If not possible, simp
         processed_sample_rows: list[Text] = []
         tokenizer = self.embed_model.tokenizer
         for table in tqdm(unique_tables):
-            table_rows = [row for row in sample_rows if row.metadat["table_name"] == table]
+            table_rows = [
+                row for row in sample_rows if row.metadat["table_name"] == table
+            ]
 
             rows_idx = 0
             while rows_idx < len(table_rows):
@@ -508,7 +568,7 @@ Describe very briefly what the {column} column represents. If not possible, simp
                     Text(
                         retriever_type=RetrieverType.PNEUMA,
                         content=processed_sample_row,
-                        metadata={"table_name": table}
+                        metadata={"table_name": table},
                     )
                 )
 
@@ -517,12 +577,16 @@ Describe very briefly what the {column} column represents. If not possible, simp
         return processed_sample_rows
 
     def __merge_table_context(self, table_context: list[Text]) -> list[Text]:
-        unique_tables = sorted(set([context.metadata["table_name"] for context in table_context]))
+        unique_tables = sorted(
+            set([context.metadata["table_name"] for context in table_context])
+        )
         processed_table_context: list[Text] = []
         tokenizer = self.embed_model.tokenizer
         for table in tqdm(unique_tables):
             table_contexts = [
-                context for context in table_context if context.metadata["table_name"] == table
+                context
+                for context in table_context
+                if context.metadata["table_name"] == table
             ]
             context_idx = 0
             while context_idx < len(table_contexts):
@@ -544,9 +608,202 @@ Describe very briefly what the {column} column represents. If not possible, simp
                     Text(
                         retriever_type=RetrieverType.PNEUMA,
                         content=processed_context,
-                        metadata={"table_name": table}
+                        metadata={"table_name": table},
                     )
                 )
         print(f"Num of context summaries (BEFORE): {len(table_context)}")
         print(f"Num of context summaries (AFTER): {len(processed_table_context)}")
         return processed_table_context
+
+
+class RerankingMode(Enum):
+    NONE = 0
+    LLM = 1
+
+
+class HybridRetriever:
+
+    def __init__(self, reranker: AbstractModel, reranking_mode: RerankingMode) -> None:
+        self.reranker = reranker
+        self.reranking_mode = reranking_mode
+
+    def _process_nodes_bm25(
+        self,
+        items,
+        all_ids,
+        dictionary_id_bm25,
+        bm25_retriever: bm25s.BM25,
+        query_tokens,
+    ):
+        results = [node for node in items[0][0]]
+        scores = [node for node in items[1][0]]
+
+        extra_results = [
+            bm25_retriever.corpus[dictionary_id_bm25[one_id]] for one_id in all_ids
+        ]
+        extra_scores = [
+            bm25_retriever.get_scores(
+                convert_tokenized_to_string_list(query_tokens)[0]
+            )[dictionary_id_bm25[one_id]]
+            for one_id in all_ids
+        ]
+
+        results.extend(extra_results)
+        scores.extend(extra_scores)
+
+        max_score = max(scores)
+        min_score = min(scores)
+        processed_nodes = {
+            node["metadata"]["table"]: (
+                (
+                    1
+                    if min_score == max_score
+                    else (scores[i] - min_score) / (max_score - min_score)
+                ),
+                node["text"],
+            )
+            for i, node in enumerate(results)
+        }
+        return processed_nodes
+
+    def _process_nodes_vec(
+        self, items, missing_ids, collection: Collection, question_embedding
+    ):
+        extra_information = collection.get_fast(
+            ids=missing_ids, limit=len(missing_ids), include=["documents", "embeddings"]
+        )
+        items["ids"][0].extend(extra_information["ids"])
+        items["documents"][0].extend(extra_information["documents"])
+        items["distances"][0].extend(
+            cosine(question_embedding, extra_information["embeddings"][i])
+            for i in range(len(missing_ids))
+        )
+
+        scores: list[float] = [1 - dist for dist in items["distances"][0]]
+        documents: list[str] = items["documents"][0]
+        ids: list[str] = items["ids"][0]
+
+        max_score = max(scores)
+        min_score = min(scores)
+        processed_nodes = {
+            ids[idx]: (
+                (
+                    1
+                    if min_score == max_score
+                    else (scores[idx] - min_score) / (max_score - min_score)
+                ),
+                documents[idx],
+            )
+            for idx in range(len(scores))
+        }
+        return processed_nodes
+
+    def _llm_rerank(self, nodes: list[tuple[str, float, str]], question: str):
+        # Each node is of the form (name, score, doc)
+        node_tables = [node[0] for node in nodes]
+
+        relevance_prompts = [
+            [
+                LLMMessage(
+                    role=Role.USER,
+                    content=self._get_relevance_prompt(
+                        node[2],
+                        (
+                            "content"
+                            if node[0].split("_SEP_")[1].startswith("contents")
+                            else "context"
+                        ),
+                        question,
+                    ),
+                )
+            ]
+            for node in nodes
+        ]
+
+        arguments = self.reranker.batch_chat(
+            relevance_prompts,
+            LLMOption(
+                max_new_tokens=2,
+                batch_size=2,
+            ),
+        )[0]
+
+        tables_relevance = {
+            node_tables[arg_idx]: argument.lower().startswith("yes")
+            for arg_idx, argument in enumerate(arguments)
+        }
+
+        new_nodes = [
+            (table_name, score, doc)
+            for table_name, score, doc in nodes
+            if tables_relevance[table_name]
+        ] + [
+            (table_name, score, doc)
+            for table_name, score, doc in nodes
+            if not tables_relevance[table_name]
+        ]
+        return new_nodes
+
+    def _get_relevance_prompt(self, desc: str, desc_type: str, question: str):
+        if desc_type == "content":
+            return f"""Given a table with the following columns:
+*/
+{desc}
+*/
+and this question:
+/*
+{question}
+*/
+Is the table relevant to answer the question? Begin your answer with yes/no."""
+        elif desc_type == "context":
+            return f"""Given this context describing a table:
+*/
+{desc}
+*/
+and this question:
+/*
+{question}
+*/
+Is the table relevant to answer the question? Begin your answer with yes/no."""
+
+    def retrieve(
+        self,
+        bm25_retriever: bm25s.BM25,
+        vec_retriever,
+        bm25_res,
+        vec_res,
+        k: int,
+        question: str,
+        alpha=0.5,
+        query_tokens=None,
+        question_embedding=None,
+        dictionary_id_bm25=None,
+    ):
+        vec_ids = {vec_id for vec_id in vec_res["ids"][0]}
+        bm25_ids = {node["metadata"]["table"] for node in bm25_res[0][0]}
+        processed_nodes_bm25 = self._process_nodes_bm25(
+            bm25_res,
+            list(vec_ids - bm25_ids),
+            dictionary_id_bm25,
+            bm25_retriever,
+            query_tokens,
+        )
+        processed_nodes_vec = self._process_nodes_vec(
+            vec_res, list(bm25_ids - vec_ids), vec_retriever, question_embedding
+        )
+
+        all_nodes: list[tuple[str, float, str]] = []
+        for node_id in sorted(vec_ids | bm25_ids):
+            bm25_score_doc = processed_nodes_bm25.get(node_id)
+            vec_score_doc = processed_nodes_vec.get(node_id)
+            combined_score = alpha * bm25_score_doc[0] + (1 - alpha) * vec_score_doc[0]
+            if bm25_score_doc[1] is None:
+                doc = vec_score_doc[1]
+            else:
+                doc = bm25_score_doc[1]
+            all_nodes.append((node_id, combined_score, doc))
+
+        sorted_nodes = sorted(all_nodes, key=lambda node: (-node[1], node[0]))[:k]
+        if self.reranking_mode == RerankingMode.LLM:
+            sorted_nodes = self._llm_rerank(sorted_nodes, question)
+        return sorted_nodes
