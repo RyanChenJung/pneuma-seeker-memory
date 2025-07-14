@@ -11,6 +11,7 @@ class LLMOption:
     top_k: int = None
     penalty_alpha: float = None
     json_mode: bool = False
+    batch_size: int = None
 
 @dataclass
 class EmbeddingModelOption:

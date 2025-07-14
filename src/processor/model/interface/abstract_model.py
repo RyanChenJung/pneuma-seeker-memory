@@ -29,6 +29,15 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
+    def batch_chat(
+        self, batch_messages: list[list[LLMMessage]], llm_option: LLMOption = None
+    ) -> list[list[str], int]:
+        """
+        Chats (in batch) with the model.
+        """
+        pass
+
+    @abstractmethod
     def embed(
         self,
         texts: str | list[str],
