@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from processor.core.ir_system.ir_state import AbstractDocument
-from processor.core.ir_system.retriever.retriever_factory import RetrieverType
+from processor.core.ir_system.ir_data_model import RetrieverType
 
 
 class AbstractRetriever(ABC):

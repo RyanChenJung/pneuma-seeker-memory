@@ -1,15 +1,8 @@
-from enum import Enum
-from typing import Type
+from processor.core.ir_system.ir_data_model import RetrieverType
 from processor.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from processor.core.ir_system.retriever.impl.pneuma import Pneuma
 from processor.core.ir_system.retriever.impl.knowledge_base import KnowledgeBase
 from processor.core.ir_system.retriever.impl.web_search import WebSearch
-
-
-class RetrieverType(Enum):
-    PNEUMA = "Pneuma"
-    KNOWLEDGE_BASE = "Knowledge Base"
-    WEB_SEARCH = "Web Search"
 
 
 class RetrieverFactory:
