@@ -18,7 +18,7 @@ class WebSearch(AbstractRetriever):
         """
         pass
 
-    def retrieve(self, query: str) -> list[AbstractDocument]:
+    def retrieve(self, query: str, sources: list[str], k: int) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
         """
