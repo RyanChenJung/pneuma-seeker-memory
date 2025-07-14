@@ -24,6 +24,18 @@ class AbstractDocument(ABC):
         self.metadata = metadata
 
 
+class Knowledge(AbstractDocument):
+    """
+    Represents some form of knowledge from users.
+
+    - retriever_type: RetrieverType.KNOWLEDGE_BASE
+    - content: str
+    - metadata: {"type": "local/global", "user": "..."}
+    """
+    def __init__(self, retriever_type: RetrieverType, content: str, metadata: dict[str, str]):
+        super().__init__(retriever_type, content, metadata)
+
+
 class Table(AbstractDocument):
     """
     Represents a table.
