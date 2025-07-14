@@ -4,7 +4,7 @@ from typing import cast
 
 from pandas import DataFrame
 
-from processor.core.interaction_conductor.ic_prompt_engineer import ICPromptEngineer
+from processor.core.interaction_conductor.ic_prompt_factory import ICPromptEngineer
 from processor.core.interaction_conductor.ic_state import ICState
 from processor.core.interaction_conductor.data_model import LLMConductorOutputType, ToolType, IRSystemToolCallingType, StateManipulationToolCallingType
 from processor.core.ir_system.ir_state import AbstractDocument
