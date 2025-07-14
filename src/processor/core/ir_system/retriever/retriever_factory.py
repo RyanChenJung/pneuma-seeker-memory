@@ -3,14 +3,15 @@ from processor.core.ir_system.retriever.abstract_retriever import AbstractRetrie
 from processor.core.ir_system.retriever.impl.pneuma import Pneuma
 from processor.core.ir_system.retriever.impl.knowledge_base import KnowledgeBase
 from processor.core.ir_system.retriever.impl.web_search import WebSearch
+from processor.model.interface.abstract_model import AbstractModel
 
 
 class RetrieverFactory:
-    def __init__(self):
+    def __init__(self, models: dict[str, AbstractModel]):
         self.retriever_instances = {
-            RetrieverType.PNEUMA: Pneuma(),
-            RetrieverType.KNOWLEDGE_BASE: KnowledgeBase(),
-            RetrieverType.WEB_SEARCH: WebSearch(),
+            RetrieverType.PNEUMA: Pneuma(models),
+            RetrieverType.KNOWLEDGE_BASE: KnowledgeBase(models),
+            RetrieverType.WEB_SEARCH: WebSearch(models),
         }
 
     def get_retriever(self, retriever_type: RetrieverType) -> AbstractRetriever:
