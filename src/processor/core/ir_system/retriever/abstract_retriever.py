@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from processor.core.ir_system.ir_state import AbstractDocument
 from processor.core.ir_system.ir_data_model import RetrieverType
+from processor.model.interface.abstract_model import AbstractModel
 
 
 class AbstractRetriever(ABC):
-    def __init__(self):
+    def __init__(self, models: dict[str, AbstractModel]):
         """
         Initialize the Retriever class
         """

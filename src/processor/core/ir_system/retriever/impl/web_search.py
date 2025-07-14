@@ -22,7 +22,7 @@ class WebSearch(AbstractRetriever):
         """
         Retrieves a list of documents given a query.
         """
-        pass
+        return []
 
     def index(self, documents: list[AbstractDocument]):
         """
