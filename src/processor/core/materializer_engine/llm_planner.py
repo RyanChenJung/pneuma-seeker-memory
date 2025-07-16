@@ -5,19 +5,11 @@ from processor.model.interface.abstract_model import AbstractModel
 from processor.model.interface.model_factory import get_llm
 
 class LLMPlanner:
-    def __init__(self, llm_path: str):
-        self.llm: AbstractModel = None  # Not yet initialized (loaded)
-        self.llm_path = llm_path
+    def __init__(self, llm: AbstractModel):
+        self.llm: AbstractModel = llm
         self.thought_history = []
         self.operation_factory = OperationFactory()
         self.tool_factory = ToolFactory()
-    
-    def load_llm(self):
-        """
-        Loads the LLM if not yet done.
-        """
-        if self.llm is None:
-            self.llm = get_llm(self.llm_path)()
     
     def materialize_target_schemas(self, target_schemas: list[DataFrame], sqls: list[str]) -> list[DataFrame]:
         """

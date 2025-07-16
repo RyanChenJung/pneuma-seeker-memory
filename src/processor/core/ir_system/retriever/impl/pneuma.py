@@ -55,16 +55,16 @@ class Pneuma(AbstractRetriever):
         """
         pass
 
-    def retrieve(self, query: str, sources: list[str], k: int) -> list[AbstractDocument]:
+    def retrieve(
+        self, query: str, sources: list[str], k: int
+    ) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
         """
         retrieval_results: list[AbstractDocument] = []
         increased_k = k * 5
         for dataset in sources:
-            client = chromadb.PersistentClient(
-                f"indices/pneuma/vector-index-{dataset}"
-            )
+            client = chromadb.PersistentClient(f"indices/pneuma/vector-index-{dataset}")
             collection = client.get_collection("benchmark")
             retriever = bm25s.BM25.load(
                 f"indices/pneuma/fulltext-index-{dataset}",
@@ -101,9 +101,11 @@ class Pneuma(AbstractRetriever):
                 dictionary_id_bm25,
             )
             for table, _, _ in all_nodes[:k]:
+                doc_id = table
                 table = table.split("_SEP_")[0]
                 retrieval_results.append(
-                    AbstractDocument(
+                    Text(
+                        doc_id=doc_id,
                         retriever_type=RetrieverType.PNEUMA,
                         content=table,
                     )

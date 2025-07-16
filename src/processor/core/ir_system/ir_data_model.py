@@ -17,8 +17,9 @@ class AbstractDocument(ABC):
     """
 
     def __init__(
-        self, retriever_type: RetrieverType, content: Any, metadata: dict[str, str]
+        self, doc_id: str, retriever_type: RetrieverType, content: Any, metadata: dict[str, str]
     ):
+        self.doc_id = doc_id
         self.retriever_type = retriever_type
         self.content = content
         self.metadata = metadata
@@ -32,8 +33,9 @@ class Knowledge(AbstractDocument):
     - content: str
     - metadata: {"type": "local/global", "user": "..."}
     """
-    def __init__(self, retriever_type: RetrieverType, content: str, metadata: dict[str, str]):
-        super().__init__(retriever_type, content, metadata)
+
+    def __init__(self, doc_id, retriever_type, content: str, metadata):
+        super().__init__(doc_id, retriever_type, content, metadata)
 
 
 class Table(AbstractDocument):
@@ -45,13 +47,8 @@ class Table(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "..."}
     """
 
-    def __init__(
-        self,
-        retriever_type: RetrieverType,
-        content: DataFrame,
-        metadata: dict[str, str],
-    ):
-        super().__init__(retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: DataFrame, metadata):
+        super().__init__(doc_id, retriever_type, content, metadata)
 
 
 class TableContext(AbstractDocument):
@@ -63,13 +60,8 @@ class TableContext(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "...", "type": "..."}
     """
 
-    def __init__(
-        self,
-        retriever_type: RetrieverType,
-        content: str,
-        metadata: dict[str, str],
-    ):
-        super().__init__(retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: str, metadata):
+        super().__init__(doc_id, retriever_type, content, metadata)
 
 
 class Text(AbstractDocument):
@@ -77,7 +69,5 @@ class Text(AbstractDocument):
     Represents textual document.
     """
 
-    def __init__(
-        self, retriever_type: RetrieverType, content: str, metadata: dict[str, str]
-    ):
-        super().__init__(retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: str, metadata):
+        super().__init__(doc_id, retriever_type, content, metadata)

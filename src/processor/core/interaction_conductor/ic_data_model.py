@@ -23,6 +23,11 @@ class StateManipulationToolCallingType(LLMConductorOutputType):
     new_target_schemas: list[str]
 
 
+class IRFeedbackOutputType(TypedDict):
+    irrelevant_doc_ids: list[str]
+    feedback: str
+
+
 def typed_dict_to_str(typed_dict_cls: type) -> str:
     hints = get_type_hints(typed_dict_cls)
     lines = [f"{typed_dict_cls.__name__}:"]

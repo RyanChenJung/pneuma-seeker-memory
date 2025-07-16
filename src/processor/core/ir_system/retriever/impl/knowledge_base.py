@@ -7,6 +7,7 @@ from processor.core.ir_system.ir_data_model import (
     AbstractDocument,
     Knowledge,
     RetrieverType,
+    Text,
 )
 from processor.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 
@@ -67,7 +68,8 @@ class KnowledgeBase(AbstractRetriever):
         retrieval_results: list[AbstractDocument] = []
         for result in results[0]:
             retrieval_results.append(
-                AbstractDocument(
+                Text(
+                    doc_id=result["metadata"]["doc_id"],
                     retriever_type=RetrieverType.KNOWLEDGE_BASE,
                     content=result["text"],
                     metadata={
@@ -90,11 +92,12 @@ class KnowledgeBase(AbstractRetriever):
             corpus_json.extend(retriever.corpus)
             os.rmdir(self.RETRIEVER_PATH)
 
-        for document in documents:
+        for doc_id, document in enumerate(documents):
             corpus_json.append(
                 {
                     "text": document.content,
                     "metadata": {
+                        "doc_id": f"kb_{doc_id}",
                         "type": document.metadata["type"],  # Either local or global
                         "user": document.metadata["user"],
                     },

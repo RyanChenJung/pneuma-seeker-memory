@@ -8,7 +8,11 @@ from processor.core.ir_system.retriever.retriever_factory import (
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
 
-
+RETRIEVERS = [
+    RetrieverType.PNEUMA,
+    RetrieverType.KNOWLEDGE_BASE,
+    RetrieverType.WEB_SEARCH,
+]
 RETRIEVER_INFO = [
     {"name": RetrieverType.PNEUMA, "description": "Retrieves relevant tabular data."},
     {
@@ -40,52 +44,61 @@ class LMInterface:
         self.retriever_factory.get_retriever(retriever_type).index(documents)
         print("Indexing process is done.")
 
-    def retrieve(self, requirements: str) -> list[AbstractDocument]:
+    def get_relevant_retrievers(self, requirements: str) -> list[RetrieverType]:
         """
-        Retrieves documents from the retrievers in an intelligent manner.
-
-        - requirements (str): First the initial query, subsequently feedback to improve
-        the results by adjusting the initial query.
+        Returns the list of relevant retrievers for the given requirements.
         """
-        # Assume the retrievers to be used are only determined once in the beginning
-        if len(self.state.relevant_retrievers) == 0:
-            # Consider which retrievers to use.
-            # Future-TODO: Parallelization
-            for i in RETRIEVER_INFO:
-                messages = [
-                    LLMMessage(
-                        role=Role.SYSTEM,
-                        content=self.prompt_factory.get_retriever_classification_prompt(
-                            requirements,
-                            i["name"],
-                            i["description"],
-                        ),
-                    )
-                ]
-                classification_output = self.llm.chat(messages).strip().lower()
-                if classification_output.startswith("yes"):
-                    self.state.relevant_retrievers.append(i["name"])
+        relevant_retrievers: list[RetrieverType] = []
+        for i in RETRIEVER_INFO:
+            messages = [
+                LLMMessage(
+                    role=Role.SYSTEM,
+                    content=self.prompt_factory.get_retriever_classification_prompt(
+                        requirements,
+                        i["name"],
+                        i["description"],
+                    ),
+                )
+            ]
+            classification_output = self.llm.chat(messages).strip().lower()
+            if classification_output.startswith("yes"):
+                relevant_retrievers.append(i["name"])
 
         if len(self.state.relevant_retrievers) == 0:
             # By default, use all retrievers if none is considered relevant by the LLM
-            self.state.relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
+            relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
+        return relevant_retrievers
 
-        # Step 1: Create/adjust the prompt
-        # Future-TODO: More granular adjustments for each retriever
-        sys_prompt = self.prompt_factory.get_new_retrieve_prompt(requirements)
-        if self.state.current_query != "":
-            sys_prompt = self.prompt_factory.get_refine_retrieval_prompt(
-                self.state.current_query, requirements
-            )
+    def retrieve(
+        self,
+        retriever_name: RetrieverType,
+        prompt: str,
+        sources: list[str] = None,
+        k: int = 10,
+    ) -> list[AbstractDocument]:
+        """
+        Retrieves documents from the specified retriever.
 
-        actual_retrieval_prompt = self.llm.chat(
+        - prompt (str): The query to be given to the retriever.
+        """
+        self.state.current_queries[retriever_name] = prompt
+        retriever = self.retriever_factory.get_retriever(retriever_name)
+        documents = retriever.retrieve(prompt, sources, k)
+        return documents
+
+    def re_retrieve_with_feedback(
+        self,
+        feedback: str,
+        irrelevant_results: list[AbstractDocument],
+        k: int,
+    ):
+        """
+        Re-retrives previously (irrelevant) retrieved documents.
+        It does so by adjusting the prompt using the feedback.
+        """
+        sys_prompt = self.prompt_factory.get_refine_retrieval_prompt(
+            self.state.current_query, feedback[retriever_name]
+        )
+        refined_prompt = self.llm.chat(
             [LLMMessage(role=Role.SYSTEM, content=sys_prompt)]
         )
-        self.state.current_query = actual_retrieval_prompt
-
-        # Step 2: Call the retrievers and return the results
-        documents = []
-        for retriever_name in self.state.relevant_retrievers:
-            retriever = self.retriever_factory.get_retriever(retriever_name)
-            documents.extend(retriever.retrieve(actual_retrieval_prompt))
-        return documents
