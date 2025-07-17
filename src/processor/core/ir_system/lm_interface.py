@@ -71,7 +71,7 @@ class LMInterface:
 
     def retrieve(
         self,
-        retriever_name: RetrieverType,
+        retriever_type: RetrieverType,
         prompt: str,
         sources: list[str] = None,
         k: int = 10,
@@ -81,13 +81,14 @@ class LMInterface:
 
         - prompt (str): The query to be given to the retriever.
         """
-        self.state.current_queries[retriever_name] = prompt
-        retriever = self.retriever_factory.get_retriever(retriever_name)
+        self.state.current_queries[retriever_type] = prompt
+        retriever = self.retriever_factory.get_retriever(retriever_type)
         documents = retriever.retrieve(prompt, sources, k)
         return documents
 
     def re_retrieve_with_feedback(
         self,
+        retriever_type: RetrieverType,
         feedback: str,
         irrelevant_results: list[AbstractDocument],
         k: int,
@@ -97,7 +98,9 @@ class LMInterface:
         It does so by adjusting the prompt using the feedback.
         """
         sys_prompt = self.prompt_factory.get_refine_retrieval_prompt(
-            self.state.current_query, feedback[retriever_name]
+            self.state.current_queries[retriever_type],
+            irrelevant_results,
+            feedback,
         )
         refined_prompt = self.llm.chat(
             [LLMMessage(role=Role.SYSTEM, content=sys_prompt)]
