@@ -1,14 +1,17 @@
 from enum import Enum
 from abc import ABC, abstractmethod
+from typing import Any
+
 
 class ToolType(Enum):
-    PYTHON_INTERPRETER = 'Python Interpreter'
-    SQL_ENGINE = 'SQL Engine'
+    PYTHON_INTERPRETER = "Python Interpreter"
+    SQL_ENGINE = "SQL Engine"
+
 
 class AbstractTool(ABC):
     def __init__(self, tool_type: ToolType):
         self.tool_type = tool_type
-    
+
     @abstractmethod
     def execute(self, argument: Any):
         """
