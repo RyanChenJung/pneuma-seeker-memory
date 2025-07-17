@@ -71,3 +71,13 @@ class Text(AbstractDocument):
 
     def __init__(self, doc_id, retriever_type, content: str, metadata):
         super().__init__(doc_id, retriever_type, content, metadata)
+
+
+
+def convert_retrieval_results_to_str(
+    retrieval_results: list[AbstractDocument]
+):
+    representation = "Retrieval results:\n"
+    for result in retrieval_results:
+        representation += f"- ```{str(result)}```\n"
+    return representation.strip()
