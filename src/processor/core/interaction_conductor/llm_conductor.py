@@ -1,9 +1,10 @@
 from ast import literal_eval
-from typing import cast
+from logging import Logger
 
+import duckdb
 from pandas import DataFrame
 
-from processor.core.interaction_conductor.ic_prompt_factory import ICPromptEngineer
+from processor.core.interaction_conductor.ic_prompt_factory import ICPromptFactory
 from processor.core.interaction_conductor.ic_state import ICState
 from processor.core.interaction_conductor.ic_data_model import (
     IRFeedbackOutputType,
@@ -12,7 +13,10 @@ from processor.core.interaction_conductor.ic_data_model import (
     IRSystemToolCallingType,
     StateManipulationToolCallingType,
 )
-from processor.core.ir_system.ir_data_model import RetrieverType
+from processor.core.ir_system.ir_data_model import (
+    RetrieverType,
+    convert_retrieval_results_to_str,
+)
 from processor.core.ir_system.ir_state import AbstractDocument
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
@@ -24,20 +28,22 @@ from processor.utils.json_processor import parse_json
 
 
 class LLMConductor:
-    def __init__(self, llm_path: str):
+    def __init__(self, llm_path: str, logger: Logger):
         """
         Initializes the LLM Conductor with a state, and materializer.
         """
         self.state = ICState()
         self.llm = get_llm(llm_path)(llm_path)
         self.chat_history: list[LLMMessage] = []
-        self.prompt_engineer = ICPromptEngineer()
+        self.prompt_factory = ICPromptFactory()
         self.materializer = LLMPlanner(self.llm)
+        self.logger = logger
 
     def process_input(self, user_input: str) -> str:
         """
         Processes the user input, possibly calling tools.
         """
+        self.logger.info(f"Start processing this user input: {user_input}")
         is_thinking_done = False
         final_response = ""
         self.chat_history.append(
@@ -46,22 +52,30 @@ class LLMConductor:
                 Role.USER,
             )
         )
-        while not is_thinking_done:
+
+        total_iteration = 0
+        iteration_limit = 5  # TODO: Determine limit more dynamically based on, e.g., input-output properties
+        while not is_thinking_done and total_iteration < iteration_limit:
             model_output = self.llm.chat(self.chat_history, LLMOption(json_mode=True))
+            self.logger.info(f"Model output: {model_output}")
             json_output: LLMConductorOutputType = parse_json(model_output)
-            if json_output["is_direct_response"] and json_output["direct_response"]:
-                final_response = json_output["direct_response"]
+
+            is_direct_response = json_output.get("is_direct_response")
+            tool = json_output.get("tool")
+            response = json_output.get("response")
+
+            if is_direct_response:
+                final_response = response
+                self.logger.info(
+                    f"=> Get direct response to return to the user: {final_response}"
+                )
                 is_thinking_done = True
-            elif json_output["tool"]:
-                tool = json_output["tool"]
+            elif tool:
                 if tool == ToolType.IR_SYSTEM:
-                    ir_system_instructions = cast(IRSystemToolCallingType, json_output)
-                    retrieval_prompt = ir_system_instructions["prompt"]
-                    # TODO: Serialize the output!
-                    context = self.retrieve_context(retrieval_prompt)
+                    context = self.__retrieve_context(response["prompt"])
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.ASSISTANT,
+                            role=Role.SYSTEM,
                             content=f"The context requested: {context}",
                         )
                     )
@@ -77,18 +91,13 @@ class LLMConductor:
                     )
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.ASSISTANT,
-                            content="The target schema has been materialized. You can ask the user if they want to execute the SQL statements to get the answer to their information need.",
+                            role=Role.SYSTEM,
+                            content="The target schema has been materialized. You can ask the user if they want to execute the SQL statements to get the answer to their information need. It's possible that they decide to reset the state.",
                         )
                     )
                 elif tool == ToolType.STATE_MANIPULATION:
-                    state_manipulation_instructions = cast(
-                        StateManipulationToolCallingType, json_output
-                    )
-                    new_sqls = state_manipulation_instructions["new_sqls"]
-                    new_target_schemas = state_manipulation_instructions[
-                        "new_target_schemas"
-                    ]
+                    new_sqls = response["new_sqls"]
+                    new_target_schemas = response["new_target_schemas"]
                     new_target_schemas_df = []
                     for i in new_target_schemas:
                         # Assume i is a list of column names
@@ -96,16 +105,32 @@ class LLMConductor:
                     self.state.set_state(new_sqls, new_target_schemas_df)
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.ASSISTANT,
+                            role=Role.SYSTEM,
                             content="The state has been adjusted as requested.",
+                        )
+                    )
+                elif tool == ToolType.SQL_ENGINE:
+                    result = self.__execute_sqls()
+                    self.chat_history.append(
+                        LLMMessage(
+                            role=Role.SYSTEM,
+                            content=f"The SQLs have been executed, and this is the output: {result}",
                         )
                     )
             else:
                 raise ValueError("The JSON output is invalid.")
-
+            total_iteration += 1
+        if total_iteration == iteration_limit and not is_thinking_done:
+            self.chat_history.append(
+                LLMMessage(
+                    role=Role.SYSTEM,
+                    content=self.prompt_factory.get_force_produce_final_response_prompt(total_iteration)
+                )
+            )
+            final_response = self.llm.chat(self.chat_history)
         return final_response
 
-    def retrieve_context(
+    def __retrieve_context(
         self, prompt: str, sources: list[str] = None, k: int = 10
     ) -> dict[RetrieverType, AbstractDocument]:
         """
@@ -129,11 +154,9 @@ class LLMConductor:
                 sanity_check_messages = [
                     LLMMessage(
                         role=Role.USER,
-                        content=self.prompt_engineer.get_ir_sanity_check_prompt(
+                        content=self.prompt_factory.get_ir_sanity_check_prompt(
                             prompt,
-                            self.__convert_retrieval_results_to_str(
-                                curr_retrieval_results
-                            ),
+                            convert_retrieval_results_to_str(curr_retrieval_results),
                         ),
                     )
                 ]
@@ -176,10 +199,28 @@ class LLMConductor:
             all_retrieval_results[retriever_type] = relevant_retrieval_results
         return all_retrieval_results
 
-    def __convert_retrieval_results_to_str(
-        self, retrieval_results: list[AbstractDocument]
-    ):
-        representation = "Retrieval results:\n"
-        for result in retrieval_results:
-            representation += f"- ```{str(result)}```\n"
-        return representation.strip()
+    def __execute_sqls(self) -> str:
+        """
+        Executes the SQLs (sequentially) over the target schemas.
+        The result (for now) is a scalar (converted to string).
+        """
+        curr_state = self.state.get_state()
+        tables: dict[str, DataFrame] = curr_state["target_schemas"]
+        sqls: list[str] = curr_state["sqls"]
+
+        # Create an in-memory DuckDB connection
+        con = duckdb.connect(database=':memory:')
+
+        # Register each table into DuckDB
+        for table_name, df in tables.items():
+            con.register(table_name, df)
+
+        result = None
+        for sql in sqls:
+            result = con.execute(sql).fetchdf()
+
+        # If the result has only one cell, return it as a scalar string
+        if result.shape == (1, 1):
+            return str(result.iat[0, 0])
+
+        return result
