@@ -10,8 +10,6 @@ from processor.core.interaction_conductor.ic_data_model import (
     IRFeedbackOutputType,
     LLMConductorOutputType,
     ToolType,
-    IRSystemToolCallingType,
-    StateManipulationToolCallingType,
 )
 from processor.core.ir_system.ir_data_model import (
     RetrieverType,
