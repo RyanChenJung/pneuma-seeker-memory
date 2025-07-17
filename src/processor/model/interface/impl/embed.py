@@ -2,7 +2,7 @@ from numpy import ndarray
 from sentence_transformers import SentenceTransformer
 
 from processor.model.option import EmbeddingModelOption, LLMOption
-from processor.model.message import LLMMessage
+from processor.model.llm_message import LLMMessage
 from processor.model.interface.abstract_model import AbstractModel
 
 
