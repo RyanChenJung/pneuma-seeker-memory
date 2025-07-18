@@ -1,5 +1,6 @@
+from typing import Optional
 from numpy import ndarray
-from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed, TextGenerationPipeline
 from torch import cuda
 
 from processor.model.interface.abstract_model import AbstractModel
@@ -21,7 +22,7 @@ class Qwen(AbstractModel):
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
-    def chat(self, messages: list[LLMMessage], llm_option: LLMOption = None) -> str:
+    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None) -> str:
         if llm_option is None:
             llm_option = LLMOption()
         if self.model is None:
@@ -61,9 +62,43 @@ class Qwen(AbstractModel):
                 fixing_iteration += 1
         return response
 
+    # def batch_chat(
+    #     self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+    # ):
+    #     pipeline = self.__get_text_gen_pipeline()
+    #     if llm_option is None:
+    #         llm_option = LLMOption()
+    #     batch_size = 1
+    #     if llm_option.batch_size:
+    #         batch_size = llm_option.batch_size
+        
+    #     repeat_batch_size_1 = 0
+    #     while True:
+    #         try:
+    #             set_seed(42, deterministic=True)
+    #             answers = pipeline(
+    #                 batch_messages, truncation=True, batch_size=batch_size
+    #             )
+    #             print(answers)
+    #             results: list[list[dict[str,str]]] = []
+    #             if isinstance(answers[0], dict):
+    #                 answers = [answers]
+    #             for answer in answers:
+    #                 results.append(answer[0]["generated_text"])
+    #             return (results, batch_size)
+    #         except:
+    #             prev_batch_size = batch_size
+    #             batch_size = max(batch_size - 10, 1)
+    #             if prev_batch_size == batch_size and batch_size == 1:
+    #                 repeat_batch_size_1 += 1
+    #             if repeat_batch_size_1 == 5:
+    #                 raise RuntimeError("Batch size has repeatedly been 1; the GPU is not capable enough.")
+    #             cuda.empty_cache()
+    #             print(f"Reducing batch size to {batch_size}")
+
     def batch_chat(
-        self, batch_messages: list[list[LLMMessage]], llm_option: LLMOption = None
-    ) -> list[list[str], int]:
+        self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+    ) -> tuple[list[str], int]:
         """
         Chats (in batch) with the model.
 
@@ -82,7 +117,7 @@ class Qwen(AbstractModel):
         if self.tokenizer is None:
             self.load_tokenizer()
 
-        if llm_option.seed is not None:model
+        if llm_option.seed is not None:
             set_seed(llm_option.seed, True)
 
         # Convert each conversation to a prompt
@@ -93,17 +128,15 @@ class Qwen(AbstractModel):
             for messages in batch_messages
         ]
 
-        print(f"Prompts: {prompts}")
-
         # Define batch size
         batch_size = llm_option.batch_size or 1
         repeat_batch_size_1 = 0
-        while True:model
+        while True:
             try:
                 all_responses = []
                 for i in range(0, len(prompts), batch_size):
+                    print(f"=> Processing batch {i} to {i+batch_size}")
                     sub_prompts = prompts[i:i + batch_size]
-                    print(f"Sub prompts: {sub_prompts}")
                     model_inputs = self.tokenizer(
                         sub_prompts,
                         return_tensors="pt",
@@ -130,15 +163,21 @@ class Qwen(AbstractModel):
                     print(f"Responses: {responses}")
                     all_responses.extend(responses)
 
-                return [all_responses, batch_size]
+                return all_responses, batch_size
             except:
                 batch_size = max(batch_size - 10, 1)
                 if batch_size == 1:
                     repeat_batch_size_1 += 1
                 if repeat_batch_size_1 == 5:
-                    return [[], 1]
+                    return [], 1
                 cuda.empty_cache()
                 print(f"Reducing batch size to {batch_size}")
+    
+    def __get_text_gen_pipeline(self):
+        return TextGenerationPipeline(
+            model=self.model,
+            tokenizer=self.tokenizer,
+        )
 
     def encode(
         self,
