@@ -38,7 +38,7 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),

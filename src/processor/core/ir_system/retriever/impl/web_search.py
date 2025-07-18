@@ -6,6 +6,7 @@ from processor.core.ir_system.retriever.abstract_retriever import AbstractRetrie
 class WebSearch(AbstractRetriever):
     """Represents a web searcher."""
 
+    @property
     def retriever_type(self) -> RetrieverType:
         """
         Defines the type of the retriever.

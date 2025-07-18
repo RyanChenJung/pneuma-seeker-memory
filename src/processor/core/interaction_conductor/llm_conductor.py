@@ -19,19 +19,20 @@ from processor.core.ir_system.ir_state import AbstractDocument
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.ic_data_model import ToolType
-from processor.model.interface.model_factory import get_llm
+from processor.model.interface.model_factory import get_embed_model, get_llm
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import LLMOption
 from processor.utils.json_processor import parse_json
 
 
 class LLMConductor:
-    def __init__(self, llm_path: str, logger: Logger):
+    def __init__(self, llm_path: str, embed_model_path: str, logger: Logger):
         """
         Initializes the LLM Conductor with a state, and materializer.
         """
         self.state = ICState()
         self.llm = get_llm(llm_path)(llm_path)
+        self.embed_model = get_embed_model()(embed_model_path)
         self.chat_history: list[LLMMessage] = []
         self.prompt_factory = ICPromptFactory()
         self.materializer = LLMPlanner(self.llm)
@@ -46,8 +47,8 @@ class LLMConductor:
         final_response = ""
         self.chat_history.append(
             LLMMessage(
-                user_input,
-                Role.USER,
+                role=Role.USER.value,
+                content=user_input,
             )
         )
 
@@ -62,18 +63,18 @@ class LLMConductor:
             tool = json_output.get("tool")
             response = json_output.get("response")
 
-            if is_direct_response:
+            if is_direct_response and isinstance(response, str):
                 final_response = response
                 self.logger.info(
                     f"=> Get direct response to return to the user: {final_response}"
                 )
                 is_thinking_done = True
-            elif tool:
+            elif tool and isinstance(response, dict):
                 if tool == ToolType.IR_SYSTEM:
-                    context = self.__retrieve_context(response["prompt"])
+                    context = self.__retrieve_context(response["prompt"], sources=response["sources"], k=response["k"])
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.SYSTEM,
+                            role=Role.SYSTEM.value,
                             content=f"The context requested: {context}",
                         )
                     )
@@ -89,21 +90,20 @@ class LLMConductor:
                     )
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.SYSTEM,
+                            role=Role.SYSTEM.value,
                             content="The target schema has been materialized. You can ask the user if they want to execute the SQL statements to get the answer to their information need. It's possible that they decide to reset the state.",
                         )
                     )
                 elif tool == ToolType.STATE_MANIPULATION:
                     new_sqls = response["new_sqls"]
-                    new_target_schemas = response["new_target_schemas"]
-                    new_target_schemas_df = []
+                    new_target_schemas: dict[str, list[str]] = response["new_target_schemas"]
+                    new_target_schemas_df: dict[str, DataFrame] = dict()
                     for i in new_target_schemas:
-                        # Assume i is a list of column names
-                        new_target_schemas_df.append(DataFrame(columns=literal_eval(i)))
+                        new_target_schemas_df[i] = DataFrame(columns=literal_eval(i))
                     self.state.set_state(new_sqls, new_target_schemas_df)
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.SYSTEM,
+                            role=Role.SYSTEM.value,
                             content="The state has been adjusted as requested.",
                         )
                     )
@@ -111,7 +111,7 @@ class LLMConductor:
                     result = self.__execute_sqls()
                     self.chat_history.append(
                         LLMMessage(
-                            role=Role.SYSTEM,
+                            role=Role.SYSTEM.value,
                             content=f"The SQLs have been executed, and this is the output: {result}",
                         )
                     )
@@ -121,7 +121,7 @@ class LLMConductor:
         if total_iteration == iteration_limit and not is_thinking_done:
             self.chat_history.append(
                 LLMMessage(
-                    role=Role.SYSTEM,
+                    role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_force_produce_final_response_prompt(total_iteration)
                 )
             )
@@ -129,18 +129,21 @@ class LLMConductor:
         return final_response
 
     def __retrieve_context(
-        self, prompt: str, sources: list[str] = None, k: int = 10
-    ) -> dict[RetrieverType, AbstractDocument]:
+        self, prompt: str, sources: list[str], k: int = 10
+    ) -> dict[RetrieverType, list[AbstractDocument]]:
         """
         Retrieves context from the IR system with auto sanity check mechanism.
         """
-        ir_system = LMInterface(self.llm)
+        ir_system = LMInterface({
+            "llm": self.llm,
+            "embed_model": self.embed_model,
+        })
         relevant_retrievers = ir_system.get_relevant_retrievers(prompt)
         all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
         for retriever_type in relevant_retrievers:
             total_sanity_check_iteration = 0
             relevant_retrieval_results: list[AbstractDocument] = []
-
+            irrelevant_doc_ids: list[str] = []
             curr_retrieval_results = ir_system.retrieve(
                 retriever_type, prompt, sources, k
             )
@@ -151,7 +154,7 @@ class LLMConductor:
             ):
                 sanity_check_messages = [
                     LLMMessage(
-                        role=Role.USER,
+                        role=Role.USER.value,
                         content=self.prompt_factory.get_ir_sanity_check_prompt(
                             prompt,
                             convert_retrieval_results_to_str(curr_retrieval_results),
@@ -176,6 +179,7 @@ class LLMConductor:
 
                 if len(irrelevant_doc_ids) > 0 and feedback != "":
                     curr_retrieval_results = ir_system.re_retrieve_with_feedback(
+                        retriever_type,
                         feedback,
                         [
                             i
@@ -183,6 +187,7 @@ class LLMConductor:
                             if i.doc_id in irrelevant_doc_ids
                         ],
                         k,
+                        sources,
                     )
 
             irrelevant_retrieval_results = [
@@ -197,7 +202,7 @@ class LLMConductor:
             all_retrieval_results[retriever_type] = relevant_retrieval_results
         return all_retrieval_results
 
-    def __execute_sqls(self) -> str:
+    def __execute_sqls(self) -> DataFrame | str:
         """
         Executes the SQLs (sequentially) over the target schemas.
         The result (for now) is a scalar (converted to string).
@@ -213,12 +218,12 @@ class LLMConductor:
         for table_name, df in tables.items():
             con.register(table_name, df)
 
-        result = None
+        result = DataFrame()
         for sql in sqls:
             result = con.execute(sql).fetchdf()
 
         # If the result has only one cell, return it as a scalar string
-        if result.shape == (1, 1):
+        if result is not None and result.shape == (1, 1):
             return str(result.iat[0, 0])
 
         return result

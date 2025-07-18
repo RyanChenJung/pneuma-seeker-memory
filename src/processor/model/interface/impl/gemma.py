@@ -41,7 +41,7 @@ class Gemma(AbstractModel):
         decoded = self.tokenizer.decode(generation, skip_special_tokens=True)
         return decoded
     
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),

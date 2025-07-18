@@ -12,7 +12,8 @@ class EmbeddingModel(AbstractModel):
         self.model = None
 
     def load_model(self):
-        self.model = SentenceTransformer(self.model_name)
+        if self.model is None:
+            self.model = SentenceTransformer(self.model_name)
 
     def load_tokenizer(self):
         # No need to load tokenizer
@@ -23,15 +24,22 @@ class EmbeddingModel(AbstractModel):
     ) -> str:
         """Chats with the model."""
         raise NotImplementedError("Embedding model does not support chat.")
+    
+    def batch_chat(self, batch_messages, llm_option = None):
+        raise NotImplementedError("Embedding model does not support batch chat.")
 
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
     ) -> ndarray:
         """Embed texts."""
-        if self.model is None:
-            self.load_model()
+        self.load_model()
         if isinstance(texts, str):
             texts = [texts]
-        return self.model.encode(texts)
+        return self.model.encode(
+            texts,
+            batch_size=embed_model_option.batch_size,
+            show_progress_bar=True,
+            device="cuda",
+        )

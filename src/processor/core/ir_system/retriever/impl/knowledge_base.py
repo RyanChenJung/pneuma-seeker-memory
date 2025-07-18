@@ -23,6 +23,7 @@ class KnowledgeBase(AbstractRetriever):
         self.GLOBAL_INDEX_PATH = "indices/kb/global"
         self.stemmer = Stemmer("english")
 
+    @property
     def retriever_type(self) -> RetrieverType:
         """
         Defines the type of the retriever.
@@ -49,6 +50,8 @@ class KnowledgeBase(AbstractRetriever):
         Retrieves a list of documents given a query.
         """
         self.load()
+        if self.local_retriever is None or self.global_retriever is None:
+            raise ValueError("Both the local and global retrievers must be initialized.")
         retrieval_results: list[AbstractDocument] = []
         retrieval_results.extend(self.__actual_retrieve(query, self.local_retriever, k))
         retrieval_results.extend(
@@ -62,9 +65,11 @@ class KnowledgeBase(AbstractRetriever):
     def __actual_retrieve(
         self, query: str, retriever: bm25s.BM25, k: int
     ) -> list[AbstractDocument]:
+        if retriever.corpus is None:
+            raise ValueError("Both the retriever or its corpus cannot be None.")
         max_k = min(len(retriever.corpus), k)
         query_tokens = bm25s.tokenize(query, stemmer=self.stemmer, show_progress=False)
-        results, _ = self.retriever.retrieve(query_tokens, k=max_k, show_progress=False)
+        results, _ = retriever.retrieve(query_tokens, k=max_k, show_progress=False)
         retrieval_results: list[AbstractDocument] = []
         for result in results[0]:
             retrieval_results.append(
@@ -80,35 +85,76 @@ class KnowledgeBase(AbstractRetriever):
             )
         return retrieval_results
 
-    def index(self, documents: list[Knowledge]):
+    def index(self, documents: list[AbstractDocument]):
         """
         Indexes a list of documents to the retriever.
         """
         # Future-TODO: Handle possibility of conflicts (LLM required here!)
-        corpus_json: list[dict[str, str]] = []
+        corpus_json_local: list[dict] = []
+        corpus_json_global: list[dict] = []
 
-        if os.path.exists(self.RETRIEVER_PATH):
-            retriever = bm25s.BM25.load(self.RETRIEVER_PATH, load_corpus=True)
-            corpus_json.extend(retriever.corpus)
-            os.rmdir(self.RETRIEVER_PATH)
+        new_global_document = False
+        new_local_document = False
+        for item in documents:
+            if not isinstance(item, Knowledge):
+                raise ValueError("All documents must be of type Knowledge.")
+            if item.metadata["type"] == "local":
+                new_local_document = True
+            elif item.metadata["type"] == "global":
+                new_global_document = True
+
+        if new_local_document and os.path.exists(self.LOCAL_INDEX_PATH):
+            retriever = bm25s.BM25.load(self.LOCAL_INDEX_PATH, load_corpus=True)
+            if retriever.corpus is not None:
+                corpus_json_local.extend(retriever.corpus)
+            os.rmdir(self.LOCAL_INDEX_PATH)
+        
+        if new_global_document and os.path.exists(self.GLOBAL_INDEX_PATH):
+            retriever = bm25s.BM25.load(self.GLOBAL_INDEX_PATH, load_corpus=True)
+            if retriever.corpus is not None:
+                corpus_json_global.extend(retriever.corpus)
+            os.rmdir(self.GLOBAL_INDEX_PATH)
 
         for doc_id, document in enumerate(documents):
-            corpus_json.append(
-                {
-                    "text": document.content,
-                    "metadata": {
-                        "doc_id": f"kb_{doc_id}",
-                        "type": document.metadata["type"],  # Either local or global
-                        "user": document.metadata["user"],
-                    },
-                }
+            if document.metadata["type"] == "local":
+                corpus_json_local.append(
+                    {
+                        "text": document.content,
+                        "metadata": {
+                            "doc_id": f"kb_{doc_id}",
+                            "type": document.metadata["type"],  # Either local or global
+                            "user": document.metadata["user"],
+                        },
+                    }
+                )
+            elif document.metadata["type"] == "global":
+                corpus_json_global.append(
+                    {
+                        "text": document.content,
+                        "metadata": {
+                            "doc_id": f"kb_{doc_id}",
+                            "type": document.metadata["type"],  # Either local or global
+                            "user": document.metadata["user"],
+                        },
+                    }
+                )
+        
+        if new_global_document:
+            corpus_text = [doc["text"] for doc in corpus_json_global]
+            corpus_tokens = bm25s.tokenize(
+                corpus_text, stopwords="en", stemmer=self.stemmer, show_progress=False
             )
 
-        corpus_text = [doc["text"] for doc in corpus_json]
-        corpus_tokens = bm25s.tokenize(
-            corpus_text, stopwords="en", stemmer=self.stemmer, show_progress=False
-        )
+            retriever = bm25s.BM25(corpus=corpus_json_global)
+            retriever.index(corpus_tokens, show_progress=True)
+            retriever.save(self.GLOBAL_INDEX_PATH, corpus=corpus_json_global)
+        
+        if new_local_document:
+            corpus_text = [doc["text"] for doc in corpus_json_local]
+            corpus_tokens = bm25s.tokenize(
+                corpus_text, stopwords="en", stemmer=self.stemmer, show_progress=False
+            )
 
-        retriever = bm25s.BM25(corpus=corpus_json)
-        retriever.index(corpus_tokens, show_progress=True)
-        retriever.save(self.RETRIEVER_PATH, corpus=corpus_json)
+            retriever = bm25s.BM25(corpus=corpus_json_local)
+            retriever.index(corpus_tokens, show_progress=True)
+            retriever.save(self.LOCAL_INDEX_PATH, corpus=corpus_json_local)

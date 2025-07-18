@@ -1,5 +1,5 @@
 from processor.core.ir_system.ir_prompt_factory import IRPromptFactory
-from processor.core.ir_system.ir_data_model import AbstractDocument
+from processor.core.ir_system.ir_data_model import AbstractDocument, convert_retrieval_results_to_str
 from processor.core.ir_system.ir_state import IRState
 from processor.core.ir_system.retriever.retriever_factory import (
     RetrieverType,
@@ -27,15 +27,15 @@ RETRIEVER_INFO = [
 
 
 class LMInterface:
-    def __init__(self, llm: AbstractModel, models: dict[str, str]):
+    def __init__(self, models: dict[str, AbstractModel]):
         self.prompt_factory = IRPromptFactory()
         self.retriever_factory = RetrieverFactory(models)
 
         self.state = IRState()
-        self.llm = llm
+        self.llm = models["llm"]
 
     def index_documents(
-        self, retriever_type: RetrieverType, documents: AbstractDocument
+        self, retriever_type: RetrieverType, documents: list[AbstractDocument]
     ):
         """
         Indexes documents on a retriever.
@@ -52,7 +52,7 @@ class LMInterface:
         for i in RETRIEVER_INFO:
             messages = [
                 LLMMessage(
-                    role=Role.SYSTEM,
+                    role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_retriever_classification_prompt(
                         requirements,
                         i["name"],
@@ -64,7 +64,7 @@ class LMInterface:
             if classification_output.startswith("yes"):
                 relevant_retrievers.append(i["name"])
 
-        if len(self.state.relevant_retrievers) == 0:
+        if len(relevant_retrievers) == 0:
             # By default, use all retrievers if none is considered relevant by the LLM
             relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
         return relevant_retrievers
@@ -73,7 +73,7 @@ class LMInterface:
         self,
         retriever_type: RetrieverType,
         prompt: str,
-        sources: list[str] = None,
+        sources: list[str],
         k: int = 10,
     ) -> list[AbstractDocument]:
         """
@@ -92,16 +92,18 @@ class LMInterface:
         feedback: str,
         irrelevant_results: list[AbstractDocument],
         k: int,
-    ):
+        sources: list[str],
+    ) -> list[AbstractDocument]:
         """
         Re-retrives previously (irrelevant) retrieved documents.
         It does so by adjusting the prompt using the feedback.
         """
         sys_prompt = self.prompt_factory.get_refine_retrieval_prompt(
             self.state.current_queries[retriever_type],
-            irrelevant_results,
+            convert_retrieval_results_to_str(irrelevant_results),
             feedback,
         )
         refined_prompt = self.llm.chat(
-            [LLMMessage(role=Role.SYSTEM, content=sys_prompt)]
+            [LLMMessage(role=Role.SYSTEM.value, content=sys_prompt)]
         )
+        return self.retrieve(retriever_type, refined_prompt, sources, k)

@@ -11,7 +11,7 @@ class LLMPlanner:
         self.operation_factory = OperationFactory()
         self.tool_factory = ToolFactory()
     
-    def materialize_target_schemas(self, target_schemas: list[DataFrame], sqls: list[str]) -> list[DataFrame]:
+    def materialize_target_schemas(self, target_schemas: dict[str, DataFrame], sqls: list[str]) -> dict[str, DataFrame]:
         """
         Materializes the given Target Schemas subject to SQLs over them.
         """

@@ -1,4 +1,10 @@
 from pandas import DataFrame
+from typing import TypedDict
+
+
+class ICStateStructure(TypedDict):
+    sqls: list[str]
+    target_schemas: dict[str, DataFrame]
 
 
 class ICState:
@@ -16,11 +22,11 @@ class ICState:
         self.sqls = new_sqls
         self.target_schemas = new_target_schemas
 
-    def get_state(self) -> dict[str, list[str] | dict[str, DataFrame]]:
+    def get_state(self) -> ICStateStructure:
         """
         Returns the current SQLs and Target Schemas.
         """
-        return {
-            "sqls": self.sqls,
-            "target_schemas": self.target_schemas,
-        }
+        return ICStateStructure(
+            sqls=self.sqls,
+            target_schemas=self.target_schemas,
+        )

@@ -34,7 +34,7 @@ class Llama(AbstractModel):
         )
         return outputs[0]["generated_text"][-1]
     
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),

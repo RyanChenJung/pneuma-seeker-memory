@@ -9,9 +9,6 @@ class ToolType(Enum):
 
 
 class AbstractTool(ABC):
-    def __init__(self, tool_type: ToolType):
-        self.tool_type = tool_type
-
     @abstractmethod
     def execute(self, argument: Any):
         """

@@ -9,5 +9,5 @@ class Role(Enum):
 
 
 class LLMMessage(TypedDict):
-    role: Role
+    role: str
     content: str

@@ -2,6 +2,7 @@ from collections import defaultdict
 from enum import Enum
 import gc
 from math import ceil
+from typing import Optional
 from bm25s.tokenization import convert_tokenized_to_string_list
 import time
 import Stemmer
@@ -9,7 +10,6 @@ import bm25s
 import chromadb_deterministic as chromadb
 import pandas as pd
 from scipy.spatial.distance import cosine
-from sentence_transformers import SentenceTransformer
 from torch import cuda
 
 from processor.core.ir_system.ir_data_model import (
@@ -21,12 +21,12 @@ from processor.core.ir_system.ir_data_model import (
 from processor.core.ir_system.ir_data_model import AbstractDocument
 from processor.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from tqdm import tqdm
-from chromadb_deterministic.api.client import Client
+from chromadb_deterministic.api import ClientAPI
 from chromadb_deterministic.api.models.Collection import Collection
 
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
-from processor.model.option import LLMOption
+from processor.model.option import EmbeddingModelOption, LLMOption
 
 
 class Pneuma(AbstractRetriever):
@@ -43,6 +43,7 @@ class Pneuma(AbstractRetriever):
         )
         self.stemmer = Stemmer.Stemmer("english")
 
+    @property
     def retriever_type(self) -> RetrieverType:
         """
         Defines the type of the retriever.
@@ -71,11 +72,13 @@ class Pneuma(AbstractRetriever):
                 load_corpus=True,
             )
 
-            dictionary_id_bm25 = {
-                datum["metadata"]["table"]: datum_idx
-                for datum_idx, datum in enumerate(retriever.corpus)
-            }
-            question_embedding = self.embed_model.embed(query).tolist()
+            dictionary_id_bm25 = dict()
+            if retriever.corpus is not None:
+                dictionary_id_bm25 = {
+                    datum["metadata"]["table"]: datum_idx
+                    for datum_idx, datum in enumerate(retriever.corpus)
+                }
+            question_embedding = self.embed_model.encode(query).tolist()
             query_tokens = bm25s.tokenize(
                 query, stemmer=self.stemmer, show_progress=False
             )
@@ -108,6 +111,7 @@ class Pneuma(AbstractRetriever):
                         doc_id=doc_id,
                         retriever_type=RetrieverType.PNEUMA,
                         content=table,
+                        metadata=dict(),
                     )
                 )
         return retrieval_results
@@ -122,7 +126,7 @@ class Pneuma(AbstractRetriever):
             table_context = [i for i in documents if isinstance(i, TableContext)]
             tables = [i for i in documents if isinstance(i, Table)]
 
-            schema_summaries: list[Text] = self.__get_schema_summaries(tables)
+            schema_summaries: list[Text] = self.__get_schema_summaries(tables, table_context)
             sample_rows: list[Text] = self.__get_sample_rows(tables)
 
             schema_summaries = self.__split_schema_summaries(schema_summaries)
@@ -153,11 +157,11 @@ class Pneuma(AbstractRetriever):
 
     def __indexing_vector(
         self,
-        client: Client,
-        embedding_model: SentenceTransformer,
+        client: ClientAPI,
+        embedding_model: AbstractModel,
         schema_summaries: list[Text],
         sample_rows: list[Text],
-        contexts: list[Text] = None,
+        contexts: list[Text] = [],
         collection_name="benchmark",
         reindex=False,
     ):
@@ -212,7 +216,7 @@ class Pneuma(AbstractRetriever):
                     documents.append(sample_row.content)
                     ids.append(f"{table}_SEP_contents_SEP_row-{content_idx}")
 
-            if contexts is not None:
+            if len(contexts) > 0:
                 table_contexts = [
                     context
                     for context in contexts
@@ -225,9 +229,7 @@ class Pneuma(AbstractRetriever):
         for i in range(0, len(documents), 30000):
             embeddings = embedding_model.encode(
                 documents[i : i + 30000],
-                batch_size=100,
-                show_progress_bar=True,
-                device="cuda",
+                EmbeddingModelOption(batch_size=100)
             )
 
             collection.add(
@@ -347,27 +349,31 @@ class Pneuma(AbstractRetriever):
                     optimal_batch_size = llm_output[1]
                     same_batch_size_counter = 0
 
+            print(f"DEBUGGY outputs: {outputs}")
             col_narrations: dict[str, list[str]] = defaultdict(list)
             for output_idx, output in enumerate(outputs):
                 col_narrations[conv_tables[output_idx]] += [
-                    f"{conv_cols[output_idx]}: {output[-1]["content"]}"
+                    f"{conv_cols[output_idx]}: {output}"
                 ]
+            
+            print(f"DEBUGGY col_narrations: {col_narrations}")
 
             for table in tables:
                 summaries.append(
                     Text(
+                        doc_id=f"{table.metadata['table_name']}_schema_summary",
                         retriever_type=RetrieverType.PNEUMA,
-                        content=" | ".join(col_narrations[table]),
-                        metadata={"table_name": table},
+                        content=" | ".join(col_narrations[table.metadata['table_name']]),
+                        metadata={"table_name": table.metadata['table_name']},
                     )
                 )
         summaries = sorted(summaries, key=lambda x: x.metadata["table_name"])
         return summaries
 
-    def __get_special_indices(self, texts: list[str], batch_size: int):
+    def __get_special_indices(self, texts: list[list[LLMMessage]], batch_size: int):
         # Step 1: Sort the conversations (indices) in decreasing order
         sorted_indices = sorted(
-            range(len(texts)), key=lambda x: len(texts[x]), reverse=True
+            range(len(texts)), key=lambda x: len(texts[x][0]["content"]), reverse=True
         )
 
         # Step 2: Interleave the indices (longest, shortest, second longest, second shortest, ...)
@@ -449,20 +455,20 @@ class Pneuma(AbstractRetriever):
                 and i.metadata["type"] == "description"
             ]
             if len(relevant_table_context) > 0:
-                table_desc = relevant_table_context[0]
+                table_desc = relevant_table_context[0].content
 
             cols = df.columns
             for col in cols:
                 prompt = self.__get_col_description_prompt(
                     " | ".join(cols), col, table_desc
                 )
-                conversations.append([LLMMessage(role=Role.USER, content=prompt)])
+                conversations.append([LLMMessage(role=Role.SYSTEM.value, content=prompt)])
                 conv_tables.append(table)
                 conv_cols.append(col)
         return conversations, conv_tables, conv_cols
 
     def __get_col_description_prompt(
-        self, columns: str, column: str, table_description: str = None
+        self, columns: str, column: str, table_description: Optional[str] = None
     ):
         if table_description is not None:
             return f"""A table, which represents {table_description}, has the following columns:
@@ -495,9 +501,10 @@ Describe very briefly what the {column} column represents. If not possible, simp
                 )
                 sample_rows.append(
                     Text(
+                        doc_id=f"{table.doc_id}_sample_row",
                         retriever_type=RetrieverType.PNEUMA,
                         content=formatted_row,
-                        metadata={"table_name": table},
+                        metadata={"table_name": table.metadata["table_name"]},
                     )
                 )
         return sample_rows
@@ -510,7 +517,7 @@ Describe very briefly what the {column} column represents. If not possible, simp
         unique_tables = sorted(
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
-        tokenizer = self.embed_model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
@@ -533,6 +540,7 @@ Describe very briefly what the {column} column represents. If not possible, simp
                 col_idx += 1
                 processed_schema_summaries.append(
                     Text(
+                        doc_id=f"{table}_schema_summaries_{col_idx}",
                         retriever_type=RetrieverType.PNEUMA,
                         content=processed_summary,
                         metadata={"table_name": table},
@@ -545,10 +553,10 @@ Describe very briefly what the {column} column represents. If not possible, simp
     def __merge_sample_rows(self, sample_rows: list[Text]) -> list[Text]:
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
-        tokenizer = self.embed_model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_rows = [
-                row for row in sample_rows if row.metadat["table_name"] == table
+                row for row in sample_rows if row.metadata["table_name"] == table
             ]
 
             rows_idx = 0
@@ -568,6 +576,7 @@ Describe very briefly what the {column} column represents. If not possible, simp
                 rows_idx += 1
                 processed_sample_rows.append(
                     Text(
+                        doc_id=f"{table}_sample_row_{rows_idx}",
                         retriever_type=RetrieverType.PNEUMA,
                         content=processed_sample_row,
                         metadata={"table_name": table},
@@ -578,12 +587,12 @@ Describe very briefly what the {column} column represents. If not possible, simp
         print(f"Num of rows summaries (AFTER): {len(processed_sample_rows)}")
         return processed_sample_rows
 
-    def __merge_table_context(self, table_context: list[Text]) -> list[Text]:
+    def __merge_table_context(self, table_context: list[TableContext]) -> list[Text]:
         unique_tables = sorted(
             set([context.metadata["table_name"] for context in table_context])
         )
         processed_table_context: list[Text] = []
-        tokenizer = self.embed_model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_contexts = [
                 context
@@ -608,6 +617,7 @@ Describe very briefly what the {column} column represents. If not possible, simp
                 context_idx += 1
                 processed_table_context.append(
                     Text(
+                        doc_id=f"{table}_context_{context_idx}",
                         retriever_type=RetrieverType.PNEUMA,
                         content=processed_context,
                         metadata={"table_name": table},
@@ -632,11 +642,15 @@ class HybridRetriever:
     def _process_nodes_bm25(
         self,
         items,
-        all_ids,
+        all_ids: list,
         dictionary_id_bm25,
         bm25_retriever: bm25s.BM25,
         query_tokens,
     ):
+        if bm25_retriever.corpus is None:
+            raise ValueError(
+                "BM25 retriever corpus is not loaded. Please ensure the corpus is loaded before processing nodes."
+            )
         results = [node for node in items[0][0]]
         scores = [node for node in items[1][0]]
 
@@ -707,7 +721,7 @@ class HybridRetriever:
         relevance_prompts = [
             [
                 LLMMessage(
-                    role=Role.USER,
+                    role=Role.USER.value,
                     content=self._get_relevance_prompt(
                         node[2],
                         (
@@ -757,7 +771,7 @@ and this question:
 {question}
 */
 Is the table relevant to answer the question? Begin your answer with yes/no."""
-        elif desc_type == "context":
+        else:  # Must be context
             return f"""Given this context describing a table:
 */
 {desc}

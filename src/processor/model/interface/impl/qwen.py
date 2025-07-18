@@ -56,7 +56,7 @@ class Qwen(AbstractModel):
         if llm_option.json_mode:
             fixing_iteration = 0
             while not self.is_valid_json(response) and fixing_iteration <= 5:
-                appended_messages = messages + [LLMMessage(role=Role.USER, content="The JSON is invalid and hence cannot be parsed. Please fix it.")]
+                appended_messages = messages + [LLMMessage(role=Role.USER.value, content="The JSON is invalid and hence cannot be parsed. Please fix it.")]
                 response = self.chat(appended_messages)
                 fixing_iteration += 1
         return response
@@ -74,6 +74,7 @@ class Qwen(AbstractModel):
         Returns:
             A list of generated response strings (one per conversation).
         """
+        print(f"batch_messages: {batch_messages}")
         if llm_option is None:
             llm_option = LLMOption()
         if self.model is None:
@@ -81,7 +82,7 @@ class Qwen(AbstractModel):
         if self.tokenizer is None:
             self.load_tokenizer()
 
-        if llm_option.seed is not None:
+        if llm_option.seed is not None:model
             set_seed(llm_option.seed, True)
 
         # Convert each conversation to a prompt
@@ -92,14 +93,17 @@ class Qwen(AbstractModel):
             for messages in batch_messages
         ]
 
+        print(f"Prompts: {prompts}")
+
         # Define batch size
         batch_size = llm_option.batch_size or 1
         repeat_batch_size_1 = 0
-        while True:
+        while True:model
             try:
                 all_responses = []
                 for i in range(0, len(prompts), batch_size):
                     sub_prompts = prompts[i:i + batch_size]
+                    print(f"Sub prompts: {sub_prompts}")
                     model_inputs = self.tokenizer(
                         sub_prompts,
                         return_tensors="pt",
@@ -123,6 +127,7 @@ class Qwen(AbstractModel):
                     ]
 
                     responses = self.tokenizer.batch_decode(cleaned_generated_ids, skip_special_tokens=True)
+                    print(f"Responses: {responses}")
                     all_responses.extend(responses)
 
                 return [all_responses, batch_size]
@@ -135,7 +140,7 @@ class Qwen(AbstractModel):
                 cuda.empty_cache()
                 print(f"Reducing batch size to {batch_size}")
 
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),

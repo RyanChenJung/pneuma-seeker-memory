@@ -2,4 +2,5 @@ from processor.core.materializer_engine.operation.abstract_operation import Abst
 
 
 class Union(AbstractOperation):
-    pass
+    def execute(self, **kwargs):
+        return super().execute(**kwargs)

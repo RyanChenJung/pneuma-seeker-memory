@@ -34,7 +34,7 @@ class GPT(AbstractModel):
         )
         return response.choices[0].message.content
 
-    def embed(
+    def encode(
         self,
         texts: str | list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
