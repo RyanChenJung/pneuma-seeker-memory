@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import json
+from typing import Optional
 from processor.model.option import EmbeddingModelOption, LLMOption
 from processor.model.llm_message import LLMMessage
 from numpy import ndarray
@@ -23,15 +24,15 @@ class AbstractModel(ABC):
 
     @abstractmethod
     def chat(
-        self, messages: list[LLMMessage], llm_option: LLMOption = None
+        self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
     ) -> str:
         """Chats with the model."""
         pass
 
     @abstractmethod
     def batch_chat(
-        self, batch_messages: list[list[LLMMessage]], llm_option: LLMOption = None
-    ) -> list[list[str], int]:
+        self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+    ) -> tuple[list[str], int]:
         """
         Chats (in batch) with the model.
         """
