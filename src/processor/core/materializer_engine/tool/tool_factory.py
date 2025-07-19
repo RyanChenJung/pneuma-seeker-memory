@@ -1,24 +1,35 @@
 from enum import Enum
-from typing import Type
 from processor.core.materializer_engine.tool.abstract_tool import AbstractTool
-from processor.core.materializer_engine.tool.impl.python_interpreter import (
-    PythonInterpreter,
+from processor.core.materializer_engine.tool.impl.document_retriever import (
+    DocumentRetriever,
 )
-from processor.core.materializer_engine.tool.impl.sql_engine import SQLEngine
+from processor.core.materializer_engine.tool.impl.python_executor import PythonExecutor
+from processor.core.materializer_engine.tool.impl.sql_executor import SQLExecutor
 
 
 class ToolType(Enum):
-    PYTHON_INTERPRETER = "Python"
-    SQL_ENGINE = "SQL"
+    PYTHON_EXECUTOR = "Python Executor"
+    SQL_EXECUTOR = "SQL Executor"
+    DOCUMENT_RETRIEVER = "Document Retriever"
 
 
 class ToolFactory:
     def __init__(self):
-        self.python_interpreter = PythonInterpreter()
-        self.sql_engine = SQLEngine()
+        self.python_executor = PythonExecutor()
+        self.sql_executor = SQLExecutor()
+        self.document_retriever = DocumentRetriever()
 
-    def get_tool(self, tool_type: ToolType) -> Type[AbstractTool]:
-        if tool_type == ToolType.PYTHON_INTERPRETER:
-            return self.python_interpreter
-        elif tool_type == ToolType.SQL_ENGINE:
-            return self.sql_engine
+    def available_tools(self) -> list[str]:
+        return [
+            ToolType.PYTHON_EXECUTOR.value,
+            ToolType.SQL_EXECUTOR.value,
+            ToolType.DOCUMENT_RETRIEVER.value,
+        ]
+
+    def get_tool(self, tool_type: str) -> AbstractTool:
+        if tool_type == ToolType.PYTHON_EXECUTOR.value:
+            return self.python_executor
+        elif tool_type == ToolType.SQL_EXECUTOR:
+            return self.sql_executor
+        else:
+            return self.document_retriever

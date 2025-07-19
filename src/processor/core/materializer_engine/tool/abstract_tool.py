@@ -1,17 +1,23 @@
-from enum import Enum
 from abc import ABC, abstractmethod
 from typing import Any
 
 
-class ToolType(Enum):
-    PYTHON_INTERPRETER = "Python Interpreter"
-    SQL_ENGINE = "SQL Engine"
-
-
 class AbstractTool(ABC):
     @abstractmethod
-    def execute(self, argument: Any):
+    def execute(self, argument: Any, **kwargs) -> Any:
         """
-        Executes the argument using the tool.
+        Executes the argument (e.g., Python code, SQL query) using the tool.
+        Additional keyword arguments can provide runtime context, such as:
+        - tables: dict[str, DataFrame]
+        - config: dict
+        - doc_context: list[AbstractDocument]
+        etc.
+        """
+        pass
+
+    @abstractmethod
+    def describe(self) -> str:
+        """
+        Returns a string description of this tool for LLM prompt context.
         """
         pass
