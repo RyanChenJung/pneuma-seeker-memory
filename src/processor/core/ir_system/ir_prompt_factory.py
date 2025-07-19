@@ -5,6 +5,13 @@ class IRPromptFactory:
     def get_refine_retrieval_prompt(self, prev_prompt: str, prev_docs_repr: str, feedback: str):
         return f"""This is the previous prompt given to an information retrieval system: `{prev_prompt}`, which is imperfect, as it results in the following documents being retrieved: `{prev_docs_repr}`. This is the user feedback: `{feedback}`. Please adjust the prompt by incorporating the feedback to increase the chance of getting more relevant results. Answer directly."""
 
+    def get_ir_sanity_check_prompt(self, prompt: str, results: str):
+        return f"""Given this prompt: `{prompt}`, do any of these documents retrieved from an IR system not make sense: `{results}`? Output a JSON object directly (without any extra explanations) of the following format:
+```
+"irrelevant_doc_ids": [list of irrelevant document IDs if any, else empty list.]
+"feedback": "Explain what is wrong with the irrelevant documents if any, else empty string."
+```"""
+
     def get_retriever_classification_prompt(
         self, prompt: str, retriever_name: str, retriever_desc: str
     ):

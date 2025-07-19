@@ -10,4 +10,4 @@ class PythonExecutor(AbstractTool):
         return local_env.get("result", None)
 
     def describe(self) -> str:
-        return "Executes Python code string. The code must assign final output to variable named `result`."
+        return """{"name": "Python Executor", "Description": "Executes Python code to transform data", "Parameters": {"inputs": "Python code string that assigns result to 'result' variable"}}"""

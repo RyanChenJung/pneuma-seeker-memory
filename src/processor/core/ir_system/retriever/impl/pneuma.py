@@ -103,14 +103,21 @@ class Pneuma(AbstractRetriever):
                 question_embedding,
                 dictionary_id_bm25,
             )
+            seen_tables: list[str] = []
             for table, _, _ in all_nodes[:k]:
                 doc_id = table
                 table = table.split("_SEP_")[0]
+
+                if table not in seen_tables:
+                    seen_tables.append(table)
+                else:
+                    continue
+
                 retrieval_results.append(
-                    Text(
+                    Table(
                         doc_id=doc_id,
                         retriever_type=RetrieverType.PNEUMA,
-                        content=table,
+                        content=pd.read_csv(table),
                         metadata=dict(),
                     )
                 )
@@ -323,7 +330,8 @@ class Pneuma(AbstractRetriever):
         conversations, conv_tables, conv_cols = self.__parse_tables(
             tables, table_context
         )
-        optimal_batch_size = self.__get_optimal_batch_size(conversations)
+        # optimal_batch_size = self.__get_optimal_batch_size(conversations)
+        optimal_batch_size = 20
         sorted_indices = self.__get_special_indices(conversations, optimal_batch_size)
 
         conversations = [conversations[i] for i in sorted_indices]
@@ -350,6 +358,9 @@ class Pneuma(AbstractRetriever):
                     same_batch_size_counter = 0
 
             print(f"DEBUGGY outputs: {outputs}")
+            with open('output.txt', 'w') as f:
+                for item in outputs:
+                    f.write(f"{item}\n")
             col_narrations: dict[str, list[str]] = defaultdict(list)
             for output_idx, output in enumerate(outputs):
                 col_narrations[conv_tables[output_idx]] += [

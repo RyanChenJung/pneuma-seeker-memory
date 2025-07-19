@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import Enum
-from typing import Any
+from typing import Any, TypedDict
 
 from pandas import DataFrame
 
@@ -11,18 +11,41 @@ class RetrieverType(Enum):
     WEB_SEARCH = "Web Search"
 
 
+class IRFeedbackOutputType(TypedDict):
+    irrelevant_doc_ids: list[str]
+    feedback: str
+
+
 class AbstractDocument(ABC):
     """
     Represents (abstractly) the unit of information in Processor.
     """
 
     def __init__(
-        self, doc_id: str, retriever_type: RetrieverType, content: Any, metadata: dict[str, str]
+        self,
+        doc_id: str,
+        retriever_type: RetrieverType,
+        content: Any,
+        metadata: dict[str, str],
     ):
         self.doc_id = doc_id
         self.retriever_type = retriever_type
         self.content = content
         self.metadata = metadata
+
+    def __eq__(self, other):
+        if not isinstance(other, AbstractDocument):
+            return NotImplemented
+        return (self.doc_id, self.retriever_type) == (
+            other.doc_id,
+            other.retriever_type,
+        )
+
+    def __hash__(self):
+        return hash((self.doc_id, self.retriever_type))
+    
+    def __str__(self) -> str:
+        return f"ID: {self.doc_id} ; Content: {self.content}"
 
 
 class Knowledge(AbstractDocument):
@@ -73,11 +96,8 @@ class Text(AbstractDocument):
         super().__init__(doc_id, retriever_type, content, metadata)
 
 
-
-def convert_retrieval_results_to_str(
-    retrieval_results: list[AbstractDocument]
-):
-    representation = "Retrieval results:\n"
+def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument]):
+    representation = ""
     for result in retrieval_results:
         representation += f"- ```{str(result)}```\n"
     return representation.strip()

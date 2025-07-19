@@ -1,5 +1,5 @@
 from processor.core.ir_system.ir_prompt_factory import IRPromptFactory
-from processor.core.ir_system.ir_data_model import AbstractDocument, convert_retrieval_results_to_str
+from processor.core.ir_system.ir_data_model import AbstractDocument, IRFeedbackOutputType, convert_retrieval_results_to_str
 from processor.core.ir_system.ir_state import IRState
 from processor.core.ir_system.retriever.retriever_factory import (
     RetrieverType,
@@ -7,6 +7,8 @@ from processor.core.ir_system.retriever.retriever_factory import (
 )
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
+from processor.model.option import LLMOption
+from processor.utils.json_processor import parse_json
 
 RETRIEVERS = [
     RetrieverType.PNEUMA,
@@ -33,6 +35,7 @@ class LMInterface:
 
         self.state = IRState()
         self.llm = models["llm"]
+        self.embed_model = models["embed_model"]
 
     def index_documents(
         self, retriever_type: RetrieverType, documents: list[AbstractDocument]
@@ -68,6 +71,76 @@ class LMInterface:
             # By default, use all retrievers if none is considered relevant by the LLM
             relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
         return relevant_retrievers
+
+    def retrieve_documents(
+        self, prompt: str, sources: list[str], k: int = 10
+    ) -> dict[RetrieverType, list[AbstractDocument]]:
+        """
+        Retrieves context from the IR system with auto sanity check mechanism.
+        """
+        relevant_retrievers = self.get_relevant_retrievers(prompt)
+        all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
+        for retriever_type in relevant_retrievers:
+            total_sanity_check_iteration = 0
+            relevant_retrieval_results: list[AbstractDocument] = []
+            irrelevant_doc_ids: list[str] = []
+            curr_retrieval_results = self.retrieve(
+                retriever_type, prompt, sources, k
+            )
+            while (
+                curr_retrieval_results
+                and len(relevant_retrieval_results) < k
+                and total_sanity_check_iteration < 5
+            ):
+                sanity_check_messages = [
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content=self.prompt_factory.get_ir_sanity_check_prompt(
+                            prompt,
+                            convert_retrieval_results_to_str(curr_retrieval_results),
+                        ),
+                    )
+                ]
+                sanity_check_result: IRFeedbackOutputType = parse_json(
+                    self.llm.chat(sanity_check_messages, LLMOption(json_mode=True))
+                )
+                total_sanity_check_iteration += 1
+
+                irrelevant_doc_ids = sanity_check_result["irrelevant_doc_ids"]
+                feedback = sanity_check_result["feedback"]
+
+                relevant_retrieval_results.extend(
+                    [
+                        i
+                        for i in curr_retrieval_results
+                        if i.doc_id not in irrelevant_doc_ids
+                    ]
+                )
+
+                if len(irrelevant_doc_ids) > 0 and feedback != "":
+                    curr_retrieval_results = self.re_retrieve_with_feedback(
+                        retriever_type,
+                        feedback,
+                        [
+                            i
+                            for i in curr_retrieval_results
+                            if i.doc_id in irrelevant_doc_ids
+                        ],
+                        k,
+                        sources,
+                    )
+
+            irrelevant_retrieval_results = [
+                i for i in curr_retrieval_results if i.doc_id in irrelevant_doc_ids
+            ]
+            idx = 0
+            while len(relevant_retrieval_results) < k and idx < len(
+                irrelevant_retrieval_results
+            ):
+                relevant_retrieval_results.append(irrelevant_retrieval_results[idx])
+                idx += 1
+            all_retrieval_results[retriever_type] = relevant_retrieval_results
+        return all_retrieval_results
 
     def retrieve(
         self,

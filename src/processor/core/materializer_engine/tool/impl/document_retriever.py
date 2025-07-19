@@ -15,4 +15,4 @@ class DocumentRetriever(AbstractTool):
         return ir_system.retrieve_documents(argument, ["buysite"], 10)
 
     def describe(self) -> str:
-        return "Retrieves top-10 documents (can be table, text, etc.) from each of n retrievers, which means that there are n*10 documents in total."
+        return """{"name": "Document Retriever", "Description": "Retrieves relevant documents from the document store", "Parameters": {"inputs": ["Search query string"], "embed_model": "Required", "llm": "Required"}}"""

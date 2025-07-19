@@ -7,15 +7,9 @@ from pandas import DataFrame
 from processor.core.interaction_conductor.ic_prompt_factory import ICPromptFactory
 from processor.core.interaction_conductor.ic_state import ICState
 from processor.core.interaction_conductor.ic_data_model import (
-    IRFeedbackOutputType,
     LLMConductorOutputType,
     ToolType,
 )
-from processor.core.ir_system.ir_data_model import (
-    RetrieverType,
-    convert_retrieval_results_to_str,
-)
-from processor.core.ir_system.ir_state import AbstractDocument
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.ic_data_model import ToolType
@@ -35,8 +29,8 @@ class LLMConductor:
         self.embed_model = get_embed_model()(embed_model_path)
         self.chat_history: list[LLMMessage] = []
         self.prompt_factory = ICPromptFactory()
-        self.materializer = LLMPlanner(self.llm)
         self.logger = logger
+        self.materializer = LLMPlanner(self.llm, self.logger, self.embed_model)
 
     def process_input(self, user_input: str) -> str:
         """
@@ -71,7 +65,8 @@ class LLMConductor:
                 is_thinking_done = True
             elif tool and isinstance(response, dict):
                 if tool == ToolType.IR_SYSTEM:
-                    context = self.__retrieve_context(response["prompt"], sources=response["sources"], k=response["k"])
+                    ir_system = LMInterface({"llm": self.llm, "embed_model": self.embed_model})
+                    context = ir_system.retrieve_documents(response["prompt"], response["sources"], response["k"])
                     self.chat_history.append(
                         LLMMessage(
                             role=Role.SYSTEM.value,
@@ -127,80 +122,6 @@ class LLMConductor:
             )
             final_response = self.llm.chat(self.chat_history)
         return final_response
-
-    def __retrieve_context(
-        self, prompt: str, sources: list[str], k: int = 10
-    ) -> dict[RetrieverType, list[AbstractDocument]]:
-        """
-        Retrieves context from the IR system with auto sanity check mechanism.
-        """
-        ir_system = LMInterface({
-            "llm": self.llm,
-            "embed_model": self.embed_model,
-        })
-        relevant_retrievers = ir_system.get_relevant_retrievers(prompt)
-        all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
-        for retriever_type in relevant_retrievers:
-            total_sanity_check_iteration = 0
-            relevant_retrieval_results: list[AbstractDocument] = []
-            irrelevant_doc_ids: list[str] = []
-            curr_retrieval_results = ir_system.retrieve(
-                retriever_type, prompt, sources, k
-            )
-            while (
-                curr_retrieval_results
-                and len(relevant_retrieval_results) < k
-                and total_sanity_check_iteration < 5
-            ):
-                sanity_check_messages = [
-                    LLMMessage(
-                        role=Role.USER.value,
-                        content=self.prompt_factory.get_ir_sanity_check_prompt(
-                            prompt,
-                            convert_retrieval_results_to_str(curr_retrieval_results),
-                        ),
-                    )
-                ]
-                sanity_check_result: IRFeedbackOutputType = parse_json(
-                    self.llm.chat(sanity_check_messages, LLMOption(json_mode=True))
-                )
-                total_sanity_check_iteration += 1
-
-                irrelevant_doc_ids = sanity_check_result["irrelevant_doc_ids"]
-                feedback = sanity_check_result["feedback"]
-
-                relevant_retrieval_results.extend(
-                    [
-                        i
-                        for i in curr_retrieval_results
-                        if i.doc_id not in irrelevant_doc_ids
-                    ]
-                )
-
-                if len(irrelevant_doc_ids) > 0 and feedback != "":
-                    curr_retrieval_results = ir_system.re_retrieve_with_feedback(
-                        retriever_type,
-                        feedback,
-                        [
-                            i
-                            for i in curr_retrieval_results
-                            if i.doc_id in irrelevant_doc_ids
-                        ],
-                        k,
-                        sources,
-                    )
-
-            irrelevant_retrieval_results = [
-                i for i in curr_retrieval_results if i.doc_id in irrelevant_doc_ids
-            ]
-            idx = 0
-            while len(relevant_retrieval_results) < k and idx < len(
-                irrelevant_retrieval_results
-            ):
-                relevant_retrieval_results.append(irrelevant_retrieval_results[idx])
-                idx += 1
-            all_retrieval_results[retriever_type] = relevant_retrieval_results
-        return all_retrieval_results
 
     def __execute_sqls(self) -> DataFrame | str:
         """

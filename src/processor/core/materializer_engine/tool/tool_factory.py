@@ -19,11 +19,11 @@ class ToolFactory:
         self.sql_executor = SQLExecutor()
         self.document_retriever = DocumentRetriever()
 
-    def available_tools(self) -> list[str]:
+    def available_tools(self):
         return [
-            ToolType.PYTHON_EXECUTOR.value,
-            ToolType.SQL_EXECUTOR.value,
-            ToolType.DOCUMENT_RETRIEVER.value,
+            self.python_executor,
+            self.sql_executor,
+            self.document_retriever,
         ]
 
     def get_tool(self, tool_type: str) -> AbstractTool:
