@@ -20,14 +20,14 @@ RETRIEVERS = [
     RetrieverType.WEB_SEARCH,
 ]
 RETRIEVER_INFO = [
-    {"name": RetrieverType.PNEUMA, "description": "Retrieves relevant tabular data."},
+    {"name": RetrieverType.PNEUMA, "description": "Retrieves relevant tabular data from the database."},
     {
         "name": RetrieverType.KNOWLEDGE_BASE,
-        "description": "Retrieves domain knowledge and user preferences (for a specific user) captured from the users.",
+        "description": "Retrieves domain knowledge and user preferences captured from the users.",
     },
     {
         "name": RetrieverType.WEB_SEARCH,
-        "description": "Retrieves information from the internet.",
+        "description": "Retrieves information from the internet. Only use it for time-sensitive information to get more reference (e.g., today's stock information).",
     },
 ]
 
@@ -83,8 +83,7 @@ class LMInterface:
         Retrieves context from the IR system with auto sanity check mechanism.
         """
         print(f"Starting document retrieval for prompt: {prompt[:100]}...")
-        # relevant_retrievers = self.get_relevant_retrievers(prompt)
-        relevant_retrievers = [RetrieverType.PNEUMA]
+        relevant_retrievers = self.get_relevant_retrievers(prompt)
         print(f"Selected retrievers: {relevant_retrievers}")
 
         all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
