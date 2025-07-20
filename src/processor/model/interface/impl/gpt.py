@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from numpy import ndarray
 from openai import OpenAI
 from processor.model.option import EmbeddingModelOption, LLMOption
@@ -22,17 +23,37 @@ class GPT(AbstractModel):
         pass
 
     def chat(
-        self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()
+        self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
     ) -> str:
-        response = self.client.chat.completions.create(
+        top_p = None
+        temperature = None
+        max_completion_tokens = None
+
+        if llm_option:
+            top_p = llm_option.top_p
+            temperature = llm_option.temperature
+            max_completion_tokens = llm_option.max_new_tokens
+
+        gpt_output = self.client.chat.completions.create(
             messages=messages,
             model=self.model_name,
             seed=42,
-            top_p=llm_option.top_p,
-            temperature=llm_option.temperature,
-            max_completion_tokens=llm_option.max_new_tokens,
-        )
-        return response.choices[0].message.content
+            top_p=top_p,
+            temperature=temperature,
+            max_completion_tokens=max_completion_tokens,
+        ).choices[0].message.content
+        response = ""
+        if gpt_output:
+            response = gpt_output
+        return response
+
+    def batch_chat(
+        self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+    ) -> tuple[list[str], int]:
+        """
+        Chats (in batch) with the model.
+        """
+        raise NotImplementedError("GPT does not support batch chat functionality.")
 
     def encode(
         self,

@@ -41,7 +41,7 @@ class Pneuma(AbstractRetriever):
         self.EMBEDDING_MAX_TOKENS = 768
         self.hybrid_retriever = HybridRetriever(
             self.llm,
-            RerankingMode.LLM,
+            RerankingMode.NONE,  # Alternative: RerankingMode.LLM
         )
         self.stemmer = Stemmer.Stemmer("english")
         self.index_path = os.path.join(

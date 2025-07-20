@@ -13,7 +13,7 @@ class ToolType(Enum):
 
 class LLMConductorOutputType(TypedDict):
     is_direct_response: bool  # Either direct response or tool calling
-    tool: Optional[ToolType]
+    tool: Optional[str]
     response: str | dict[str, Any]
 
 

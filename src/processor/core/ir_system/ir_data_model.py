@@ -72,6 +72,22 @@ class Table(AbstractDocument):
 
     def __init__(self, doc_id, retriever_type, content: DataFrame, metadata):
         super().__init__(doc_id, retriever_type, content, metadata)
+    
+    def __str__(self) -> str:
+        content_representation = ""
+        table: DataFrame = self.content
+        content_representation += f"- Table {self.doc_id}: \n```col: {" | ".join(table.columns)}"
+        if len(table) > 0:
+            # Sample 5 rows to represent the table
+            sample_rows = table.sample(min(5, len(table)), random_state=42)
+            sample_row_idx = 1
+            for _, data in sample_rows.iterrows():
+                str_data = [str(i) for i in data]
+                content_representation += (
+                    f"\n- Sample Row {sample_row_idx}: {" | ".join(str_data)}"
+                )
+                sample_row_idx += 1
+        return content_representation
 
 
 class TableContext(AbstractDocument):

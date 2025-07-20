@@ -1,17 +1,18 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class LLMOption:
-    seed: int = None
-    max_new_tokens: int = None
+    seed: Optional[int] = None
+    max_new_tokens: Optional[int] = None
     do_sample: bool = False
-    temperature: float = None
-    top_p: float = None
-    top_k: int = None
-    penalty_alpha: float = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    penalty_alpha: Optional[float] = None
     json_mode: bool = False
-    batch_size: int = None
+    batch_size: Optional[int] = None
 
 @dataclass
 class EmbeddingModelOption:

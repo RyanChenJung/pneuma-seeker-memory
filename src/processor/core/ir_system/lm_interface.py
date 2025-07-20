@@ -27,7 +27,7 @@ RETRIEVER_INFO = [
     },
     {
         "name": RetrieverType.WEB_SEARCH,
-        "description": "Retrieves information from the internet. Only use it for time-sensitive information to get more reference (e.g., today's stock information).",
+        "description": "Retrieves information from the internet. Only use it for time-sensitive and external information requests to get more reference (e.g., today's stock information).",
     },
 ]
 
@@ -90,7 +90,7 @@ class LMInterface:
         for retriever_type in relevant_retrievers:
             print(f"\nProcessing retriever: {retriever_type}")
             total_sanity_check_iteration = 0
-            relevant_retrieval_results: list[AbstractDocument] = []
+            relevant_retrieval_results: set[AbstractDocument] = set()
             irrelevant_doc_ids: list[str] = []
             curr_retrieval_results = self.retrieve(retriever_type, prompt, sources, k)
             print(f"Initial retrieval returned {len(curr_retrieval_results)} documents")
@@ -98,7 +98,7 @@ class LMInterface:
             while (
                 curr_retrieval_results
                 and len(relevant_retrieval_results) < k
-                and total_sanity_check_iteration < 5
+                and total_sanity_check_iteration < 3
             ):
                 print(
                     f"Starting sanity check iteration {total_sanity_check_iteration + 1}"
@@ -121,13 +121,9 @@ class LMInterface:
                 feedback = sanity_check_result["feedback"]
                 print(f"Found {len(irrelevant_doc_ids)} irrelevant documents")
 
-                relevant_retrieval_results.extend(
-                    [
-                        i
-                        for i in curr_retrieval_results
-                        if i.doc_id not in irrelevant_doc_ids
-                    ]
-                )
+                for i in curr_retrieval_results:
+                    if i.doc_id not in irrelevant_doc_ids:
+                        relevant_retrieval_results.add(i)
 
                 if len(irrelevant_doc_ids) > 0 and feedback != "":
                     print(f"Re-retrieving with feedback: {feedback}...")
@@ -143,16 +139,16 @@ class LMInterface:
                         sources,
                     )
 
-            irrelevant_retrieval_results = [
-                i for i in curr_retrieval_results if i.doc_id in irrelevant_doc_ids
-            ]
-            idx = 0
-            while len(relevant_retrieval_results) < k and idx < len(
-                irrelevant_retrieval_results
-            ):
-                relevant_retrieval_results.append(irrelevant_retrieval_results[idx])
-                idx += 1
-            all_retrieval_results[retriever_type] = relevant_retrieval_results
+            # irrelevant_retrieval_results = [
+            #     i for i in curr_retrieval_results if i.doc_id in irrelevant_doc_ids
+            # ]
+            # idx = 0
+            # while len(relevant_retrieval_results) < k and idx < len(
+            #     irrelevant_retrieval_results
+            # ):
+            #     relevant_retrieval_results.append(irrelevant_retrieval_results[idx])
+            #     idx += 1
+            all_retrieval_results[retriever_type] = list(relevant_retrieval_results)
             print(
                 f"Final results for {retriever_type}: {len(relevant_retrieval_results)} documents"
             )

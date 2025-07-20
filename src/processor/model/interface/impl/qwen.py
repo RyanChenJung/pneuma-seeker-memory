@@ -1,6 +1,11 @@
 from typing import Optional
 from numpy import ndarray
-from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed, TextGenerationPipeline
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    set_seed,
+    TextGenerationPipeline,
+)
 from torch import cuda
 
 from processor.model.interface.abstract_model import AbstractModel
@@ -22,7 +27,9 @@ class Qwen(AbstractModel):
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
-    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None) -> str:
+    def chat(
+        self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
+    ) -> str:
         if llm_option is None:
             llm_option = LLMOption()
         if self.model is None:
@@ -31,20 +38,26 @@ class Qwen(AbstractModel):
             self.load_tokenizer()
 
         text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
 
         if llm_option.seed is not None:
             set_seed(llm_option.seed, True)
+        else:
+            set_seed(42, True)
 
         generated_ids = self.model.generate(
             **model_inputs,
-            max_new_tokens=llm_option.max_new_tokens if llm_option.max_new_tokens is not None else 10000,
+            max_new_tokens=(
+                llm_option.max_new_tokens
+                if llm_option.max_new_tokens is not None
+                else 10000
+            ),
             do_sample=llm_option.do_sample,
             temperature=llm_option.temperature,
             top_p=llm_option.top_p,
-            top_k=llm_option.top_k
+            top_k=llm_option.top_k,
         )
         generated_ids = [
             output_ids[len(input_ids) :]
@@ -54,10 +67,17 @@ class Qwen(AbstractModel):
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
             0
         ]
+        print(f"QWEN: response: {response}")
         if llm_option.json_mode:
             fixing_iteration = 0
             while not self.is_valid_json(response) and fixing_iteration <= 5:
-                appended_messages = messages + [LLMMessage(role=Role.USER.value, content="The JSON is invalid and hence cannot be parsed. Please fix it.")]
+                appended_messages = messages + [
+                    LLMMessage(role=Role.ASSISTANT.value, content=response),
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content="The JSON is invalid and hence cannot be parsed. Please fix it.",
+                    ),
+                ]
                 response = self.chat(appended_messages)
                 fixing_iteration += 1
         return response
@@ -71,7 +91,7 @@ class Qwen(AbstractModel):
     #     batch_size = 1
     #     if llm_option.batch_size:
     #         batch_size = llm_option.batch_size
-        
+
     #     repeat_batch_size_1 = 0
     #     while True:
     #         try:
@@ -97,7 +117,9 @@ class Qwen(AbstractModel):
     #             print(f"Reducing batch size to {batch_size}")
 
     def batch_chat(
-        self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+        self,
+        batch_messages: list[list[LLMMessage]],
+        llm_option: Optional[LLMOption] = None,
     ) -> tuple[list[str], int]:
         """
         Chats (in batch) with the model.
@@ -123,7 +145,10 @@ class Qwen(AbstractModel):
         # Convert each conversation to a prompt
         prompts = [
             self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
             )
             for messages in batch_messages
         ]
@@ -135,18 +160,18 @@ class Qwen(AbstractModel):
             try:
                 all_responses = []
                 for i in range(0, len(prompts), batch_size):
-                    print(f"=> Processing batch {i} to {i+batch_size}")
-                    sub_prompts = prompts[i:i + batch_size]
+                    sub_prompts = prompts[i : i + batch_size]
                     model_inputs = self.tokenizer(
-                        sub_prompts,
-                        return_tensors="pt",
-                        padding=True,
-                        truncation=True
+                        sub_prompts, return_tensors="pt", padding=True, truncation=True
                     ).to(self.model.device)
 
                     generated_ids = self.model.generate(
                         **model_inputs,
-                        max_new_tokens=llm_option.max_new_tokens if llm_option.max_new_tokens else 10000,
+                        max_new_tokens=(
+                            llm_option.max_new_tokens
+                            if llm_option.max_new_tokens
+                            else 10000
+                        ),
                         do_sample=llm_option.do_sample,
                         temperature=llm_option.temperature,
                         top_p=llm_option.top_p,
@@ -155,12 +180,15 @@ class Qwen(AbstractModel):
 
                     # Remove prompt tokens from the output to keep only the generation
                     cleaned_generated_ids = [
-                        output_ids[len(input_ids):]
-                        for input_ids, output_ids in zip(model_inputs["input_ids"], generated_ids)
+                        output_ids[len(input_ids) :]
+                        for input_ids, output_ids in zip(
+                            model_inputs["input_ids"], generated_ids
+                        )
                     ]
 
-                    responses = self.tokenizer.batch_decode(cleaned_generated_ids, skip_special_tokens=True)
-                    print(f"Responses: {responses}")
+                    responses = self.tokenizer.batch_decode(
+                        cleaned_generated_ids, skip_special_tokens=True
+                    )
                     all_responses.extend(responses)
 
                 return all_responses, batch_size
@@ -172,7 +200,7 @@ class Qwen(AbstractModel):
                     return [], 1
                 cuda.empty_cache()
                 print(f"Reducing batch size to {batch_size}")
-    
+
     def __get_text_gen_pipeline(self):
         return TextGenerationPipeline(
             model=self.model,
