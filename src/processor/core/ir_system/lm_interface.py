@@ -1,5 +1,9 @@
 from processor.core.ir_system.ir_prompt_factory import IRPromptFactory
-from processor.core.ir_system.ir_data_model import AbstractDocument, IRFeedbackOutputType, convert_retrieval_results_to_str
+from processor.core.ir_system.ir_data_model import (
+    AbstractDocument,
+    IRFeedbackOutputType,
+    convert_retrieval_results_to_str,
+)
 from processor.core.ir_system.ir_state import IRState
 from processor.core.ir_system.retriever.retriever_factory import (
     RetrieverType,
@@ -78,20 +82,28 @@ class LMInterface:
         """
         Retrieves context from the IR system with auto sanity check mechanism.
         """
-        relevant_retrievers = self.get_relevant_retrievers(prompt)
+        print(f"Starting document retrieval for prompt: {prompt[:100]}...")
+        # relevant_retrievers = self.get_relevant_retrievers(prompt)
+        relevant_retrievers = [RetrieverType.PNEUMA]
+        print(f"Selected retrievers: {relevant_retrievers}")
+
         all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
         for retriever_type in relevant_retrievers:
+            print(f"\nProcessing retriever: {retriever_type}")
             total_sanity_check_iteration = 0
             relevant_retrieval_results: list[AbstractDocument] = []
             irrelevant_doc_ids: list[str] = []
-            curr_retrieval_results = self.retrieve(
-                retriever_type, prompt, sources, k
-            )
+            curr_retrieval_results = self.retrieve(retriever_type, prompt, sources, k)
+            print(f"Initial retrieval returned {len(curr_retrieval_results)} documents")
+
             while (
                 curr_retrieval_results
                 and len(relevant_retrieval_results) < k
                 and total_sanity_check_iteration < 5
             ):
+                print(
+                    f"Starting sanity check iteration {total_sanity_check_iteration + 1}"
+                )
                 sanity_check_messages = [
                     LLMMessage(
                         role=Role.USER.value,
@@ -108,6 +120,7 @@ class LMInterface:
 
                 irrelevant_doc_ids = sanity_check_result["irrelevant_doc_ids"]
                 feedback = sanity_check_result["feedback"]
+                print(f"Found {len(irrelevant_doc_ids)} irrelevant documents")
 
                 relevant_retrieval_results.extend(
                     [
@@ -118,6 +131,7 @@ class LMInterface:
                 )
 
                 if len(irrelevant_doc_ids) > 0 and feedback != "":
+                    print(f"Re-retrieving with feedback: {feedback}...")
                     curr_retrieval_results = self.re_retrieve_with_feedback(
                         retriever_type,
                         feedback,
@@ -140,6 +154,11 @@ class LMInterface:
                 relevant_retrieval_results.append(irrelevant_retrieval_results[idx])
                 idx += 1
             all_retrieval_results[retriever_type] = relevant_retrieval_results
+            print(
+                f"Final results for {retriever_type}: {len(relevant_retrieval_results)} documents"
+            )
+
+        print("Document retrieval completed")
         return all_retrieval_results
 
     def retrieve(
