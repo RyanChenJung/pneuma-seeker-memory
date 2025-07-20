@@ -1,4 +1,5 @@
 from numpy import ndarray
+from typing import Optional
 from sentence_transformers import SentenceTransformer
 
 from processor.model.option import EmbeddingModelOption, LLMOption
@@ -20,7 +21,7 @@ class EmbeddingModel(AbstractModel):
         pass
 
     def chat(
-        self, messages: list[LLMMessage], llm_option: LLMOption = LLMOption()
+        self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
     ) -> str:
         """Chats with the model."""
         raise NotImplementedError("Embedding model does not support chat.")
