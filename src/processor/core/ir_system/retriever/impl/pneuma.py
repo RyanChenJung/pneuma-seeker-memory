@@ -1,7 +1,9 @@
 from collections import defaultdict
+import ast
 from enum import Enum
 import gc
 from math import ceil
+import os
 from typing import Optional
 from bm25s.tokenization import convert_tokenized_to_string_list
 import time
@@ -42,6 +44,9 @@ class Pneuma(AbstractRetriever):
             RerankingMode.LLM,
         )
         self.stemmer = Stemmer.Stemmer("english")
+        self.index_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "indices", "pneuma"
+        )
 
     @property
     def retriever_type(self) -> RetrieverType:
@@ -65,10 +70,12 @@ class Pneuma(AbstractRetriever):
         retrieval_results: list[AbstractDocument] = []
         increased_k = k * 5
         for dataset in sources:
-            client = chromadb.PersistentClient(f"indices/pneuma/vector-index-{dataset}")
+            client = chromadb.PersistentClient(
+                os.path.join(self.index_path, f"vector-index-{dataset}")
+            )
             collection = client.get_collection("benchmark")
             retriever = bm25s.BM25.load(
-                f"indices/pneuma/fulltext-index-{dataset}",
+                os.path.join(self.index_path, f"fulltext-index-{dataset}"),
                 load_corpus=True,
             )
 
@@ -78,7 +85,7 @@ class Pneuma(AbstractRetriever):
                     datum["metadata"]["table"]: datum_idx
                     for datum_idx, datum in enumerate(retriever.corpus)
                 }
-            question_embedding = self.embed_model.encode(query).tolist()
+            question_embedding = self.embed_model.encode(query)[0].tolist()
             query_tokens = bm25s.tokenize(
                 query, stemmer=self.stemmer, show_progress=False
             )
@@ -117,7 +124,7 @@ class Pneuma(AbstractRetriever):
                     Table(
                         doc_id=doc_id,
                         retriever_type=RetrieverType.PNEUMA,
-                        content=pd.read_csv(table),
+                        content=pd.read_csv(table, nrows=100),  # Reduce time for now
                         metadata=dict(),
                     )
                 )
@@ -133,7 +140,9 @@ class Pneuma(AbstractRetriever):
             table_context = [i for i in documents if isinstance(i, TableContext)]
             tables = [i for i in documents if isinstance(i, Table)]
 
-            schema_summaries: list[Text] = self.__get_schema_summaries(tables, table_context)
+            schema_summaries: list[Text] = self.__get_schema_summaries(
+                tables, table_context
+            )
             sample_rows: list[Text] = self.__get_sample_rows(tables)
 
             schema_summaries = self.__split_schema_summaries(schema_summaries)
@@ -142,7 +151,9 @@ class Pneuma(AbstractRetriever):
 
             print(f"[VECTOR INDEX] Indexing dataset: {dataset}")
             start = time.time()
-            client = chromadb.PersistentClient(f"indices/pneuma/vector-index-{dataset}")
+            client = chromadb.PersistentClient(
+                os.path.join(self.index_path, f"vector-index-{dataset}")
+            )
             self.__indexing_vector(
                 client, self.embed_model, schema_summaries, sample_rows, table_context
             )
@@ -235,8 +246,7 @@ class Pneuma(AbstractRetriever):
 
         for i in range(0, len(documents), 30000):
             embeddings = embedding_model.encode(
-                documents[i : i + 30000],
-                EmbeddingModelOption(batch_size=100)
+                documents[i : i + 30000], EmbeddingModelOption(batch_size=100)
             )
 
             collection.add(
@@ -321,7 +331,7 @@ class Pneuma(AbstractRetriever):
 
         retriever = bm25s.BM25(corpus=corpus_json)
         retriever.index(corpus_tokens, show_progress=True)
-        retriever.save(f"indices/pneuma/fulltext-index-{dataset}")
+        retriever.save(os.path.join(self.index_path, f"fulltext-index-{dataset}"))
 
     def __get_schema_summaries(
         self, tables: list[Table], table_context: list[TableContext]
@@ -330,6 +340,7 @@ class Pneuma(AbstractRetriever):
         conversations, conv_tables, conv_cols = self.__parse_tables(
             tables, table_context
         )
+        # Still need adjustments; we set the value to 20 for now.
         # optimal_batch_size = self.__get_optimal_batch_size(conversations)
         optimal_batch_size = 20
         sorted_indices = self.__get_special_indices(conversations, optimal_batch_size)
@@ -357,25 +368,28 @@ class Pneuma(AbstractRetriever):
                     optimal_batch_size = llm_output[1]
                     same_batch_size_counter = 0
 
-            print(f"DEBUGGY outputs: {outputs}")
-            with open('output.txt', 'w') as f:
-                for item in outputs:
-                    f.write(f"{item}\n")
             col_narrations: dict[str, list[str]] = defaultdict(list)
             for output_idx, output in enumerate(outputs):
                 col_narrations[conv_tables[output_idx]] += [
                     f"{conv_cols[output_idx]}: {output}"
                 ]
-            
-            print(f"DEBUGGY col_narrations: {col_narrations}")
+
+            # Sample code to load created narrations
+            # path = os.path.dirname(os.path.abspath(__file__))
+            # col_narrations_path = os.path.join(path, "pneuma_col_narrations.txt")
+            # with open(col_narrations_path, 'r') as file:
+            #     content = file.read()
+            #     col_narrations = ast.literal_eval(content)
 
             for table in tables:
                 summaries.append(
                     Text(
                         doc_id=f"{table.metadata['table_name']}_schema_summary",
                         retriever_type=RetrieverType.PNEUMA,
-                        content=" | ".join(col_narrations[table.metadata['table_name']]),
-                        metadata={"table_name": table.metadata['table_name']},
+                        content=" | ".join(
+                            col_narrations[table.metadata["table_name"]]
+                        ),
+                        metadata={"table_name": table.metadata["table_name"]},
                     )
                 )
         summaries = sorted(summaries, key=lambda x: x.metadata["table_name"])
@@ -473,7 +487,9 @@ class Pneuma(AbstractRetriever):
                 prompt = self.__get_col_description_prompt(
                     " | ".join(cols), col, table_desc
                 )
-                conversations.append([LLMMessage(role=Role.SYSTEM.value, content=prompt)])
+                conversations.append(
+                    [LLMMessage(role=Role.SYSTEM.value, content=prompt)]
+                )
                 conv_tables.append(table)
                 conv_cols.append(col)
         return conversations, conv_tables, conv_cols
@@ -498,7 +514,9 @@ Describe very briefly what the ```{column}``` column represents. If not possible
         sample_rows: list[Text] = []
         for table_idx, table in enumerate(tqdm(tables)):
             try:
-                df = pd.read_csv(table.metadata["table_name"], on_bad_lines="skip")
+                df = pd.read_csv(
+                    table.metadata["table_name"], on_bad_lines="skip", nrows=100
+                )
             except pd.errors.EmptyDataError:
                 continue
             sample_size = ceil(min(len(df), 5))
@@ -528,12 +546,13 @@ Describe very briefly what the ```{column}``` column represents. If not possible
         unique_tables = sorted(
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
+        self.embed_model.load_model()
         tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
                 for summary in schema_summaries
-                if summary.metadata["table"] == table
+                if summary.metadata["table_name"] == table
             ][0]
             column_summaries = table_schema_summary.split(" | ")
             col_idx = 0
@@ -564,6 +583,7 @@ Describe very briefly what the ```{column}``` column represents. If not possible
     def __merge_sample_rows(self, sample_rows: list[Text]) -> list[Text]:
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
+        self.embed_model.load_model()
         tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_rows = [
@@ -603,6 +623,7 @@ Describe very briefly what the ```{column}``` column represents. If not possible
             set([context.metadata["table_name"] for context in table_context])
         )
         processed_table_context: list[Text] = []
+        self.embed_model.load_model()
         tokenizer = self.embed_model.model.tokenizer
         for table in tqdm(unique_tables):
             table_contexts = [
