@@ -19,8 +19,14 @@ class KnowledgeBase(AbstractRetriever):
         super().__init__(models)
         self.local_retriever = None
         self.global_retriever = None
-        self.LOCAL_INDEX_PATH = "indices/kb/local"
-        self.GLOBAL_INDEX_PATH = "indices/kb/global"
+
+        curr_file_path = os.path.dirname(os.path.abspath(__file__))
+        self.LOCAL_INDEX_PATH = os.path.join(
+            curr_file_path, "indices", "kb", "local"
+        )
+        self.GLOBAL_INDEX_PATH = os.path.join(
+            curr_file_path, "indices", "kb", "global"
+        )
         self.stemmer = Stemmer("english")
 
     @property
@@ -35,13 +41,19 @@ class KnowledgeBase(AbstractRetriever):
         Loads the retriever, including its dependencies (e.g., its model).
         """
         if self.local_retriever is None:
-            self.local_retriever = bm25s.BM25.load(
-                self.LOCAL_INDEX_PATH, load_corpus=True
-            )
+            try:
+                self.local_retriever = bm25s.BM25.load(
+                    self.LOCAL_INDEX_PATH, load_corpus=True
+                )
+            except:
+                pass
         if self.global_retriever is None:
-            self.global_retriever = bm25s.BM25.load(
-                self.GLOBAL_INDEX_PATH, load_corpus=True
-            )
+            try:
+                self.global_retriever = bm25s.BM25.load(
+                    self.GLOBAL_INDEX_PATH, load_corpus=True
+                )
+            except:
+                pass
 
     def retrieve(
         self, query: str, sources: list[str], k: int
@@ -50,13 +62,16 @@ class KnowledgeBase(AbstractRetriever):
         Retrieves a list of documents given a query.
         """
         self.load()
-        if self.local_retriever is None or self.global_retriever is None:
-            raise ValueError("Both the local and global retrievers must be initialized.")
+        if self.local_retriever is None and self.global_retriever is None:
+            print("Both the local and global retrievers have not been initialized.")
+            return []
         retrieval_results: list[AbstractDocument] = []
-        retrieval_results.extend(self.__actual_retrieve(query, self.local_retriever, k))
-        retrieval_results.extend(
-            self.__actual_retrieve(query, self.global_retriever, k)
-        )
+        if self.local_retriever is not None:
+            retrieval_results.extend(self.__actual_retrieve(query, self.local_retriever, k))
+        if self.global_retriever is not None:
+            retrieval_results.extend(
+                self.__actual_retrieve(query, self.global_retriever, k)
+            )
 
         self.local_retriever = None
         self.global_retriever = None
