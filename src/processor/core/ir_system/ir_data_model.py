@@ -76,7 +76,7 @@ class Table(AbstractDocument):
     def __str__(self) -> str:
         content_representation = ""
         table: DataFrame = self.content
-        content_representation += f"- Table {self.doc_id}: \n```col: {" | ".join(table.columns)}"
+        content_representation += f"Table {self.doc_id}: \n```col: {" | ".join(table.columns)}"
         if len(table) > 0:
             # Sample 5 rows to represent the table
             sample_rows = table.sample(min(5, len(table)), random_state=42)

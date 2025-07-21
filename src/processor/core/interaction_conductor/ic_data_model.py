@@ -25,9 +25,21 @@ def typed_dict_to_str(typed_dict_cls: type) -> str:
     return "\n".join(lines)
 
 
-def convert_target_schemas_to_str(target_schemas: dict[str, DataFrame]):
-    representation = ""
+def convert_target_schemas_to_str(target_schemas: dict[str, dict[str, str]]):
+    representation = "**Target Schemas**:\n"
     for table_id, table in target_schemas.items():
+        representation += f"- Table {table_id}:```\n"
+        for col_name, col_desc in table.items():
+            representation += f"-> col {col_name}: {col_desc}\n"
+        representation += "```"
+    return representation
+
+
+def convert_materialized_target_schemas_to_str(
+    materialized_target_schemas: dict[str, DataFrame],
+):
+    representation = "**Materialized Target Schemas**:\n"
+    for table_id, table in materialized_target_schemas.items():
         representation += f"- Table {table_id}: \n```col: {" | ".join(table.columns)}"
         if len(table) > 0:
             # Sample 5 rows to represent the table
@@ -36,7 +48,7 @@ def convert_target_schemas_to_str(target_schemas: dict[str, DataFrame]):
             for _, data in sample_rows.iterrows():
                 str_data = [str(i) for i in data]
                 representation += (
-                    f"\n- Sample Row {sample_row_idx}: {" | ".join(str_data)}"
+                    f"\n- sample row {sample_row_idx}: {" | ".join(str_data)}"
                 )
                 sample_row_idx += 1
         representation += "```\n"

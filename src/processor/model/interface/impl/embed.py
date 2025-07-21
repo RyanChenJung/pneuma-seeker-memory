@@ -41,6 +41,6 @@ class EmbeddingModel(AbstractModel):
         return self.model.encode(
             texts,
             batch_size=embed_model_option.batch_size,
-            show_progress_bar=True,
+            show_progress_bar=False,
             device="cuda",
         )

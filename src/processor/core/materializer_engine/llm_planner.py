@@ -25,14 +25,14 @@ class LLMPlanner:
         self.operation_factory = OperationFactory()
         self.tool_factory = ToolFactory()
         self.prompt_factory = MEPromptFactory()
-        self.state = MaterializerState(
-            
-        )
+        self.state = MaterializerState()
 
     def materialize_target_schemas(
-        self, target_schemas: dict[str, list[str]], sqls: list[str]
+        self, target_schemas: dict[str, dict[str, str]], sqls: list[str]
     ) -> dict[str, DataFrame]:
-        self.logger.info(f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs")
+        self.logger.info(
+            f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
+        )
         self.state.reset()
         while not self.__check_completion(target_schemas):
             self.logger.info("Planning next materialization step")
@@ -63,10 +63,14 @@ class LLMPlanner:
 
             try:
                 plan = parse_json(response)
-                self.logger.info(f"Executing plan of type: {plan.get('step_type')} with name: {plan.get('name')}")
+                self.logger.info(
+                    f"Executing plan of type: {plan.get('step_type')} with name: {plan.get('name')}"
+                )
                 result = self.__execute_plan(plan, target_schemas)
                 self.logger.info(f"Updating state with result for: {plan['assign_to']}")
-                self.__update_state_with_result(plan["assign_to"], result, target_schemas)
+                self.__update_state_with_result(
+                    plan["assign_to"], result, target_schemas
+                )
             except Exception as e:
                 self.logger.error(f"Failed to execute plan: {e}", exc_info=True)
                 continue
@@ -74,17 +78,19 @@ class LLMPlanner:
         self.logger.info("Materialization completed successfully")
         return self.state.materialized_target_schemas
 
-    def __check_completion(self, target_schemas: dict[str, list[str]]) -> bool:
+    def __check_completion(self, target_schemas: dict[str, dict[str, str]]) -> bool:
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.materialized_target_schemas.keys())
         is_complete = all_schema_ids == materialized_schema_ids
-        self.logger.info(f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)")
+        self.logger.info(
+            f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)"
+        )
         return is_complete
 
-    def __execute_plan(self, plan: dict, target_schemas: dict[str, list[str]]) -> Any:
+    def __execute_plan(self, plan: dict, target_schemas: dict[str, dict[str, str]]) -> Any:
         step_type = plan["step_type"]
         self.logger.info(f"Executing plan step: {step_type}")
-        
+
         if step_type == "operation":
             self.logger.info(f"Executing operation: {plan['name']}")
             operation = self.operation_factory.get_operation(plan["name"])
@@ -95,44 +101,50 @@ class LLMPlanner:
         elif step_type == "tool":
             self.logger.info(f"Executing tool: {plan['name']}")
             tool = self.tool_factory.get_tool(plan["name"])
-            
+
             # Get the main input
-            main_input = plan["inputs"][0] if isinstance(plan["inputs"], list) else plan["inputs"]
-            
+            main_input = (
+                plan["inputs"][0]
+                if isinstance(plan["inputs"], list)
+                else plan["inputs"]
+            )
+
             # Prepare tool-specific parameters
             tool_params = {}
-            
+
             if plan["name"] == "SQL Executor" and "tables" in plan["parameters"]:
                 # Resolve table references to actual DataFrames
                 table_dict = {}
                 for table_name, table_id in plan["parameters"]["tables"].items():
                     table_dict[table_name] = self.__resolve_input(table_id)
                 tool_params["tables"] = table_dict
-                
+
             elif plan["name"] == "Document Retriever":
                 tool_params["llm"] = self.llm
                 tool_params["embed_model"] = self.embed_model
-            
+
             elif plan["name"] == "Python Executor":
                 # Add state variables to Python context
                 tool_params["context"] = {
                     "intermediate_tables": self.state.intermediate_tables,
                     "target_schemas": target_schemas,
-                    "retrieved_documents": self.state.current_retrieved_documents
+                    "retrieved_documents": self.state.current_retrieved_documents,
                 }
-            
+
             self.logger.info(f"Executing tool with parameters: {tool_params}")
             result = tool.execute(main_input, **tool_params)
-            
+
             # Special handling for Document Retriever results
             if plan["name"] == "Document Retriever":
-                self.logger.info(f"Updating retrieved documents with {len(result)} new documents")
+                self.logger.info(
+                    f"Updating retrieved documents with {len(result)} new documents"
+                )
                 # Update current retrieved documents
                 for retriever_docs in result.values():
                     self.state.current_retrieved_documents.update(retriever_docs)
                 # Return None since we don't want to store this result
                 return None
-                
+
             return result
         else:
             self.logger.error(f"Unknown step type encountered: {step_type}")
@@ -143,38 +155,44 @@ class LLMPlanner:
         # Check intermediate tables first
         if input_id in self.state.intermediate_tables:
             return self.state.intermediate_tables[input_id]
-        
+
         # Then check materialized schemas
         if input_id in self.state.materialized_target_schemas:
             return self.state.materialized_target_schemas[input_id]
-        
+
         # Finally check retrieved documents
         for doc in self.state.current_retrieved_documents:
             if doc.doc_id == input_id:
                 if isinstance(doc.content, DataFrame):
                     return doc.content
                 raise ValueError(f"Document {input_id} content is not a DataFrame")
-        
+
         self.logger.error(f"Failed to resolve input: {input_id}")
         raise ValueError(f"Could not find input '{input_id}' in any available sources")
 
-    def __update_state_with_result(self, name: str, result: Any, target_schemas: dict[str, list[str]]):
+    def __update_state_with_result(
+        self, name: str, result: Any, target_schemas: dict[str, dict[str, str]]
+    ):
         if result is None:
             self.logger.info(f"Skipping update for {name} - result is None")
             return
-            
+
         if not isinstance(result, pd.DataFrame):
             self.logger.warning(f"Result '{name}' is not a DataFrame, skipping.")
             return
-            
-        self.logger.info(f"Updating state with result for {name} (shape: {result.shape})")
+
+        self.logger.info(
+            f"Updating state with result for {name} (shape: {result.shape})"
+        )
         # Validate schema if this is a target schema
         if name in target_schemas:
             expected_columns = set(target_schemas[name])
             actual_columns = set(result.columns)
             if expected_columns != actual_columns:
-                raise ValueError(f"Schema mismatch for {name}. Expected: {expected_columns}, Got: {actual_columns}")
-        
+                raise ValueError(
+                    f"Schema mismatch for {name}. Expected: {expected_columns}, Got: {actual_columns}"
+                )
+
         # Store result
         if name in target_schemas:
             self.state.materialized_target_schemas[name] = result

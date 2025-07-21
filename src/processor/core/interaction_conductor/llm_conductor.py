@@ -1,4 +1,3 @@
-from ast import literal_eval
 from logging import Logger
 
 import duckdb
@@ -9,8 +8,14 @@ from processor.core.interaction_conductor.ic_state import ICState
 from processor.core.interaction_conductor.ic_data_model import (
     LLMConductorOutputType,
     ToolType,
+    convert_materialized_target_schemas_to_str,
+    convert_target_schemas_to_str,
 )
-from processor.core.ir_system.ir_data_model import convert_retrieval_results_to_str
+from processor.core.ir_system.ir_data_model import (
+    AbstractDocument,
+    RetrieverType,
+    convert_retrieval_results_to_str,
+)
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
 from processor.core.interaction_conductor.ic_data_model import ToolType
@@ -30,12 +35,19 @@ class LLMConductor:
             f"Initializing LLMConductor with llm_path={llm_path}, embed_model_path={embed_model_path}"
         )
         self.state = ICState()
+
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
+
         self.prompt_factory = ICPromptFactory()
         self.materializer = LLMPlanner(self.llm, self.logger, self.embed_model)
-        self.curr_thinking_action_history: list[str] = []
+
+        self.action_history: list[str] = []
         self.conversations: list[LLMMessage] = []
+        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
+            dict()
+        )
+        self.materialized_target_schemas: dict[str, DataFrame] = dict()
 
     def process_input(self, user_input: str) -> str:
         """
@@ -47,28 +59,60 @@ class LLMConductor:
         total_iteration = 0
         iteration_limit = 3  # TODO: Determine limit more dynamically based on, e.g., input-output properties
         self.conversations.append(LLMMessage(role=Role.USER.value, content=user_input))
-        self.curr_thinking_action_history = []
         while not is_thinking_done and total_iteration < iteration_limit:
+            retrieval_results_repr = ""
+            for retriever_type in self.current_retrieval_results.keys():
+                retrieved_documents = self.current_retrieval_results[retriever_type]
+                retrieval_results_repr += f"""- Retriever {retriever_type.value}:\n{convert_retrieval_results_to_str(retrieved_documents)}"""
+
+            self.logger.info("=" * 50)
+            self.logger.info(
+                f"Current retrieval results representation: {retrieval_results_repr}"
+            )
+            self.logger.info("=" * 50)
+
+            if set(self.materialized_target_schemas.keys()) == set(
+                self.state.target_schemas.keys()
+            ):
+                target_schemas_repr = convert_materialized_target_schemas_to_str(
+                    self.materialized_target_schemas
+                )
+            else:
+                target_schemas_repr = convert_target_schemas_to_str(
+                    self.state.target_schemas
+                )
+
+            self.logger.info("=" * 50)
+            self.logger.info(
+                f"Current target schemas representation: {target_schemas_repr}"
+            )
+            self.logger.info("=" * 50)
+
             llm_messages = [
                 LLMMessage(
                     role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_input_processing_prompt(
                         self.state.sqls,
-                        self.state.target_schemas,
+                        target_schemas_repr,
                         user_input,
-                        self.curr_thinking_action_history,
-                        (
-                            self.conversations[-3:]
-                            if len(self.conversations) >= 3
-                            else self.conversations
-                        ),
+                        self.action_history[-7:],
+                        self.conversations[-3:],
+                        retrieval_results_repr,
                     ),
                 )
             ]
             self.logger.info("Below is the current chat history:")
-            self.logger.info("Conversation history:\n" + "\n".join(
-                f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.conversations
-            ))
+            self.logger.info(
+                "Conversation history:\n"
+                + "\n".join(
+                    f"{msg['role'].capitalize()}: {msg['content']}"
+                    for msg in self.conversations
+                )
+            )
+
+            self.logger.info(
+                f"Below is the current LLM Messages for inference:\n{llm_messages}"
+            )
             model_output = self.llm.chat(llm_messages, LLMOption(json_mode=True))
             self.logger.info(f"Model output: {model_output}")
             json_output: LLMConductorOutputType = parse_json(model_output)
@@ -92,82 +136,77 @@ class LLMConductor:
                 if tool == ToolType.IR_SYSTEM.value:
                     self.logger.info(f"IR System request with params: {response}")
                     ir_system = LMInterface(
-                        {"llm": self.llm, "embed_model": self.embed_model}
+                        {"llm": self.llm, "embed_model": self.embed_model},
+                        self.logger,
                     )
-                    context = ir_system.retrieve_documents(
-                        response["prompt"], ["buysite"], 5  # Hard-coded sources and k
+                    self.current_retrieval_results = ir_system.retrieve_documents(
+                        response["prompt"],
+                        ["buysite"],
+                        5,  # Future-TODO: Change hard-coded sources and k
                     )
-                    self.logger.info(f"Retrieved context length: {len(str(context))}")
 
-                    context_str = "Retrieving documents from the IR system. The results:\n"
-                    for retriever_type in context.keys():
-                        retrieved_documents = context[retriever_type]
-                        context_str += f"""- Retriever {retriever_type.value}:\n{convert_retrieval_results_to_str(retrieved_documents)}"""
-                    self.curr_thinking_action_history.append(
-                        context_str
-                    )
+                    context_str = "Retrieved documents from the IR system."
+                    self.action_history.append(context_str)
                 elif tool == ToolType.MATERIALIZER_ENGINE.value:
                     self.logger.info("Starting materialization of target schemas")
                     current_state = self.state.get_state()
                     materialized_target_schemas = (
                         self.materializer.materialize_target_schemas(
-                            self.__convert_target_schemas_to_target_columns(),
+                            current_state["target_schemas"],
                             current_state["sqls"],
                         )
                     )
                     self.logger.info(
                         f"Materialized schemas count: {len(materialized_target_schemas)}"
                     )
-                    self.state.set_state(
-                        current_state["sqls"], materialized_target_schemas
-                    )
-                    self.curr_thinking_action_history.append(
-                        "Materializing the target schemas"
-                    )
+                    self.materialized_target_schemas = materialized_target_schemas
+                    self.action_history.append("Materialized the target schemas")
                 elif tool == ToolType.STATE_MANIPULATION.value:
                     self.logger.info("Manipulating state with new values")
-                    new_sqls = response["new_sqls"]
+                    new_sqls: list[str] = response["new_sqls"]
                     self.logger.info(f"New SQLs count: {len(new_sqls)}")
-                    new_target_schemas: dict[str, list[str]] = response[
+                    new_target_schemas: dict[str, dict[str, str]] = response[
                         "new_target_schemas"
                     ]
-                    new_target_schemas_df: dict[str, DataFrame] = dict()
-                    for i in new_target_schemas:
-                        new_target_schemas_df[i] = DataFrame(columns=literal_eval(i))
-                    self.state.set_state(new_sqls, new_target_schemas_df)
-                    self.curr_thinking_action_history.append(
-                        f"Adjusting the state (refer to the latest state)."
-                    )
+                    self.state.set_state(new_sqls, new_target_schemas)
+                    self.action_history.append(f"Adjusted the state.")
                 elif tool == ToolType.SQL_ENGINE.value:
                     self.logger.info("Executing SQL statements")
                     result = self.__execute_sqls()
                     self.logger.info(f"SQL execution result type: {type(result)}")
-                    self.curr_thinking_action_history.append(
-                        f"Executing the SQLs, resulting in this output: {result}"
+                    self.action_history.append(
+                        f"Executed the SQLs, which resulted in this output: {result}"
                     )
             else:
                 raise ValueError("The JSON output is invalid.")
             total_iteration += 1
         if total_iteration == iteration_limit and not is_thinking_done:
+            if set(self.materialized_target_schemas.keys()) == set(
+                self.state.target_schemas.keys()
+            ):
+                target_schemas_repr = convert_materialized_target_schemas_to_str(
+                    self.materialized_target_schemas
+                )
+            else:
+                target_schemas_repr = convert_target_schemas_to_str(
+                    self.state.target_schemas
+                )
             llm_messages = [
                 LLMMessage(
                     role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_force_produce_final_response_prompt(
-                        total_iteration, self.curr_thinking_action_history
+                        total_iteration,
+                        self.action_history,
+                        target_schemas_repr,
+                        self.state.sqls,
                     ),
                 )
             ]
             final_response = self.llm.chat(llm_messages)
-            self.conversations.append(LLMMessage(role=Role.ASSISTANT.value, content=final_response))
-        return final_response
-
-    def __convert_target_schemas_to_target_columns(self):
-        target_columns: dict[str, list[str]] = dict()
-        for target_schema_id in self.state.target_schemas.keys():
-            target_columns[target_schema_id] = list(
-                self.state.target_schemas[target_schema_id].columns
+            self.conversations.append(
+                LLMMessage(role=Role.ASSISTANT.value, content=final_response)
             )
-        return target_columns
+        return final_response
 
     def __execute_sqls(self) -> DataFrame | str:
         """
@@ -178,7 +217,7 @@ class LLMConductor:
         self.logger.info(
             f"Executing {len(curr_state['sqls'])} SQL statements on {len(curr_state['target_schemas'])} tables"
         )
-        tables: dict[str, DataFrame] = curr_state["target_schemas"]
+        tables: dict[str, DataFrame] = self.materialized_target_schemas
         sqls: list[str] = curr_state["sqls"]
 
         # Create an in-memory DuckDB connection

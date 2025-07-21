@@ -1,10 +1,9 @@
-from pandas import DataFrame
 from typing import TypedDict
 
 
 class ICStateStructure(TypedDict):
     sqls: list[str]
-    target_schemas: dict[str, DataFrame]
+    target_schemas: dict[str, dict[str, str]]
 
 
 class ICState:
@@ -13,9 +12,11 @@ class ICState:
         Initializes the session state with empty SQLs and target schemas.
         """
         self.sqls: list[str] = []
-        self.target_schemas: dict[str, DataFrame] = dict()
+        self.target_schemas: dict[str, dict[str, str]] = dict()
 
-    def set_state(self, new_sqls: list[str], new_target_schemas: dict[str, DataFrame]) -> None:
+    def set_state(
+        self, new_sqls: list[str], new_target_schemas: dict[str, dict[str, str]]
+    ) -> None:
         """
         Sets new values for SQLs and Target Schemas
         """

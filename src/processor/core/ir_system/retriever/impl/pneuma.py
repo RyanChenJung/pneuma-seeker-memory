@@ -112,7 +112,6 @@ class Pneuma(AbstractRetriever):
             )
             seen_tables: list[str] = []
             for table, _, _ in all_nodes[:k]:
-                doc_id = table
                 table = table.split("_SEP_")[0]
 
                 if table not in seen_tables:
@@ -122,7 +121,7 @@ class Pneuma(AbstractRetriever):
 
                 retrieval_results.append(
                     Table(
-                        doc_id=doc_id,
+                        doc_id=table[-4:],
                         retriever_type=RetrieverType.PNEUMA,
                         content=pd.read_csv(table, nrows=100),  # Reduce time for now
                         metadata=dict(),
