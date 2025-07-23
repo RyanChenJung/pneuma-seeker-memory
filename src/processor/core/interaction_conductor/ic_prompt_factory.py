@@ -1,8 +1,4 @@
-from pandas import DataFrame
-
-from processor.core.interaction_conductor.ic_data_model import (
-    convert_target_schemas_to_str,
-)
+from datetime import date
 from processor.model.llm_message import LLMMessage
 
 
@@ -24,7 +20,11 @@ IMPORTANT NOTES:
 - Focus on understanding and explaining rather than rushing to a solution.
 - Always explain your reasoning when changing state (schemas/SQLs).
 - Verify your understanding with the user before proceeding to complex steps.
+- The IR System already uses internal refinement (a self-loop mechanism) to produce the best possible results from a single call. Calling it again with similar prompts will not help. You must only call the IR System once per turn unless:
+  - The previous IR results are completely irrelevant or empty.
+  - You have a strong justification and a significantly different query.
 
+- You may take multiple steps per turn, but avoid calling the same tool repeatedly with minor variations.
 ---
 
 SYSTEM FLOW:
@@ -134,6 +134,8 @@ CURRENT STATE:
 ```
 
 ---
+
+For reference, today is {date.today().strftime("%B %-d %Y")}.
 
 OUTPUT FORMAT (respond ONLY with this JSON — no extra explanation):
 {{

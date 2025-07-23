@@ -121,7 +121,7 @@ class Pneuma(AbstractRetriever):
 
                 retrieval_results.append(
                     Table(
-                        doc_id=table[-4:],
+                        doc_id=table[:-4],
                         retriever_type=RetrieverType.PNEUMA,
                         content=pd.read_csv(table, nrows=100),  # Reduce time for now
                         metadata=dict(),

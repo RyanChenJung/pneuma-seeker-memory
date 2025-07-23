@@ -231,4 +231,5 @@ class LMInterface:
         refined_prompt = self.llm.chat(
             [LLMMessage(role=Role.SYSTEM.value, content=sys_prompt)]
         )
+        print(f"Refined prompt: {refined_prompt}")
         return self.retrieve(retriever_type, refined_prompt, sources, k)

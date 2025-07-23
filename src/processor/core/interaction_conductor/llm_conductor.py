@@ -48,6 +48,7 @@ class LLMConductor:
             dict()
         )
         self.materialized_target_schemas: dict[str, DataFrame] = dict()
+        self.is_materialized = False  # Add this line
 
     def process_input(self, user_input: str) -> str:
         """
@@ -63,17 +64,16 @@ class LLMConductor:
             retrieval_results_repr = ""
             for retriever_type in self.current_retrieval_results.keys():
                 retrieved_documents = self.current_retrieval_results[retriever_type]
-                retrieval_results_repr += f"""- Retriever {retriever_type.value}:\n{convert_retrieval_results_to_str(retrieved_documents)}"""
+                retrieval_results_repr += f"""- Retriever {retriever_type.value}:\n{convert_retrieval_results_to_str(retrieved_documents)}\n"""
 
-            self.logger.info("=" * 50)
             self.logger.info(
                 f"Current retrieval results representation: {retrieval_results_repr}"
             )
             self.logger.info("=" * 50)
 
-            if set(self.materialized_target_schemas.keys()) == set(
-                self.state.target_schemas.keys()
-            ):
+            # Replace the schema representation check with this:
+            target_schemas_repr = ""
+            if self.is_materialized:
                 target_schemas_repr = convert_materialized_target_schemas_to_str(
                     self.materialized_target_schemas
                 )
@@ -82,7 +82,6 @@ class LLMConductor:
                     self.state.target_schemas
                 )
 
-            self.logger.info("=" * 50)
             self.logger.info(
                 f"Current target schemas representation: {target_schemas_repr}"
             )
@@ -131,9 +130,9 @@ class LLMConductor:
                     LLMMessage(role=Role.ASSISTANT.value, content=final_response)
                 )
                 is_thinking_done = True
-            elif tool and isinstance(response, dict):
+            elif tool:
                 self.logger.info(f"Using tool: {tool}")
-                if tool == ToolType.IR_SYSTEM.value:
+                if tool == ToolType.IR_SYSTEM.value and isinstance(response, dict):
                     self.logger.info(f"IR System request with params: {response}")
                     ir_system = LMInterface(
                         {"llm": self.llm, "embed_model": self.embed_model},
@@ -150,18 +149,18 @@ class LLMConductor:
                 elif tool == ToolType.MATERIALIZER_ENGINE.value:
                     self.logger.info("Starting materialization of target schemas")
                     current_state = self.state.get_state()
-                    materialized_target_schemas = (
+                    self.materialized_target_schemas = (
                         self.materializer.materialize_target_schemas(
                             current_state["target_schemas"],
                             current_state["sqls"],
                         )
                     )
+                    self.is_materialized = True  # Add this line
                     self.logger.info(
-                        f"Materialized schemas count: {len(materialized_target_schemas)}"
+                        f"Materialized schemas count: {len(self.materialized_target_schemas)}"
                     )
-                    self.materialized_target_schemas = materialized_target_schemas
                     self.action_history.append("Materialized the target schemas")
-                elif tool == ToolType.STATE_MANIPULATION.value:
+                elif tool == ToolType.STATE_MANIPULATION.value and isinstance(response, dict):
                     self.logger.info("Manipulating state with new values")
                     new_sqls: list[str] = response["new_sqls"]
                     self.logger.info(f"New SQLs count: {len(new_sqls)}")
@@ -169,6 +168,8 @@ class LLMConductor:
                         "new_target_schemas"
                     ]
                     self.state.set_state(new_sqls, new_target_schemas)
+                    self.is_materialized = False  # Add this line
+                    self.materialized_target_schemas.clear()  # Add this line
                     self.action_history.append(f"Adjusted the state.")
                 elif tool == ToolType.SQL_ENGINE.value:
                     self.logger.info("Executing SQL statements")
@@ -213,6 +214,8 @@ class LLMConductor:
         Executes the SQLs (sequentially) over the target schemas.
         The result (for now) is a scalar (converted to string).
         """
+        if not self.is_materialized:
+            raise ValueError("Cannot execute SQLs before materializing target schemas")
         curr_state = self.state.get_state()
         self.logger.info(
             f"Executing {len(curr_state['sqls'])} SQL statements on {len(curr_state['target_schemas'])} tables"
