@@ -76,7 +76,7 @@ class Table(AbstractDocument):
     def __str__(self) -> str:
         content_representation = ""
         table: DataFrame = self.content
-        content_representation += f"Table {self.doc_id}: \n```col: {" | ".join(table.columns)}"
+        content_representation += f"Table {self.doc_id}:\ncol: {" | ".join(table.columns)}"
         if len(table) > 0:
             # Sample 5 rows to represent the table
             sample_rows = table.sample(min(5, len(table)), random_state=42)
@@ -84,7 +84,7 @@ class Table(AbstractDocument):
             for _, data in sample_rows.iterrows():
                 str_data = [str(i) for i in data]
                 content_representation += (
-                    f"\n- Sample Row {sample_row_idx}: {" | ".join(str_data)}"
+                    f"\nsample row {sample_row_idx}: {" | ".join(str_data)}"
                 )
                 sample_row_idx += 1
         return content_representation
@@ -111,6 +111,12 @@ class Text(AbstractDocument):
     def __init__(self, doc_id, retriever_type, content: str, metadata):
         super().__init__(doc_id, retriever_type, content, metadata)
 
+
+def convert_multi_retriever_results_to_str(retrieval_results: dict[RetrieverType, list[AbstractDocument]]):
+    representation = ""
+    for retriever_type in retrieval_results.keys():
+        representation += f"Retriever {retriever_type}:\n{convert_retrieval_results_to_str(retrieval_results[retriever_type])}"
+    return representation
 
 def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument]):
     representation = ""
