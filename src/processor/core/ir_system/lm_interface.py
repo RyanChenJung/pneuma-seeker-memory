@@ -61,26 +61,30 @@ class LMInterface:
         """
         Returns the list of relevant retrievers for the given requirements.
         """
-        relevant_retrievers: list[RetrieverType] = []
-        for i in RETRIEVER_INFO:
-            messages = [
-                LLMMessage(
-                    role=Role.SYSTEM.value,
-                    content=self.prompt_factory.get_retriever_classification_prompt(
-                        requirements,
-                        i["name"],
-                        i["description"],
-                    ),
-                )
-            ]
-            classification_output = self.llm.chat(messages).strip().lower()
-            if classification_output.startswith("yes"):
-                relevant_retrievers.append(i["name"])
+        return [
+            RetrieverType.PNEUMA,
+            RetrieverType.KNOWLEDGE_BASE
+        ]
+        # relevant_retrievers: list[RetrieverType] = []
+        # for i in RETRIEVER_INFO:
+        #     messages = [
+        #         LLMMessage(
+        #             role=Role.SYSTEM.value,
+        #             content=self.prompt_factory.get_retriever_classification_prompt(
+        #                 requirements,
+        #                 i["name"],
+        #                 i["description"],
+        #             ),
+        #         )
+        #     ]
+        #     classification_output = self.llm.chat(messages).strip().lower()
+        #     if classification_output.startswith("yes"):
+        #         relevant_retrievers.append(i["name"])
 
-        if len(relevant_retrievers) == 0:
-            # By default, use all retrievers if none is considered relevant by the LLM
-            relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
-        return relevant_retrievers
+        # if len(relevant_retrievers) == 0:
+        #     # By default, use all retrievers if none is considered relevant by the LLM
+        #     relevant_retrievers = [i["name"] for i in RETRIEVER_INFO]
+        # return relevant_retrievers
 
     def retrieve_documents(
         self, prompt: str, sources: list[str], k: int = 10
