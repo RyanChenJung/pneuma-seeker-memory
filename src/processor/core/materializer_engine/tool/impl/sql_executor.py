@@ -1,17 +1,20 @@
 # tools/sql_engine.py
+from logging import Logger
 import duckdb
 import pandas as pd
 
 from processor.core.materializer_engine.tool.abstract_tool import AbstractTool
 
 class SQLExecutor(AbstractTool):
-    def __init__(self):
+    def __init__(self, logger: Logger):
         self.db = duckdb.connect(database=":memory:")
+        self.logger = logger
 
     def execute(self, argument: str, **kwargs) -> pd.DataFrame:
         """
         Executes a SQL query. Can optionally register new tables via kwargs["tables"].
         """
+        self.logger.info(f"Executing this SQL query: {argument} over these tables: {kwargs}")
         # Clear previous tables
         for table in self.db.execute("SHOW TABLES").fetchall():
             self.db.execute(f"DROP TABLE {table[0]}")

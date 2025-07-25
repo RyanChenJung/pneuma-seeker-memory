@@ -18,12 +18,12 @@ from processor.utils.json_processor import parse_json
 class LLMPlanner:
     def __init__(self, llm: AbstractModel, logger: Logger, embed_model: AbstractModel):
         self.logger = logger
-        self.logger.info("Initializing LLMPlanner")
+        self.logger.info("Initializing LLMPlanner, the core component of Materializer Engine")
         self.llm = llm
         self.embed_model = embed_model
 
         self.operation_factory = OperationFactory()
-        self.tool_factory = ToolFactory()
+        self.tool_factory = ToolFactory(self.llm, self.embed_model, self.logger)
         self.prompt_factory = MEPromptFactory()
         self.state = MaterializerState()
 

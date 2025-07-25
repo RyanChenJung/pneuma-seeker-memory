@@ -25,8 +25,7 @@ class MEPromptFactory:
         retrieved_documents: set[AbstractDocument],
         intermediate_tables: dict[str, DataFrame],
     ) -> str:
-        return f"""
-You are a smart data scientist planning to materialize the following schemas:
+        return f"""You are a smart data scientist planning to materialize the following schemas:
 
 Target Schemas (these are the final tables you need to create):
 {json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}
@@ -36,9 +35,9 @@ Column Descriptions of Target Schemas:
 
 Current Progress:
 - Available Intermediate Tables: {list(intermediate_tables.keys())}
-- Retrieved Documents: {convert_retrieval_results_to_str(list(retrieved_documents))}
+- Previously Retrieved Documents: {convert_retrieval_results_to_str(list(retrieved_documents))}
 
-SQL Statements:
+SQL Statements (will be executed over the final tables):
 {sqls}
 
 Available Tools and Operations:

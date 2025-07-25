@@ -1,10 +1,12 @@
 from enum import Enum
+from logging import Logger
 from processor.core.materializer_engine.tool.abstract_tool import AbstractTool
 from processor.core.materializer_engine.tool.impl.document_retriever import (
     DocumentRetriever,
 )
 from processor.core.materializer_engine.tool.impl.python_executor import PythonExecutor
 from processor.core.materializer_engine.tool.impl.sql_executor import SQLExecutor
+from processor.model.interface.abstract_model import AbstractModel
 
 
 class ToolType(Enum):
@@ -14,10 +16,10 @@ class ToolType(Enum):
 
 
 class ToolFactory:
-    def __init__(self):
-        self.python_executor = PythonExecutor()
-        self.sql_executor = SQLExecutor()
-        self.document_retriever = DocumentRetriever()
+    def __init__(self, llm: AbstractModel, embed_model: AbstractModel, logger: Logger):
+        self.python_executor = PythonExecutor(logger)
+        self.sql_executor = SQLExecutor(logger)
+        self.document_retriever = DocumentRetriever(llm, embed_model, logger)
 
     def available_tools(self):
         return [

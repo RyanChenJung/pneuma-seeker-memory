@@ -1,10 +1,16 @@
+from logging import Logger
 from typing import Any
 from processor.core.materializer_engine.tool.abstract_tool import AbstractTool
 
 
 class PythonExecutor(AbstractTool):
+    def __init__(self, logger: Logger) -> None:
+        super().__init__()
+        self.logger = logger
+
     def execute(self, argument: str, **kwargs) -> Any:
         # Argument is the code
+        self.logger.info(f"Executing this Python code: {argument}")
         local_env = {}
         exec(argument, {}, local_env)
         return local_env.get("result", None)
