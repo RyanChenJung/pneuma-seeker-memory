@@ -16,7 +16,8 @@ from processor.model.llm_message import LLMMessage
 class MEPromptFactory:
     def get_planning_prompt(
         self,
-        target_schemas,
+        target_schemas: dict[str, DataFrame],
+        column_descriptions: dict[str, dict[str, str]],
         sqls,
         history: list[LLMMessage],
         tools: list[AbstractTool],
@@ -29,6 +30,9 @@ You are a smart data scientist planning to materialize the following schemas:
 
 Target Schemas (these are the final tables you need to create):
 {json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}
+
+Column Descriptions of Target Schemas:
+{column_descriptions}
 
 Current Progress:
 - Available Intermediate Tables: {list(intermediate_tables.keys())}

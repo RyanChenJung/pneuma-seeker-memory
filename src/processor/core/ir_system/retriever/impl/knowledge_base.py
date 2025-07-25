@@ -1,3 +1,4 @@
+import shutil
 import bm25s
 import os
 
@@ -110,66 +111,67 @@ class KnowledgeBase(AbstractRetriever):
 
         new_global_document = False
         new_local_document = False
-        for item in documents:
-            if not isinstance(item, Knowledge):
-                raise ValueError("All documents must be of type Knowledge.")
-            if item.metadata["type"] == "local":
-                new_local_document = True
-            elif item.metadata["type"] == "global":
-                new_global_document = True
-
-        if new_local_document and os.path.exists(self.LOCAL_INDEX_PATH):
+        
+        # Get existing documents first
+        if os.path.exists(self.LOCAL_INDEX_PATH):
             retriever = bm25s.BM25.load(self.LOCAL_INDEX_PATH, load_corpus=True)
             if retriever.corpus is not None:
                 corpus_json_local.extend(retriever.corpus)
-            os.rmdir(self.LOCAL_INDEX_PATH)
         
-        if new_global_document and os.path.exists(self.GLOBAL_INDEX_PATH):
+        if os.path.exists(self.GLOBAL_INDEX_PATH):
             retriever = bm25s.BM25.load(self.GLOBAL_INDEX_PATH, load_corpus=True)
             if retriever.corpus is not None:
                 corpus_json_global.extend(retriever.corpus)
-            os.rmdir(self.GLOBAL_INDEX_PATH)
 
-        for doc_id, document in enumerate(documents):
+        # Calculate the next available ID
+        existing_ids = set()
+        for corpus in [corpus_json_local, corpus_json_global]:
+            for doc in corpus:
+                doc_id = int(doc["metadata"]["doc_id"].split("_")[1])
+                existing_ids.add(doc_id)
+        next_id = max(existing_ids) + 1 if existing_ids else 0
+
+        # Process new documents
+        for document in documents:
+            if not isinstance(document, Knowledge):
+                raise ValueError("All documents must be of type Knowledge.")
+            
+            doc_entry = {
+                "text": document.content,
+                "metadata": {
+                    "doc_id": f"kb_{next_id}",
+                    "type": document.metadata["type"],
+                    "user": document.metadata["user"],
+                }
+            }
+            next_id += 1
+
             if document.metadata["type"] == "local":
-                corpus_json_local.append(
-                    {
-                        "text": document.content,
-                        "metadata": {
-                            "doc_id": f"kb_{doc_id}",
-                            "type": document.metadata["type"],  # Either local or global
-                            "user": document.metadata["user"],
-                        },
-                    }
-                )
+                new_local_document = True
+                corpus_json_local.append(doc_entry)
             elif document.metadata["type"] == "global":
-                corpus_json_global.append(
-                    {
-                        "text": document.content,
-                        "metadata": {
-                            "doc_id": f"kb_{doc_id}",
-                            "type": document.metadata["type"],  # Either local or global
-                            "user": document.metadata["user"],
-                        },
-                    }
-                )
-        
+                new_global_document = True
+                corpus_json_global.append(doc_entry)
+
+        # Save indices if we have new documents
         if new_global_document:
+            if os.path.exists(self.GLOBAL_INDEX_PATH):
+                shutil.rmtree(self.GLOBAL_INDEX_PATH)
             corpus_text = [doc["text"] for doc in corpus_json_global]
             corpus_tokens = bm25s.tokenize(
                 corpus_text, stopwords="en", stemmer=self.stemmer, show_progress=False
             )
-
             retriever = bm25s.BM25(corpus=corpus_json_global)
             retriever.index(corpus_tokens, show_progress=True)
             retriever.save(self.GLOBAL_INDEX_PATH, corpus=corpus_json_global)
         
         if new_local_document:
+            if os.path.exists(self.LOCAL_INDEX_PATH):
+                shutil.rmtree(self.LOCAL_INDEX_PATH)
             corpus_text = [doc["text"] for doc in corpus_json_local]
             corpus_tokens = bm25s.tokenize(
                 corpus_text, stopwords="en", stemmer=self.stemmer, show_progress=False
             )
-
             retriever = bm25s.BM25(corpus=corpus_json_local)
             retriever.index(corpus_tokens, show_progress=True)
             retriever.save(self.LOCAL_INDEX_PATH, corpus=corpus_json_local)

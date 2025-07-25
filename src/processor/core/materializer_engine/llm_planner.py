@@ -28,7 +28,7 @@ class LLMPlanner:
         self.state = MaterializerState()
 
     def materialize_target_schemas(
-        self, target_schemas: dict[str, dict[str, str]], sqls: list[str]
+        self, target_schemas: dict[str, DataFrame], column_descriptions: dict[str, dict[str, str]], sqls: list[str]
     ) -> dict[str, DataFrame]:
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
@@ -38,6 +38,7 @@ class LLMPlanner:
             self.logger.info("Planning next materialization step")
             plan_prompt = self.prompt_factory.get_planning_prompt(
                 target_schemas=target_schemas,
+                column_descriptions=column_descriptions,
                 sqls=sqls,
                 history=self.state.action_history,
                 tools=self.tool_factory.available_tools(),
@@ -78,7 +79,7 @@ class LLMPlanner:
         self.logger.info("Materialization completed successfully")
         return self.state.materialized_target_schemas
 
-    def __check_completion(self, target_schemas: dict[str, dict[str, str]]) -> bool:
+    def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.materialized_target_schemas.keys())
         is_complete = all_schema_ids == materialized_schema_ids
@@ -87,7 +88,7 @@ class LLMPlanner:
         )
         return is_complete
 
-    def __execute_plan(self, plan: dict, target_schemas: dict[str, dict[str, str]]) -> Any:
+    def __execute_plan(self, plan: dict, target_schemas: dict[str, DataFrame]) -> Any:
         step_type = plan["step_type"]
         self.logger.info(f"Executing plan step: {step_type}")
 
@@ -171,7 +172,7 @@ class LLMPlanner:
         raise ValueError(f"Could not find input '{input_id}' in any available sources")
 
     def __update_state_with_result(
-        self, name: str, result: Any, target_schemas: dict[str, dict[str, str]]
+        self, name: str, result: Any, target_schemas: dict[str, DataFrame]
     ):
         if result is None:
             self.logger.info(f"Skipping update for {name} - result is None")
@@ -186,7 +187,7 @@ class LLMPlanner:
         )
         # Validate schema if this is a target schema
         if name in target_schemas:
-            expected_columns = set(target_schemas[name])
+            expected_columns = set(target_schemas[name].columns)
             actual_columns = set(result.columns)
             if expected_columns != actual_columns:
                 raise ValueError(
