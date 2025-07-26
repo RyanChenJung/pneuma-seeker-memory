@@ -497,11 +497,11 @@ class Pneuma(AbstractRetriever):
         self, table_name: str, columns: str, column: str, table_description: Optional[str] = None
     ):
         if table_description is not None:
-            return f"""A table, which represents ```{table_description}```, has the following columns:
+            return f"""A table with the name {table_name}, which represents ```{table_description}```, has the following columns:
 /*
 {columns}
 */
-Describe very briefly what the ```{column}``` column represents. If not possible, simply state "No description.\""""
+Describe very briefly what the ```{column}``` column represents. Consider the table name as well if relevant to contextualize the description. If not possible, simply state "No description.\""""
         else:
             return f"""A table with the name {table_name} has the following columns:
 /*

@@ -1,4 +1,5 @@
 from logging import Logger
+from typing import Optional
 from processor.core.ir_system.ir_prompt_factory import IRPromptFactory
 from processor.core.ir_system.ir_data_model import (
     AbstractDocument,
@@ -87,13 +88,16 @@ class LMInterface:
         # return relevant_retrievers
 
     def retrieve_documents(
-        self, prompt: str, sources: list[str], k: int = 10
+        self, prompt: str, sources: list[str], k: int = 10, retriever_types: Optional[list[RetrieverType]] = None
     ) -> dict[RetrieverType, list[AbstractDocument]]:
         """
         Retrieves context from the IR system with auto sanity check mechanism.
         """
         self.logger.info(f"Starting document retrieval for prompt: {prompt[:100]}...")
-        relevant_retrievers = self.get_relevant_retrievers(prompt)
+        if retriever_types is not None:
+            relevant_retrievers = retriever_types
+        else:
+            relevant_retrievers = self.get_relevant_retrievers(prompt)
         self.logger.info(f"Selected retrievers: {relevant_retrievers}")
 
         all_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = dict()
