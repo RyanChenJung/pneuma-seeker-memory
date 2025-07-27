@@ -3,10 +3,9 @@ from numpy import ndarray
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    set_seed,
-    TextGenerationPipeline,
 )
-from torch import cuda
+from transformers.trainer_utils import set_seed
+from torch import cuda, manual_seed
 
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
@@ -44,8 +43,14 @@ class Qwen(AbstractModel):
 
         if llm_option.seed is not None:
             set_seed(llm_option.seed, True)
+            manual_seed(llm_option.seed)
+            if cuda.is_available():
+                cuda.manual_seed_all(llm_option.seed)
         else:
             set_seed(42, True)
+            manual_seed(42)
+            if cuda.is_available():
+                cuda.manual_seed_all(42)
 
         generated_ids = self.model.generate(
             **model_inputs,
@@ -200,12 +205,6 @@ class Qwen(AbstractModel):
                     return [], 1
                 cuda.empty_cache()
                 print(f"Reducing batch size to {batch_size}")
-
-    def __get_text_gen_pipeline(self):
-        return TextGenerationPipeline(
-            model=self.model,
-            tokenizer=self.tokenizer,
-        )
 
     def encode(
         self,

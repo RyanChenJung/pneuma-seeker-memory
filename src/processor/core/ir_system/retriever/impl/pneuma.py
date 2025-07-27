@@ -123,7 +123,7 @@ class Pneuma(AbstractRetriever):
                     Table(
                         doc_id=table[:-4],
                         retriever_type=RetrieverType.PNEUMA,
-                        content=pd.read_csv(table, nrows=100),  # Reduce time for now
+                        content=pd.read_csv(table),
                         metadata=dict(),
                     )
                 )

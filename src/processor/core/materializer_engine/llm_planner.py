@@ -5,17 +5,18 @@ from pandas import DataFrame
 from processor.core.ir_system.ir_data_model import RetrieverType
 from processor.core.materializer_engine.me_prompt_factory import MEPromptFactory
 from processor.core.materializer_engine.me_state import MaterializerState
+from processor.core.materializer_engine.operation.document_retriever import (
+    get_documents,
+)
 from processor.core.materializer_engine.operation.operation_description import (
     get_operation_description,
 )
+from processor.core.materializer_engine.operation.python_executor import (
+    execute_python_code,
+)
+from processor.core.materializer_engine.operation.sql_executor import execute_sql
 from processor.core.materializer_engine.operation.std_inner_join import std_inner_join
 from processor.core.materializer_engine.operation.union import union
-from processor.core.materializer_engine.tool.document_retriever import get_documents
-from processor.core.materializer_engine.tool.python_executor import execute_python_code
-from processor.core.materializer_engine.tool.sql_executor import execute_sql
-from processor.core.materializer_engine.tool.tool_description import (
-    get_tool_description,
-)
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import LLMOption
@@ -46,17 +47,28 @@ class LLMPlanner:
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
         )
-        self.state.reset()
+        if not feedback:
+            self.state.reset()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
             content=self.prompt_factory.get_planning_prompt(
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
-                tool_description=get_tool_description(),
                 operation_description=get_operation_description(),
             ),
         )
+        if feedback:
+            sys_prompt = LLMMessage(
+                role=Role.SYSTEM.value,
+                content=self.prompt_factory.get_planning_prompt_with_feedback(
+                    target_schemas=target_schemas,
+                    column_descriptions=column_descriptions,
+                    sqls=sqls,
+                    operation_description=get_operation_description(),
+                    feedback=feedback,
+                ),
+            )
         num_iterations = 0
         llm_messages = [sys_prompt]
         while not self.__check_completion(target_schemas):
@@ -86,10 +98,10 @@ class LLMPlanner:
             """
             Output format:
             {{
-                "step_type": "operation" | "tool" | "internal_reasoning",
-                "message": null (if step_type is "operation" or "tool") | <"Reflect out loud (for yourself only)">
-                "name": null (if step_type is "internal_reasoning") | "Operation or Tool name",
-                "args": null (if step_type is "internal_reasoning") | {{"The argument to the function or tool that you call"}}
+                "step_type": "operation" | "internal_reasoning",
+                "message": null (if step_type is "operation") | <"Reflect out loud (for yourself only)">
+                "name": null (if step_type is "internal_reasoning") | "Operation name",
+                "args": null (if step_type is "internal_reasoning") | {{"The argument to the operation that you call"}}
                 "assign_to": null (if step_type is "internal_reasoning") | "result_table_id"  # Must match one of the target schema IDs if this is a final result
             }}
             """
@@ -110,7 +122,7 @@ class LLMPlanner:
             if step_type == "internal_reasoning":
                 message: str = plan["message"]
                 self.actions.append(f"Reasoned internally: {message}")
-            elif step_type == "operation" or step_type == "tool":
+            elif step_type == "operation":
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
                 assign_to: str = plan["assign_to"]
@@ -176,15 +188,15 @@ class LLMPlanner:
         return final_result
 
     def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
-        print(f"DEBUGGY: CHECK COMPLETION")
+        self.logger.info(f"CHECK COMPLETION")
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.intermediate_tables.keys())
-        print(f"==> all_schema_ids: {all_schema_ids}")
-        print(f"==> materialized_schema_ids: {materialized_schema_ids}")
+        self.logger.info(f"==> all_schema_ids: {all_schema_ids}")
+        self.logger.info(f"==> materialized_schema_ids: {materialized_schema_ids}")
 
         is_complete = all_schema_ids <= materialized_schema_ids
 
-        print(f"==> is_complete: {is_complete}")
+        self.logger.info(f"==> is_complete: {is_complete}")
 
         self.logger.info(
             f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)"
