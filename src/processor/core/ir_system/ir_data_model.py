@@ -115,7 +115,7 @@ class Text(AbstractDocument):
 def convert_multi_retriever_results_to_str(retrieval_results: dict[RetrieverType, list[AbstractDocument]]):
     representation = ""
     for retriever_type in retrieval_results.keys():
-        representation += f"Retriever {retriever_type}:\n{convert_retrieval_results_to_str(retrieval_results[retriever_type])}"
+        representation += f"Retriever {retriever_type}:\n{convert_retrieval_results_to_str(retrieval_results[retriever_type])}\n"
     return representation
 
 def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument]):

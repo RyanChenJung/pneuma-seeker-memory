@@ -18,4 +18,4 @@ def get_documents(
         },
         logger,
     )
-    return ir_system.retrieve_documents(prompt, source_datasets, 10)
+    return ir_system.retrieve_documents(prompt, source_datasets, 5)

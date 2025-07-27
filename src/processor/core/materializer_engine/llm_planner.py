@@ -1,13 +1,20 @@
-from typing import Any
-import pandas as pd
+from typing import Any, Optional
 
 from logging import Logger
 from pandas import DataFrame
+from processor.core.ir_system.ir_data_model import RetrieverType
 from processor.core.materializer_engine.me_prompt_factory import MEPromptFactory
 from processor.core.materializer_engine.me_state import MaterializerState
-from processor.core.materializer_engine.tool.tool_factory import ToolFactory
-from processor.core.materializer_engine.operation.operation_factory import (
-    OperationFactory,
+from processor.core.materializer_engine.operation.operation_description import (
+    get_operation_description,
+)
+from processor.core.materializer_engine.operation.std_inner_join import std_inner_join
+from processor.core.materializer_engine.operation.union import union
+from processor.core.materializer_engine.tool.document_retriever import get_documents
+from processor.core.materializer_engine.tool.python_executor import execute_python_code
+from processor.core.materializer_engine.tool.sql_executor import execute_sql
+from processor.core.materializer_engine.tool.tool_description import (
+    get_tool_description,
 )
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
@@ -18,184 +25,168 @@ from processor.utils.json_processor import parse_json
 class LLMPlanner:
     def __init__(self, llm: AbstractModel, logger: Logger, embed_model: AbstractModel):
         self.logger = logger
-        self.logger.info("Initializing LLMPlanner, the core component of Materializer Engine")
+        self.logger.info(
+            "Initializing LLMPlanner, the core component of Materializer Engine"
+        )
         self.llm = llm
         self.embed_model = embed_model
 
-        self.operation_factory = OperationFactory()
-        self.tool_factory = ToolFactory(self.llm, self.embed_model, self.logger)
         self.prompt_factory = MEPromptFactory()
         self.state = MaterializerState()
 
+        self.actions: list[str] = []
+
     def materialize_target_schemas(
-        self, target_schemas: dict[str, DataFrame], column_descriptions: dict[str, dict[str, str]], sqls: list[str]
+        self,
+        target_schemas: dict[str, DataFrame],
+        column_descriptions: dict[str, dict[str, str]],
+        sqls: list[str],
+        feedback: Optional[str] = None,
     ) -> dict[str, DataFrame]:
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
         )
         self.state.reset()
-        while not self.__check_completion(target_schemas):
-            self.logger.info("Planning next materialization step")
-            plan_prompt = self.prompt_factory.get_planning_prompt(
+        sys_prompt = LLMMessage(
+            role=Role.SYSTEM.value,
+            content=self.prompt_factory.get_planning_prompt(
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
-                history=self.state.action_history,
-                tools=self.tool_factory.available_tools(),
-                operations=self.operation_factory.available_operations(),
-                retrieved_documents=self.state.current_retrieved_documents,
-                intermediate_tables=self.state.intermediate_tables,
+                tool_description=get_tool_description(),
+                operation_description=get_operation_description(),
+            ),
+        )
+        num_iterations = 0
+        llm_messages = [sys_prompt]
+        while not self.__check_completion(target_schemas):
+            self.logger.info("Planning next materialization step")
+            self.logger.info("Requesting LLM response for plan")
+            llm_messages.append(
+                LLMMessage(
+                    role=Role.USER.value,
+                    content=self.prompt_factory.get_context_prompt(
+                        self.state.current_retrieved_documents,
+                        self.state.intermediate_tables,
+                        self.actions,
+                        num_iterations,
+                    ),
+                )
             )
 
-            self.logger.info("Requesting LLM response for plan")
-            response = self.llm.chat(
-                [
-                    LLMMessage(
-                        role=Role.SYSTEM.value,
-                        content=plan_prompt,
-                    )
-                ],
-                LLMOption(json_mode=True),
-            )
-            self.state.action_history.append(
-                LLMMessage(role=Role.ASSISTANT.value, content=response)
+            num_iterations += 1
+            response = self.llm.chat(llm_messages, LLMOption(json_mode=True))
+            llm_messages.append(
+                LLMMessage(
+                    role=Role.ASSISTANT.value,
+                    content=response,
+                )
             )
             self.logger.info(f"LLM response: {response}")
+            """
+            Output format:
+            {{
+                "step_type": "operation" | "tool" | "internal_reasoning",
+                "message": null (if step_type is "operation" or "tool") | <"Reflect out loud (for yourself only)">
+                "name": null (if step_type is "internal_reasoning") | "Operation or Tool name",
+                "args": null (if step_type is "internal_reasoning") | {{"The argument to the function or tool that you call"}}
+                "assign_to": null (if step_type is "internal_reasoning") | "result_table_id"  # Must match one of the target schema IDs if this is a final result
+            }}
+            """
+            plan: dict[str, Any] = parse_json(response)
+            step_type: str = plan["step_type"]
 
-            try:
-                plan = parse_json(response)
-                self.logger.info(
-                    f"Executing plan of type: {plan.get('step_type')} with name: {plan.get('name')}"
-                )
-                result = self.__execute_plan(plan, target_schemas)
-                self.logger.info(f"Updating state with result for: {plan['assign_to']}")
-                self.__update_state_with_result(
-                    plan["assign_to"], result, target_schemas
-                )
-            except Exception as e:
-                self.logger.error(f"Failed to execute plan: {e}", exc_info=True)
-                continue
+            curr_retrieved_docs_tables_only: dict[str, DataFrame] = dict()
+            for retriever_type in self.state.current_retrieved_documents:
+                if retriever_type == RetrieverType.PNEUMA:
+                    docs = self.state.current_retrieved_documents[retriever_type]
+                    for doc in docs:
+                        curr_retrieved_docs_tables_only[doc.doc_id] = doc.content
+            all_tables = {
+                **curr_retrieved_docs_tables_only,
+                **self.state.intermediate_tables,
+            }
 
+            if step_type == "internal_reasoning":
+                message: str = plan["message"]
+                self.actions.append(f"Reasoned internally: {message}")
+            elif step_type == "operation" or step_type == "tool":
+                op_name: str = plan["name"]
+                op_args: dict[str, Any] = plan["args"]
+                assign_to: str = plan["assign_to"]
+                if op_name == "Standard Inner Join":
+                    left_table_id: str = op_args["left_table_id"]
+                    right_table_id: str = op_args["right_table_id"]
+                    join_key: str = op_args["join_key"]
+                    join_res = std_inner_join(
+                        left_table_id,
+                        right_table_id,
+                        all_tables,
+                        join_key,
+                    )
+                    self.state.intermediate_tables[assign_to] = join_res
+                    self.actions.append(
+                        f"Performed standard inner join between {left_table_id} and {right_table_id} with join key {join_key}, resulting in {assign_to}"
+                    )
+                elif op_name == "Union":
+                    table_ids: list[str] = op_args["table_ids"]
+                    union_res = union(all_tables, table_ids)
+                    self.state.intermediate_tables[assign_to] = union_res
+                    self.actions.append(
+                        f"Performed union between these tables: {table_ids}, resulting in {assign_to}"
+                    )
+                elif op_name == "Document Retriever":
+                    prompt: str = op_args["prompt"]
+                    self.state.current_retrieved_documents = get_documents(
+                        self.llm, self.embed_model, self.logger, prompt, ["environment"]
+                    )
+                    self.actions.append(
+                        f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
+                    )
+                elif op_name == "Python Executor":
+                    python_code: str = op_args["code"]
+                    exec_res = execute_python_code(python_code, all_tables, self.logger)
+                    if isinstance(exec_res, DataFrame):
+                        self.state.intermediate_tables[assign_to] = exec_res
+                        self.actions.append(
+                            f"Successfully executed the Python code, resulting in a table named {assign_to}"
+                        )
+                    else:
+                        self.actions.append(
+                            f"Successfully executed the Python code, resulting in this: {exec_res}"
+                        )
+                elif op_name == "SQL Executor":
+                    sql_query: str = op_args["sql_query"]
+                    exec_res = execute_sql(self.logger, sql_query, all_tables)
+                    self.state.intermediate_tables[assign_to] = exec_res
+                    self.actions.append(
+                        f"Successfully executed the SQL query, resulting in a table named {assign_to}"
+                    )
+                else:
+                    self.actions.append(
+                        f"Trying to perform/execute {op_name}, but it is not a valid operation."
+                    )
+            else:
+                self.actions.append(f"The step {step_type} is not a valid action.")
         self.logger.info("Materialization completed successfully")
-        return self.state.materialized_target_schemas
+        final_result: dict[str, DataFrame] = dict()
+        for key, value in self.state.intermediate_tables.items():
+            if key in target_schemas.keys():
+                final_result[key] = value
+        return final_result
 
     def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
+        print(f"DEBUGGY: CHECK COMPLETION")
         all_schema_ids = set(target_schemas.keys())
-        materialized_schema_ids = set(self.state.materialized_target_schemas.keys())
-        is_complete = all_schema_ids == materialized_schema_ids
+        materialized_schema_ids = set(self.state.intermediate_tables.keys())
+        print(f"==> all_schema_ids: {all_schema_ids}")
+        print(f"==> materialized_schema_ids: {materialized_schema_ids}")
+
+        is_complete = all_schema_ids <= materialized_schema_ids
+
+        print(f"==> is_complete: {is_complete}")
+
         self.logger.info(
             f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)"
         )
         return is_complete
-
-    def __execute_plan(self, plan: dict, target_schemas: dict[str, DataFrame]) -> Any:
-        step_type = plan["step_type"]
-        self.logger.info(f"Executing plan step: {step_type}")
-
-        if step_type == "operation":
-            self.logger.info(f"Executing operation: {plan['name']}")
-            operation = self.operation_factory.get_operation(plan["name"])
-            inputs = [self.__resolve_input(input_id) for input_id in plan["inputs"]]
-            self.logger.info(f"Operation inputs resolved: {len(inputs)} inputs")
-            return operation.execute(*inputs, **plan.get("parameters", {}))
-
-        elif step_type == "tool":
-            self.logger.info(f"Executing tool: {plan['name']}")
-            tool = self.tool_factory.get_tool(plan["name"])
-
-            # Get the main input
-            main_input = (
-                plan["inputs"][0]
-                if isinstance(plan["inputs"], list)
-                else plan["inputs"]
-            )
-
-            # Prepare tool-specific parameters
-            tool_params = {}
-
-            if plan["name"] == "SQL Executor" and "tables" in plan["parameters"]:
-                # Resolve table references to actual DataFrames
-                table_dict = {}
-                for table_name, table_id in plan["parameters"]["tables"].items():
-                    table_dict[table_name] = self.__resolve_input(table_id)
-                tool_params["tables"] = table_dict
-
-            elif plan["name"] == "Document Retriever":
-                tool_params["llm"] = self.llm
-                tool_params["embed_model"] = self.embed_model
-
-            elif plan["name"] == "Python Executor":
-                # Add state variables to Python context
-                tool_params["context"] = {
-                    "intermediate_tables": self.state.intermediate_tables,
-                    "target_schemas": target_schemas,
-                    "retrieved_documents": self.state.current_retrieved_documents,
-                }
-
-            self.logger.info(f"Executing tool with parameters: {tool_params}")
-            result = tool.execute(main_input, **tool_params)
-
-            # Special handling for Document Retriever results
-            if plan["name"] == "Document Retriever":
-                self.logger.info(
-                    f"Updating retrieved documents with {len(result)} new documents"
-                )
-                # Update current retrieved documents
-                for retriever_docs in result.values():
-                    self.state.current_retrieved_documents.update(retriever_docs)
-                # Return None since we don't want to store this result
-                return None
-
-            return result
-        else:
-            self.logger.error(f"Unknown step type encountered: {step_type}")
-            raise ValueError(f"Unknown step type: {step_type}")
-
-    def __resolve_input(self, input_id: str) -> DataFrame:
-        self.logger.info(f"Resolving input: {input_id}")
-        # Check intermediate tables first
-        if input_id in self.state.intermediate_tables:
-            return self.state.intermediate_tables[input_id]
-
-        # Then check materialized schemas
-        if input_id in self.state.materialized_target_schemas:
-            return self.state.materialized_target_schemas[input_id]
-
-        # Finally check retrieved documents
-        for doc in self.state.current_retrieved_documents:
-            if doc.doc_id == input_id:
-                if isinstance(doc.content, DataFrame):
-                    return doc.content
-                raise ValueError(f"Document {input_id} content is not a DataFrame")
-
-        self.logger.error(f"Failed to resolve input: {input_id}")
-        raise ValueError(f"Could not find input '{input_id}' in any available sources")
-
-    def __update_state_with_result(
-        self, name: str, result: Any, target_schemas: dict[str, DataFrame]
-    ):
-        if result is None:
-            self.logger.info(f"Skipping update for {name} - result is None")
-            return
-
-        if not isinstance(result, pd.DataFrame):
-            self.logger.warning(f"Result '{name}' is not a DataFrame, skipping.")
-            return
-
-        self.logger.info(
-            f"Updating state with result for {name} (shape: {result.shape})"
-        )
-        # Validate schema if this is a target schema
-        if name in target_schemas:
-            expected_columns = set(target_schemas[name].columns)
-            actual_columns = set(result.columns)
-            if expected_columns != actual_columns:
-                raise ValueError(
-                    f"Schema mismatch for {name}. Expected: {expected_columns}, Got: {actual_columns}"
-                )
-
-        # Store result
-        if name in target_schemas:
-            self.state.materialized_target_schemas[name] = result
-        else:
-            self.state.intermediate_tables[name] = result
