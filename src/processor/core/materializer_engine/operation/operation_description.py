@@ -10,7 +10,7 @@ def get_operation_description():
     - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, list of strings, or whatever (you will be informed about the output, but make sure it is not too long, else just produce a table)
     - Common libraries like pandas, numpy are available (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
     - Ensure your code uses Pandas DataFrame if you want to manipulate tables
-    - Because we use Pandas and Numpy, you can transform the values of certain columns as well. For example, if the sqls expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it.
+    - Because we use Pandas and Numpy, you can transform the values of certain columns as well. For example, if the sqls expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values in this case.
     - All tables, whether retrieved or the ones you formed, are all available in the execution environment in a Python dictionary named "tables". You can simply access the tables you want using their IDs as keys (e.g., tables["../../data_src/environment/dataset/[table_name]"]), and you get them directly in Pandas DataFrame format.
     - Make sure to assign the result to 'result' variable
     - Args: {"code": "<Python code string>"}
