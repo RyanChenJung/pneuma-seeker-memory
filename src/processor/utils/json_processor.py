@@ -23,3 +23,12 @@ def parse_json(json_string: str) -> Any:
     if json_string.startswith("json"):
         json_string = json_string[4:]
     return json.loads(json_string)
+
+def parse_sql(sql_string: str) -> str:
+    if sql_string.startswith("```"):
+        sql_string = sql_string[3:]
+    if sql_string.endswith("```"):
+        sql_string = sql_string[:-3]
+    if sql_string.startswith("sql"):
+        sql_string = sql_string[3:]
+    return sql_string
