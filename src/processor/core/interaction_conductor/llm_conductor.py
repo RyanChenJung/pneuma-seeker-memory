@@ -18,7 +18,13 @@ PAST_INTERACTIONS_LIMIT = 5
 
 
 class LLMConductor:
-    def __init__(self, llm_path: str, embed_model_path: str, logger: Logger) -> None:
+    def __init__(
+        self,
+        llm_path: str,
+        embed_model_path: str,
+        logger: Logger,
+        data_sources: list[str],
+    ) -> None:
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
         self.logger = logger
@@ -31,7 +37,10 @@ class LLMConductor:
             dict()
         )
 
-        self.materializer = LLMPlanner(self.llm, self.logger, self.embed_model)
+        self.materializer = LLMPlanner(
+            self.llm, self.logger, self.embed_model, data_sources
+        )
+        self.data_sources = data_sources
 
     def process_input(self, human_input: str, human_id: str) -> str:
         self.logger.info(f"Processing human input: {human_input}")
@@ -159,7 +168,7 @@ class LLMConductor:
             )
             self.current_retrieval_results = ir_system.retrieve_documents(
                 args["prompt"],
-                ["environment"],
+                self.data_sources,
                 10,  # Future-TODO: Change hard-coded sources and k
             )
             return "Successfully retrieved documents from the IR system. Notice that the `PREVIOUSLY RETRIEVED DATA FROM THE IR SYSTEM` has been updated."

@@ -24,7 +24,7 @@ from processor.utils.json_processor import parse_json
 
 
 class LLMPlanner:
-    def __init__(self, llm: AbstractModel, logger: Logger, embed_model: AbstractModel):
+    def __init__(self, llm: AbstractModel, logger: Logger, embed_model: AbstractModel, data_sources: list[str]):
         self.logger = logger
         self.logger.info(
             "Initializing LLMPlanner, the core component of Materializer Engine"
@@ -36,6 +36,7 @@ class LLMPlanner:
         self.state = MaterializerState()
 
         self.actions: list[str] = []
+        self.data_sources = data_sources
 
     def materialize_target_schemas(
         self,
@@ -150,7 +151,7 @@ class LLMPlanner:
                 elif op_name == "Document Retriever":
                     prompt: str = op_args["prompt"]
                     self.state.current_retrieved_documents = get_documents(
-                        self.llm, self.embed_model, self.logger, prompt, ["environment"]
+                        self.llm, self.embed_model, self.logger, prompt, self.data_sources
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
