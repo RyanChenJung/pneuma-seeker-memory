@@ -28,6 +28,7 @@ Static System First Turn:
 
 # %%
 import json
+import os
 
 def read_jsonl(file_path):
     """Reads a JSONL file and returns a list of JSON objects (dicts)."""
@@ -46,9 +47,7 @@ def write_jsonl(data, file_path):
 
 # %%
 SOURCE_DIR = "sources (kramabench)"
-KRAMABENCH_SRCS = [
-    "archeology.json"
-]
+KRAMABENCH_SRCS = os.listdir(SOURCE_DIR)
 
 final_bench: list[dict[str, str]] = []
 for kramabench_src in KRAMABENCH_SRCS:
