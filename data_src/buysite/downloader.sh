@@ -48,9 +48,13 @@ file_ids=(
 )
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+download_dir="$script_dir/dataset"
+
+# Create the dataset folder if it doesn't exist
+mkdir -p "$download_dir"
 
 for id in "${file_ids[@]}"; do
     full_url="${prefix}${id}"
     echo "Downloading file with ID: $id"
-    wget --content-disposition -P "$script_dir" "$full_url"
+    wget --content-disposition -P "$download_dir" "$full_url"
 done
