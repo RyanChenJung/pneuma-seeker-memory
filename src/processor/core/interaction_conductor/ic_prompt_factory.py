@@ -34,6 +34,7 @@ Some principles to remember:
     - For general inquiries, you may not need to use this tool and rely on your knowledge, but state clearly the sources of your information in the user-facing message.
     - Use when new or updated data is needed, but remember that calling this tool erases previously retrieved data (if any).
     - Args: `{{"prompt": "<retrieval query>"}}`
+    - VERY IMPORTANT: IR System only retrieves tabular/textual data. DO NOT ask IR System to manipulate data (e.g., ask it to list values of a column). Define SQL queries in the state's sqls and call the SQL engine.
 
 - **State Manipulation**
     - Updates Information Need State
@@ -60,13 +61,15 @@ Some principles to remember:
 
 - **Materializer Engine**
     - Fills the current target schemas with actual data
-    - Args: `""` (no input).
+    - Args (OPTIONAL; if no feedback, just set as null): `{{"feedback": "<feedback regarding previously materialized target schemas (e.g., I encountered error because the column...)>"}}`
     - **VERY IMPORTANT**: DO NOT be too eager to call Materializer Engine, especially when the user needs is still a bit general/exploratory/vague. This is a costly operation.
+    - If target schemas have been materialized, and you have defined some SQL queries (sqls), and found error when executing sqls. You can provide feedback to the materializer to fix the materialization results (e.g., fixing column format), then call the SQL Engine again.
 
 - **SQL Engine**
   - If you have defined `sqls` in the Information Need State AND have materialized the target schemas, you can run the SQL queries on the materialized target schemas
   - Args: `""` (no input).
-  - Again, remember that if you want to execute the SQLs, ensure that the `sqls` in the state is not empty AND the target schemas have been materialized, else you will get empty result or errors."""
+  - Again, remember that if you want to execute the SQLs, ensure that the `sqls` in the state is not empty AND the target schemas have been materialized, else you will get empty result or errors.
+  - Ensure the SQL queries, no matter if they have been executed or not, are what you need. If not, manipulate sqls in the state, then call SQL Engine."""
 
     def get_env_state_prompt(
         self,
@@ -103,7 +106,7 @@ Please output your decision for this step in either of the following formats (de
 
 {{
     "intent": "tool_call",
-    "tool": "IR System" | "Materializer Engine" | "State Manipulation" | "SQL Engine",
+    "tool": "ir_system" | "materializer_engine" | "state_manipulation" | "sql_engine",
     "args": { ... }
 }}
 

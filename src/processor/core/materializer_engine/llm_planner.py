@@ -38,6 +38,8 @@ class LLMPlanner:
         self.actions: list[str] = []
         self.data_sources = data_sources
 
+        self.feedback_iteration = 0
+
     def materialize_target_schemas(
         self,
         target_schemas: dict[str, DataFrame],
@@ -72,7 +74,7 @@ class LLMPlanner:
             )
         num_iterations = 0
         llm_messages = [sys_prompt]
-        while not self.__check_completion(target_schemas):
+        while not self.__check_completion(target_schemas, feedback):
             self.logger.info("Planning next materialization step")
             self.logger.info("Requesting LLM response for plan")
             llm_messages.append(
@@ -200,7 +202,10 @@ class LLMPlanner:
                 final_result[key] = value
         return final_result
 
-    def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
+    def __check_completion(self, target_schemas: dict[str, DataFrame], feedback: str | None) -> bool:
+        if feedback and self.feedback_iteration < 2:
+            self.feedback_iteration += 1
+            return False
         self.logger.info(f"CHECK COMPLETION")
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.intermediate_tables.keys())

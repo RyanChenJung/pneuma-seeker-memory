@@ -135,11 +135,9 @@ class LLMConductor:
                         content=f"You did some internal reasoning: {action_message}",
                     )
                 )
-            elif (
-                intent == "tool_call"
-                or intent != "communicate_with_user"
-                or intent != "internal_reasoning"
-            ) and tool is not None:
+            else:
+                if tool is None:
+                    tool = intent
                 tool_outcome = self.__execute_tool(tool, args)
                 llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=tool_outcome)
@@ -160,7 +158,7 @@ class LLMConductor:
         return user_facing_response
 
     def __execute_tool(self, tool: str, args: str | dict) -> str:
-        if tool == "IR System" and isinstance(args, dict):
+        if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
             ir_system = LMInterface(
                 {"llm": self.llm, "embed_model": self.embed_model},
@@ -172,7 +170,7 @@ class LLMConductor:
                 10,  # Future-TODO: Change hard-coded sources and k
             )
             return "Successfully retrieved documents from the IR system. Notice that the `PREVIOUSLY RETRIEVED DATA FROM THE IR SYSTEM` has been updated."
-        elif tool == "State Manipulation" and isinstance(args, dict):
+        elif (tool == "State Manipulation" or tool == "state_manipulation") and isinstance(args, dict):
             self.logger.info(f"State Manipulation request with params: {args}")
             target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
@@ -197,29 +195,34 @@ class LLMConductor:
 
             if sqls is not None:
                 self.info_need_state.sqls = sqls
+                self.info_need_state.is_sql_executed = False
                 modifications_happening = True
 
             if modifications_happening:
                 return "Successfully modified the state."
             return "No modification is done."
-        elif tool == "Materializer Engine":
+        elif (tool == "Materializer Engine" or tool == "materializer_engine"):
             self.logger.info(f"Materializer Engine called")
+            feedback = None
+            if "feedback" in args and args.get("feedback") != "":
+                feedback = args["feedback"]
             self.info_need_state.target_schemas = (
                 self.materializer.materialize_target_schemas(
                     self.info_need_state.target_schemas,
                     self.info_need_state.column_descriptions,
                     self.info_need_state.sqls,
+                    feedback,
                 )
             )
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."
-        elif tool == "SQL Engine":
+        elif (tool == "SQL Engine" or tool == "sql_engine"):
             self.logger.info("SQL Engine called")
-            execution_result: str = ""
+            execution_result: list[str] = []
             if not self.info_need_state.is_target_schemas_materialized:
                 return "Target schemas have not been materialized, so running SQL Engine will produce empty results."
             if len(self.info_need_state.sqls) == 0:
-                return "sqls is still empty, which means there is nothing to execute."
+                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then call SQL Engine again to execute them."
             execution_result = self.__execute_sqls()
 
             self.logger.info(f"SQL execution result output: {execution_result}")
@@ -246,7 +249,7 @@ class LLMConductor:
         for table_name, df in tables.items():
             con.register(table_name, df)
 
-        result = DataFrame()
+        results: list[DataFrame] = []
         for sql in sqls:
             self.logger.info(f"Sanity checking the SQL query {sql}")
             relevant_tables: dict[str, DataFrame] = dict()
@@ -258,7 +261,7 @@ class LLMConductor:
                     [
                         LLMMessage(
                             role=Role.SYSTEM.value,
-                            content="""You are a SQL query fixer. Given an input SQL query, check if it contains any syntactic or semantic errors (e.g., case sensitivity, unescaped identifiers, invalid field names, type mismatches, or non-standard functions for the target SQL engine: DuckDB). Fix the query as needed to ensure it runs correctly in the specified engine. Use double quotes for identifiers (e.g., "Beach Name" instead of Beach Name), and handle case sensitivity appropriately for string comparisons. Output the updated/fixed/same-if-no-issue SQL query directly without any explanation or formatting.""",
+                            content="""You are a SQL query fixer. Given an input SQL query, check if it contains any syntactic or semantic errors (e.g., case sensitivity, unescaped identifiers, invalid field names, type mismatches, or non-standard functions for the target SQL engine: DuckDB). Fix the query as needed to ensure it runs correctly in the specified engine. Use double quotes for identifiers (e.g., "Beach Name" instead of Beach Name), and handle case sensitivity appropriately for string comparisons. Also, we use DuckDB, so you may need to adjust the functions (e.g., change the function substring_index to substring). Output the updated/fixed/same-if-no-issue SQL query directly without any explanation or formatting.""",
                         ),
                         LLMMessage(
                             role=Role.USER.value,
@@ -267,16 +270,34 @@ class LLMConductor:
                     ]
                 )
             )
-            self.logger.info(f"Executing Fixed SQL: {fixed_sql}")
-            result = con.execute(fixed_sql).fetchdf()
-
-        self.logger.info(f"Final result shape: {result.shape}")
+            try:
+                self.logger.info(f"Executing Fixed SQL: {fixed_sql}")
+                result = con.execute(fixed_sql).fetchdf()
+                results.append(result)
+            except Exception as e:
+                results.append(
+                    DataFrame(
+                        columns=["error"],
+                        data=[
+                            [f"Error encountered: {e}. "
+                            "You may need to check the values of the relevant columns. "
+                            "If the format can be adjusted, use Materializer Engine with feedback argument. "
+                            "If there can be loss of information due to formatting (e.g., changing 'a or b' to 'a'), "
+                            "confirm with the user first, but directly tell them you will call the Materializer Engine to fix the issue if they agree."]
+                        ]
+                    )
+                )
+                print(e)
 
         # If the result has only one cell, return it as a scalar string
-        if result is not None and result.shape == (1, 1):
-            return str(result.iat[0, 0])
-
-        return str(result)
+        self.info_need_state.is_sql_executed = True
+        final_output: list[str] = []
+        for result in results:
+            if result.shape == (1, 1):
+                final_output.append(str(result.iat[0, 0]))
+            else:
+                final_output.append(str(result))
+        return final_output
 
     def __format_available_tables(self, tables: dict[str, DataFrame]):
         tables_repr = ""

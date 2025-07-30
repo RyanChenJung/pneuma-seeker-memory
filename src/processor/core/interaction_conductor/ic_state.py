@@ -15,6 +15,7 @@ class InformationNeedState:
         self.is_target_schemas_materialized = False
         self.column_descriptions: dict[str, dict[str, str]] = dict()
         self.sqls: list[str] = []
+        self.is_sql_executed = False
 
     def __str__(self) -> str:
         target_schemas_repr = ""
@@ -34,11 +35,11 @@ class InformationNeedState:
                     )
                     sample_row_idx += 1
             target_schemas_repr += "\n"
-        return f"""Target schemas (Is materialized? {self.is_target_schemas_materialized}):
+        return f"""Target schemas (Is materialized yet? {self.is_target_schemas_materialized}):
 {target_schemas_repr.strip()}
 
 Column descriptions of target schemas:
 {self.column_descriptions}
 
-SQLs to be run sequentially over the target schemas:
+SQLs to be run sequentially over the target schemas (Is executed yet? {self.is_sql_executed}):
 {self.sqls}"""
