@@ -50,6 +50,6 @@ class AbstractModel(ABC):
     def is_valid_json(self, text: str):
         try:
             json.loads(text)
-            return True
-        except json.JSONDecodeError:
-            return False
+            return (True, '')
+        except json.JSONDecodeError as j:
+            return (False, j)

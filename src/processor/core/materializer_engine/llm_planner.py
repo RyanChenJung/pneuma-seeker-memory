@@ -61,7 +61,7 @@ class LLMPlanner:
                 operation_description=get_operation_description(),
             ),
         )
-        if feedback:
+        if feedback and len(self.state.intermediate_tables) > 0:
             sys_prompt = LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_planning_prompt_with_feedback(
@@ -164,6 +164,8 @@ class LLMPlanner:
                     for target_schema_id, retrieved_table_id in table_mapping.items():
                         if retrieved_table_id.startswith("Table "):
                             retrieved_table_id = retrieved_table_id[6:]
+                        retrieved_table_id = retrieved_table_id.strip()
+                        target_schema_id = target_schema_id.strip()
                         self.logger.info(f"DEBUGGY: target_schema_id: {target_schema_id}; retrieved_table_id: {retrieved_table_id}")
                         if target_schema_id in target_schemas and retrieved_table_id in all_tables:
                             self.state.intermediate_tables[target_schema_id] = all_tables[retrieved_table_id]
@@ -184,7 +186,7 @@ class LLMPlanner:
                         )
                 elif op_name == "SQL Executor":
                     sql_query: str = op_args["sql_query"]
-                    exec_res = execute_sql(self.logger, sql_query, all_tables)
+                    exec_res = execute_sql(self.logger, sql_query, all_tables, self.llm)
                     self.state.intermediate_tables[assign_to] = exec_res
                     self.actions.append(
                         f"Successfully executed the SQL query, resulting in a table named {assign_to}"

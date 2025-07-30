@@ -220,9 +220,9 @@ class LLMConductor:
             self.logger.info("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_target_schemas_materialized:
-                return "Target schemas have not been materialized, so running SQL Engine will produce empty results."
+                return "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer Engine first, then you can call SQL Engine."
             if len(self.info_need_state.sqls) == 0:
-                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then call SQL Engine again to execute them."
+                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer Engine. Finally, you can call SQL Engine again to execute them."
             execution_result = self.__execute_sqls()
 
             self.logger.info(f"SQL execution result output: {execution_result}")
@@ -250,7 +250,7 @@ class LLMConductor:
             con.register(table_name, df)
 
         results: list[DataFrame] = []
-        for sql in sqls:
+        for sql_idx, sql in enumerate(sqls):
             self.logger.info(f"Sanity checking the SQL query {sql}")
             relevant_tables: dict[str, DataFrame] = dict()
             for table_id, table in tables.items():
@@ -261,7 +261,12 @@ class LLMConductor:
                     [
                         LLMMessage(
                             role=Role.SYSTEM.value,
-                            content="""You are a SQL query fixer. Given an input SQL query, check if it contains any syntactic or semantic errors (e.g., case sensitivity, unescaped identifiers, invalid field names, type mismatches, or non-standard functions for the target SQL engine: DuckDB). Fix the query as needed to ensure it runs correctly in the specified engine. Use double quotes for identifiers (e.g., "Beach Name" instead of Beach Name), and handle case sensitivity appropriately for string comparisons. Also, we use DuckDB, so you may need to adjust the functions (e.g., change the function substring_index to substring). Output the updated/fixed/same-if-no-issue SQL query directly without any explanation or formatting.""",
+                            content="""You are a SQL query fixer for DuckDB. 
+Given an input SQL query, check for syntactic or semantic errors (case sensitivity, unescaped identifiers, invalid field names, type mismatches, or unsupported functions). 
+Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible. 
+If no standard equivalent exists, use the closest DuckDB-supported function. 
+Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed. 
+Always output only the corrected SQL query, without explanations."""
                         ),
                         LLMMessage(
                             role=Role.USER.value,
@@ -270,24 +275,22 @@ class LLMConductor:
                     ]
                 )
             )
+            self.info_need_state.sqls[sql_idx] = fixed_sql
             try:
                 self.logger.info(f"Executing Fixed SQL: {fixed_sql}")
                 result = con.execute(fixed_sql).fetchdf()
                 results.append(result)
             except Exception as e:
-                results.append(
+                results = [
                     DataFrame(
                         columns=["error"],
                         data=[
-                            [f"Error encountered: {e}. "
-                            "You may need to check the values of the relevant columns. "
-                            "If the format can be adjusted, use Materializer Engine with feedback argument. "
-                            "If there can be loss of information due to formatting (e.g., changing 'a or b' to 'a'), "
-                            "confirm with the user first, but directly tell them you will call the Materializer Engine to fix the issue if they agree."]
+                            [f"Error encountered when executing this SQL: {fixed_sql} on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue and how to fix it."]
                         ]
                     )
-                )
+                ]
                 print(e)
+                break
 
         # If the result has only one cell, return it as a scalar string
         self.info_need_state.is_sql_executed = True

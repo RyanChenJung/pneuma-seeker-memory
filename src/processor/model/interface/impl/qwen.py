@@ -73,18 +73,18 @@ class Qwen(AbstractModel):
             0
         ]
         print(f"QWEN: response: {response}")
-        # if llm_option.json_mode:
-        #     fixing_iteration = 0
-        #     while not self.is_valid_json(response) and fixing_iteration <= 5:
-        #         appended_messages = messages + [
-        #             LLMMessage(role=Role.ASSISTANT.value, content=response),
-        #             LLMMessage(
-        #                 role=Role.USER.value,
-        #                 content="The JSON is invalid and hence cannot be parsed. Please fix it.",
-        #             ),
-        #         ]
-        #         response = self.chat(appended_messages)
-        #         fixing_iteration += 1
+        if llm_option.json_mode:
+            fixing_iteration = 0
+            while not self.is_valid_json(response)[0] and fixing_iteration <= 5:
+                appended_messages = messages + [
+                    LLMMessage(role=Role.ASSISTANT.value, content=response),
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content=f"The JSON is invalid and hence cannot be parsed. This is the error detail: {self.is_valid_json(response)[1]}. One possible issue is if a SQL query is separated into multiple strings without commas. In this case, combine them into a single string. Please fix it.",
+                    ),
+                ]
+                response = self.chat(appended_messages)
+                fixing_iteration += 1
         return response
 
     # def batch_chat(
