@@ -88,7 +88,7 @@ Plan our next step using either of these formats (depending on the step_type):
 
 {{
   "step_type": "operation",
-  "name": "Document Retriever" | "Python Executor" | "SQL Executor" | "Standard Inner Join" | "Union",
+  "name": "Document Retriever" | "Python Executor" | "Table Select" | "SQL Executor" | "Standard Inner Join" | "Union",
   "args": {{"The argument to the operation that we call"}}
   "assign_to": "result_table_id"  # Must match one of the target schema IDs if this is a final result (i.e., correspond to a target schema directly)
 }}

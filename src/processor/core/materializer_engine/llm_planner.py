@@ -126,7 +126,7 @@ class LLMPlanner:
             elif step_type == "operation":
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
-                assign_to: str = plan["assign_to"]
+                assign_to: str = plan.get("assign_to")
                 if op_name == "Standard Inner Join":
                     left_table_id: str = op_args["left_table_id"]
                     right_table_id: str = op_args["right_table_id"]
@@ -155,6 +155,18 @@ class LLMPlanner:
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
+                    )
+                elif op_name == "Table Select":
+                    self.logger.info(f"Enter Table Select")
+                    table_mapping = op_args
+                    for target_schema_id, retrieved_table_id in table_mapping.items():
+                        if retrieved_table_id.startswith("Table "):
+                            retrieved_table_id = retrieved_table_id[6:]
+                        self.logger.info(f"DEBUGGY: target_schema_id: {target_schema_id}; retrieved_table_id: {retrieved_table_id}")
+                        if target_schema_id in target_schemas and retrieved_table_id in all_tables:
+                            self.state.intermediate_tables[target_schema_id] = all_tables[retrieved_table_id]
+                    self.actions.append(
+                        f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed."
                     )
                 elif op_name == "Python Executor":
                     python_code: str = op_args["code"]
