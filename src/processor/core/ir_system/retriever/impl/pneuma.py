@@ -81,6 +81,9 @@ class Pneuma(AbstractRetriever):
 
             dictionary_id_bm25 = dict()
             if retriever.corpus is not None:
+                if len(retriever.corpus) < increased_k:
+                    print(f"Reducing increased_k from {increased_k} to {len(retriever.corpus)}")
+                    increased_k = len(retriever.corpus)
                 dictionary_id_bm25 = {
                     datum["metadata"]["table"]: datum_idx
                     for datum_idx, datum in enumerate(retriever.corpus)
