@@ -16,6 +16,11 @@ def get_operation_description():
     - Args: {"code": "<Python code string>"}
     - Again, DO NOT try to read a table using, for instance, pd.read_csv. Use tables["<ID>"], and you get it directly in a Pandas DataFrame format.
 
+- **Table Select**
+    - Selects retrieved tables directly as the materialized forms of some tables in target schemas.
+    - Args: {"<target schema ID>": "<retrieved table ID>"}
+    - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {"B": "A"}.
+
 - **SQL Executor**
     - Executes a SQL query on available tables to produce another table, NOT executing the `sqls`.
     - Supports standard SQL syntax
