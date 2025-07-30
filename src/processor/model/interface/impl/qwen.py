@@ -57,7 +57,7 @@ class Qwen(AbstractModel):
             max_new_tokens=(
                 llm_option.max_new_tokens
                 if llm_option.max_new_tokens is not None
-                else 10000
+                else 1000000
             ),
             do_sample=llm_option.do_sample,
             temperature=llm_option.temperature,
