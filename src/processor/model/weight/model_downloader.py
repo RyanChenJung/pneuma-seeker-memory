@@ -15,3 +15,8 @@ snapshot_download(repo_id, local_dir=local_dir, resume_download=True)
 repo_id = "mistralai/Mistral-7B-Instruct-v0.3"
 local_dir = "mistral-7b"
 snapshot_download(repo_id, local_dir=local_dir, resume_download=True)
+
+# LLM for SQL generator
+repo_id = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+local_dir = "qwen25coder-1_5b"
+snapshot_download(repo_id, local_dir=local_dir, resume_download=True)
