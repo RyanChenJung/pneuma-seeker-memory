@@ -38,6 +38,7 @@ class LLMPlanner:
         self.actions: list[str] = []
         self.data_sources = data_sources
 
+        self.is_feedback_mode = False
         self.feedback_iteration = 0
 
     def materialize_target_schemas(
@@ -47,10 +48,15 @@ class LLMPlanner:
         sqls: list[str],
         feedback: Optional[str] = None,
     ) -> dict[str, DataFrame]:
+        if feedback and len(self.state.intermediate_tables) > 0:
+            # This means IC asked to fix previously materialized target schemas (meaning it's feedback mode)
+            self.is_feedback_mode = True
+
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
         )
-        if not feedback:
+
+        if not self.is_feedback_mode:
             self.state.reset()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
@@ -61,7 +67,7 @@ class LLMPlanner:
                 operation_description=get_operation_description(),
             ),
         )
-        if feedback and len(self.state.intermediate_tables) > 0:
+        if self.is_feedback_mode:
             sys_prompt = LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_planning_prompt_with_feedback(
@@ -71,10 +77,11 @@ class LLMPlanner:
                     operation_description=get_operation_description(),
                     feedback=feedback,
                 ),
-            )
+            )            
+
         num_iterations = 0
         llm_messages = [sys_prompt]
-        while not self.__check_completion(target_schemas, feedback):
+        while not self.__check_completion(target_schemas):
             self.logger.info("Planning next materialization step")
             self.logger.info("Requesting LLM response for plan")
             llm_messages.append(
@@ -204,8 +211,8 @@ class LLMPlanner:
                 final_result[key] = value
         return final_result
 
-    def __check_completion(self, target_schemas: dict[str, DataFrame], feedback: str | None) -> bool:
-        if feedback and self.feedback_iteration < 2:
+    def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
+        if self.is_feedback_mode and self.feedback_iteration < 3:
             self.feedback_iteration += 1
             return False
         self.logger.info(f"CHECK COMPLETION")

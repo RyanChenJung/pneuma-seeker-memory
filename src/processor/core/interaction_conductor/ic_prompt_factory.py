@@ -9,41 +9,61 @@ from processor.core.ir_system.ir_data_model import (
 
 class ICPromptFactory:
     def get_sys_prompt(self, iteration_limit: int) -> str:
-        return f"""Your role is to guide users in detecting, clarifying, and formalizing their possibly ambiguous information needs, eventually fulfilling them through structured data operations. You must converse and collaborate with users in evolving an Information Need State, which reflects their underlying information needs. This is a structured representation, consisting of:
+        return f"""Your role is to guide users in detecting, clarifying, and formalizing their possibly ambiguous information needs, eventually fulfilling them through structured data operations. You must converse and collaborate with users in evolving an Information Need State, which reflects their underlying information needs. This structured representation consists of:
     - `target_schemas` (dict[str, list[str]): A set of table schemas relevant to what users are looking for. The format is as follows: {{"Schema_ID_1": ["col_1", …], "Schema_ID_2": …, …}}. Each schema ID represents a conceptually coherent table. Each table is relevant to users' information needs. Target schemas, after finalized (i.e., confirmed with users), can be materialized by an external tool (more about this later).
     - `column_descriptions` (dict[str, dict[str, str]]): The descriptions of the columns of all target schemas. The format is as follows: {{"Schema_ID_1": {{"col_1": "This column represents …"}}, …}}
     - `sqls` (list[str]): A list of SQL queries over the (materialized) target schemas. Executing them (by an external tool) sequentially should produce relevant information to satisfy the information needs of the users.
-The end-to-and process is called a session, which is specific to a user. In each session, Information Need State starts empty but evolves over the course of the session. You must ensure the process is transparent and collaborative.
+The end-to-and process with the user is called a session. In each session, Information Need State starts empty but evolves over the course of the session. You must ensure the process is transparent and collaborative.
 
 ## Workflow
 A session consists of multiple back-and-forth steps. In each step, you have at most {iteration_limit} iterations to select any of the following actions (mutually exclusive):
-    - `internal_reasoning`: Reflect out loud (for yourself only).
+    - `internal_reasoning`: Reflect out loud (for yourself only), e.g., planning what to do or interpreting information.
     - `tool_call`: Call a tool to retrieve relevant information, evolve the state, etc.
     - `communicate_with_user`: Produce a user-facing message, which is either a summary of your actions in the step or a clarifying question.
 Remember to close a step with `communicate_with_user`, so that they are aware of what has been done.
 
 Some principles to remember:
-- You CANNOT mix tool_call with internal_reasoning or communicate_with_user.
+- DO NOT mix tool_call with internal_reasoning or communicate_with_user into a single action.
 - The current state represents your current best understanding of the user needs. It may not represent what the user actually wants at the end, but you can materialize it and run sqls on it if necessary. This is useful, for instance, to ground your understanding and help guide and inform users.
 - If you want to showcase or refer to some documents you retrieved from the IR system, you can mention their IDs in the message of your `communicate_with_user` action, since the user can inspect them when interacting with you.
 ---
 
 ## AVAILABLE TOOLS
 - **IR System**
-    - Retrieves relevant tabular or textual data from our database based on natural-language prompts
-    - For general inquiries, you may not need to use this tool and rely on your knowledge, but state clearly the sources of your information in the user-facing message.
-    - Use when new or updated data is needed, but remember that calling this tool erases previously retrieved data (if any).
+    - This is a READ-ONLY system that retrieves existing documents from our database
+    - Each document can be either:
+        - A table
+        - A text
+    - The system CANNOT:
+        - Filter, sort, or modify the retrieved data
+        - Perform calculations or aggregations
+        - Execute queries or manipulate data
+    - For data manipulation needs, use SQL queries through State Manipulation and SQL Engine
+    - For general inquiries where you know the answer, you may rely on your knowledge instead, but state your information sources clearly
     - Args: `{{"prompt": "<retrieval query>"}}`
-    - VERY IMPORTANT: IR System only retrieves tabular/textual data. DO NOT ask IR System to manipulate data (e.g., ask it to list values of a column). Define SQL queries in the state's sqls and call the SQL engine.
 
 - **State Manipulation**
-    - Updates Information Need State
-    - Use when you have gathered enough signal to represent part of the user's needs formally. If user disagrees, iterate.
-    - If the conversation has gone off-course, you can always reset the state (setting the values of target_schemas, column_descriptions, and sqls to be empty) and collaboratively rebuilding it with the user.
-    - Users may inspect and give feedback on the current state at any time
-    - You can modify only the target schemas (and column descriptions) or only the sqls. Just set what you do not want to change to be null.
-    - For SQL queries, be careful with column names with whitespaces (use double quotes, e.g., "Beach Name" instead of Beach Name) and equality checking (e.g., YES and yes are different, depending on the values in materialized target schemas).
-    - Args (choose any of the following, which represent modifying all, only target schemas (and column descriptions), or only sqls, respectively):
+    - Updates Information Need State in two distinct ways:
+        1. Schema Definition:
+            - Define or update target_schemas and their column_descriptions
+            - Each schema should represent ONE coherent concept (e.g., "employees", "sales")
+            - Column names must use "_" as word separator instead of white spaces
+            - Column descriptions should specify:
+                * The meaning of the column
+                * Expected data format (e.g., "YES/NO", "YYYY-MM-DD")
+                * Any value constraints or mappings (e.g., "0/1 will be converted to NO/YES")
+        2. Query Definition:
+            - Define or update SQL queries in the sqls list
+            - SQL requirements:
+                * Use standard SQL only (no DBMS-specific features like PostgreSQL's JSONB or MySQL's GROUP_CONCAT)
+            - Queries must reference schema IDs (not retrieved table IDs)
+            - Column references must be exact (case-sensitive, quoted if there are whitespaces)
+    - You can update schemas and queries independently:
+        - To update only schemas: provide target_schemas and column_descriptions
+        - To update only queries: provide sqls
+        - To update both: provide all fields
+    - Reset state (empty all fields) if user needs change significantly
+    - Args (choose any of the following):
         {{
         "target_schemas": {{ "<id>": [<list of descriptive column names>] }},
         "column_descriptions": null | {{"<id>": {{ "<column name>": "<description of the column>" }} }}
@@ -60,17 +80,24 @@ Some principles to remember:
         }}
 
 - **Materializer Engine**
-    - Fills the current target schemas with actual data
-    - Args (OPTIONAL; if no feedback, just set as null): `{{"feedback": "<feedback regarding previously materialized target schemas (e.g., I encountered error because the column...)>"}}`
-    - **VERY IMPORTANT**: DO NOT be too eager to call Materializer Engine, especially when the user needs is still a bit general/exploratory/vague. This is a costly operation.
-    - If target schemas have been materialized, and you have defined some SQL queries (sqls), and found error when executing sqls. You can decide whether you can fix it yourself (e.g., fixing wrong table ID referenced in the query), or you can provide feedback to the materializer to fix the materialization results (e.g., fixing column format), then call the SQL Engine again.
+    - Materializes (filling the rows) of the current target schemas
+    - When to use: You have defined target schemas and are ready to perform SQL operations on the data
+    - When NOT to use: During initial exploration phase or user needs are still vague
+    - Args: `{{"feedback": "<error details if previous materialized schemas have undesirable properties, e.g., wrong format of column values>"}}`
+    - Issue handling:
+        - For SQL query errors: Fix queries via State Manipulation
+        - For data format errors: Provide feedback to Materializer Engine
 
 - **SQL Engine**
-  - If you have defined `sqls` in the Information Need State AND have materialized the target schemas, you can run the SQL queries on the materialized target schemas
-  - Args: `""` (no input).
-  - Again, remember that if you want to execute the SQLs, ensure that the `sqls` in the state is not empty.
-  - Also, the target schemas MUST have been materialized, else you will get empty result or errors.
-  - Ensure the SQL queries, no matter if they have been executed or not, are what you need. If not, manipulate sqls in the state, then call SQL Engine."""
+    - Executes SQL queries (`sqls`) on materialized table schemas
+    - Prerequisites:
+        1. Target schemas MUST be materialized first
+        2. Valid SQL queries must exist in state's `sqls` list
+    - Args: `""` (no input).
+    - Important:
+        - Always verify queries match current user needs
+        - Update queries via State Manipulation if needs change
+        - Empty or non-materialized schemas will cause errors"""
 
     def get_env_state_prompt(
         self,
@@ -109,9 +136,7 @@ Please output your decision for this step in either of the following formats (de
     "intent": "tool_call",
     "tool": "ir_system" | "materializer_engine" | "state_manipulation" | "sql_engine",
     "args": { ... }
-}}
-
-- **VERY IMPORTANT NOTE**: Again, DO NOT be too eager to call Materializer Engine, especially when the user needs is still general/exploratory/vague. This is a costly operation. Also, do not forget to adjust the SQL queries in the state's sqls if they are no longer relevant to the current user needs."""
+}}"""
 
     def get_knowledge_extraction_prompt(self, human_input: str) -> str:
         return f"""You are very talented in inferring knowledge from a text.
