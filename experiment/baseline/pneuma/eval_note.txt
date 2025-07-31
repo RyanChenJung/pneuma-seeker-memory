@@ -1,0 +1,2 @@
+- In pneuma.py, change reading the csv file to f"../{table}" (accounting for path differences)
+- 
