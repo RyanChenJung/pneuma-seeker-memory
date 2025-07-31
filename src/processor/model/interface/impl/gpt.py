@@ -5,12 +5,10 @@ from openai import OpenAI
 from processor.model.option import EmbeddingModelOption, LLMOption
 from processor.model.llm_message import LLMMessage
 from processor.model.interface.abstract_model import AbstractModel
-from dotenv import load_dotenv
 
 
 class GPT(AbstractModel):
     def __init__(self, model_name: str = "gpt-4o-mini"):
-        load_dotenv()
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model_name = model_name
 
