@@ -123,7 +123,9 @@ class LLMPlanner:
                 if retriever_type == RetrieverType.PNEUMA:
                     docs = self.state.current_retrieved_documents[retriever_type]
                     for doc in docs:
+                        alternative_doc_id = doc.doc_id.split('/')[-1]
                         curr_retrieved_docs_tables_only[doc.doc_id] = doc.content
+                        curr_retrieved_docs_tables_only[alternative_doc_id] = doc.content
             all_tables = {
                 **curr_retrieved_docs_tables_only,
                 **self.state.intermediate_tables,
@@ -177,7 +179,7 @@ class LLMPlanner:
                         if target_schema_id in target_schemas and retrieved_table_id in all_tables:
                             self.state.intermediate_tables[target_schema_id] = all_tables[retrieved_table_id]
                     self.actions.append(
-                        f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed."
+                        f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match with the ones in target schemas."
                     )
                 elif op_name == "Python Executor":
                     python_code: str = op_args["code"]
@@ -188,9 +190,14 @@ class LLMPlanner:
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
                         )
                     else:
-                        self.actions.append(
-                            f"Successfully executed the Python code, resulting in this: {exec_res}"
-                        )
+                        if exec_res is None:
+                            self.actions.append(
+                                f"The `result` variable is empty, which means the my Python code did not assign the outcome (e.g., table) to the variable `result`."
+                            )
+                        else:
+                            self.actions.append(
+                                f"Successfully executed the Python code, resulting in this: {exec_res}"
+                            )
                 elif op_name == "SQL Executor":
                     sql_query: str = op_args["sql_query"]
                     exec_res = execute_sql(self.logger, sql_query, all_tables, self.llm)
@@ -222,7 +229,24 @@ class LLMPlanner:
         self.logger.info(f"==> materialized_schema_ids: {materialized_schema_ids}")
 
         is_complete = all_schema_ids <= materialized_schema_ids
+        wrong_columns = []
+        if is_complete:
+            for target_schema_id in all_schema_ids:
+                if target_schema_id in materialized_schema_ids:
+                    self.logger.info(f"Checking the {target_schema_id}")
+                    target_table_columns = set(target_schemas[target_schema_id].columns)
+                    materialized_table_columns = set(self.state.intermediate_tables[target_schema_id].columns)
 
+                    self.logger.info(f"target_table_columns {target_table_columns}")
+                    self.logger.info(f"materialized_table_columns {materialized_table_columns}")
+                    if target_table_columns != materialized_table_columns:
+                        is_complete = False
+                        wrong_columns.extend(target_table_columns - materialized_table_columns)
+        if not is_complete:
+            self.actions.append(
+                f"You should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`): {wrong_columns}"
+            )
+            print(self.actions[-1])
         self.logger.info(f"==> is_complete: {is_complete}")
 
         self.logger.info(

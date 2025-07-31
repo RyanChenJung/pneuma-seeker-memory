@@ -4,11 +4,11 @@ def get_operation_description():
     - Retrieves relevant tabular or textual data from our database based on natural-language prompts
     - Please observe the existing, previously retrieved data, before calling this tool, since this tool erases previously retrieved data (if any). In other words, use this tool only when new or updated data is needed
     - Args: {"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the the target schema IDs>"}
-    - Example: {"prompt": "Get sales data for Q1 2025"}
+    - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
 
 - **Python Executor**
-    - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, list of strings, or whatever (you will be informed about the output, but make sure it is not too long, else just produce a table)
-    - Common libraries like pandas, numpy are available (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
+    - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, or list of strings
+    - Common libraries like pandas and numpy are available (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
     - Ensure your code uses Pandas DataFrame if you want to manipulate tables
     - Because we use Pandas and Numpy, you can transform the values of certain columns as well. For example, if the sqls expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values in this case.
     - All tables, whether retrieved or the ones you formed, are all available in the execution environment in a Python dictionary named "tables". You can simply access the tables you want using their IDs as keys (e.g., tables["../../data_src/environment/dataset/[table_name]"]), and you get them directly in Pandas DataFrame format.

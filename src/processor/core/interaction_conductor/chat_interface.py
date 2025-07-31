@@ -36,14 +36,16 @@ class ChatInterface:
             llm_path, embed_model_path, logger, data_sources
         )
         self.user_id = user_id
+        self.subsequent_chat = False
 
     def process_user_input(self, user_input: str) -> ChatInterfaceOutputFormat:
         """
         Accepts user prompt and forwards it to the LLM conductor for processing.
         """
-        system_response = self.llm_conductor.process_input(user_input, self.user_id)
+        system_response = self.llm_conductor.process_input(user_input, self.user_id, self.subsequent_chat)
         state = self.llm_conductor.info_need_state
         curr_retrieval_results = self.llm_conductor.current_retrieval_results
+        self.subsequent_chat = True
         return {
             "system_response": system_response,
             "state": state,

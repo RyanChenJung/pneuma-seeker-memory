@@ -1,4 +1,5 @@
 from logging import Logger
+from math import floor
 import duckdb
 from pandas import DataFrame
 from processor.core.interaction_conductor.ic_data_model import Interaction
@@ -42,7 +43,9 @@ class LLMConductor:
         )
         self.data_sources = data_sources
 
-    def process_input(self, human_input: str, human_id: str) -> str:
+    def process_input(self, human_input: str, human_id: str, subsequent_chat: bool) -> str:
+        if subsequent_chat:
+            human_input += " (Note: please check the current state (target schemas & sqls), are they still relevant, or do they need any adjustments?)"
         self.logger.info(f"Processing human input: {human_input}")
         # self.logger.info(f"Preliminary step: extracting domain knowledge")
         # domain_knowledge_extraction_messages = [
@@ -126,8 +129,9 @@ class LLMConductor:
                 self.interaction_history.append(
                     Interaction(human_input, action_message)
                 )
-                user_facing_response = action_message
-                is_user_facing_response = True
+                if num_iteration > floor(ITERATION_LIMIT/2):
+                    user_facing_response = action_message
+                    is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
                 llm_messages.append(
                     LLMMessage(
