@@ -1,2 +1,2 @@
 - In pneuma.py, change reading the csv file to f"../{table}" (accounting for path differences)
-- 
+- In ir_data_model.py, for biomedical data, set sample rows to be 2 (prevent longer-than-context-window error with GPT, which has 128k context window) 
