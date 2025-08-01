@@ -16,6 +16,20 @@ class InformationNeedState:
         self.column_descriptions: dict[str, dict[str, str]] = dict()
         self.sqls: list[str] = []
         self.is_sql_executed = False
+    
+    def get_table_repr(self, table: DataFrame, table_id: str):
+        table_repr = f"\nTable {table_id}:\ncol: {" | ".join(list(table.columns))}"
+        if len(table) > 0:
+            # Sample 5 rows to represent the table
+            sample_rows = table.sample(min(5, len(table)), random_state=42)
+            sample_row_idx = 1
+            for _, data in sample_rows.iterrows():
+                str_data = [str(i) for i in data]
+                table_repr += (
+                    f"\n- sample row {sample_row_idx}: {" | ".join(str_data)}"
+                )
+                sample_row_idx += 1
+        return table_repr
 
     def __str__(self) -> str:
         target_schemas_repr = ""

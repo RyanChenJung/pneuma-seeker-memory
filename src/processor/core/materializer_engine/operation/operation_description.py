@@ -18,7 +18,12 @@ def get_operation_description():
 
 - **Table Select**
     - Selects retrieved tables directly as the materialized forms of some tables in target schemas.
-    - Args: {"<target schema ID>": "<retrieved table ID>"}
+    - Args: {"<target schema ID>": {
+                {
+                    "id": "<retrieved table ID>",
+                    "columns": ["<The relevant columns from the selected retrieved table to form target schema ID>"]
+                }
+            }
     - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {"B": "A"}.
 
 - **SQL Executor**

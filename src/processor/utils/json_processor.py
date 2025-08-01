@@ -34,3 +34,15 @@ def parse_sql(sql_string: str) -> str:
     if sql_string.startswith("sql"):
         sql_string = sql_string[3:]
     return sql_string
+
+def parse_code(code: str):
+    """
+    Parses python code
+    """
+    if code.startswith("```"):
+        code = code[3:]
+    if code.endswith("```"):
+        code = code[:-3]
+    if code.startswith("python"):
+        code = code[6:]
+    return code

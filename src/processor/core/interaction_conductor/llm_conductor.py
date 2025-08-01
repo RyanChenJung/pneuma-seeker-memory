@@ -8,10 +8,13 @@ from processor.core.interaction_conductor.ic_state import InformationNeedState
 from processor.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
 from processor.core.ir_system.lm_interface import LMInterface
 from processor.core.materializer_engine.llm_planner import LLMPlanner
+from processor.core.materializer_engine.operation.python_executor import (
+    execute_python_code,
+)
 from processor.model.interface.model_factory import get_embed_model, get_llm
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import LLMOption
-from processor.utils.json_processor import parse_json, parse_sql
+from processor.utils.json_processor import parse_code, parse_json, parse_sql
 
 
 ITERATION_LIMIT = 5
@@ -43,7 +46,9 @@ class LLMConductor:
         )
         self.data_sources = data_sources
 
-    def process_input(self, human_input: str, human_id: str, subsequent_chat: bool) -> str:
+    def process_input(
+        self, human_input: str, human_id: str, subsequent_chat: bool
+    ) -> str:
         if subsequent_chat:
             human_input += " (Note: please check the current state (target schemas & sqls), are they still relevant, or do they need any adjustments?)"
         self.logger.info(f"Processing human input: {human_input}")
@@ -129,7 +134,7 @@ class LLMConductor:
                 self.interaction_history.append(
                     Interaction(human_input, action_message)
                 )
-                if num_iteration > floor(ITERATION_LIMIT/2):
+                if num_iteration > 1:
                     user_facing_response = action_message
                     is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
@@ -174,13 +179,15 @@ class LLMConductor:
                 10,  # Future-TODO: Change hard-coded sources and k
             )
             return "Successfully retrieved documents from the IR system. Notice that the `PREVIOUSLY RETRIEVED DATA FROM THE IR SYSTEM` has been updated."
-        elif (tool == "State Manipulation" or tool == "state_manipulation") and isinstance(args, dict):
+        elif (
+            tool == "State Manipulation" or tool == "state_manipulation"
+        ) and isinstance(args, dict):
             self.logger.info(f"State Manipulation request with params: {args}")
             target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
                 "column_descriptions"
             )
-            sqls: list[str] | None = args.get("sqls")
+            sqls: list[str] | None = args.get("sqls", [])
 
             modifications_happening = False
             if target_schemas is not None and column_descriptions is not None:
@@ -202,10 +209,62 @@ class LLMConductor:
                 self.info_need_state.is_sql_executed = False
                 modifications_happening = True
 
+                # Check if safe to run the SQL queries on the (materialized) target schemas
+                if (
+                    len(self.info_need_state.target_schemas.keys()) > 0
+                    and self.info_need_state.is_target_schemas_materialized
+                ):
+                    for sql in sqls:
+                        relevant_table_ids = [
+                            i
+                            for i in self.info_need_state.target_schemas.keys()
+                            if i in sql
+                        ]
+                        for relevant_table_id in relevant_table_ids:
+                            validation_messages = [
+                                LLMMessage(
+                                    role=Role.SYSTEM.value,
+                                    content="""You will receive an actual table and SQL query. Your task is to validate and transform the EXISTING table values to match the SQL query requirements.
+
+Example scenario:
+- If SQL has: WHERE status = 'ACTIVE'
+- But table has: status values like 'active' or 'Active'
+- You should transform to match case: df['status'] = df['status'].str.upper()
+
+Rules for Python code:
+1. Work ONLY with the provided table - do not create hypothetical scenarios
+2. Use the actual table from tables["<table_id>"] dictionary
+3. Transform values to match SQL requirements (case, format, etc.)
+4. Return transformed DataFrame in 'result' variable
+5. Available libraries: pandas (as pd) and numpy (as np)
+
+Output only the Python code needed for transformation. If no changes needed, use:
+result = tables["<table_id>"]""",
+                                ),
+                                LLMMessage(
+                                    role=Role.USER.value, 
+                                    content=f"""The SQL query: ```{sql}```\n\nThe ACTUAL table content: ```{self.info_need_state.get_table_repr(self.info_need_state.target_schemas[relevant_table_id], relevant_table_id)}```"""
+                                ),
+                            ]
+                            code = parse_code(self.llm.chat(validation_messages))
+                            resulting_table = execute_python_code(
+                                code,
+                                {
+                                    relevant_table_id: self.info_need_state.target_schemas[
+                                        relevant_table_id
+                                    ]
+                                },
+                                self.logger,
+                            )
+                            if isinstance(resulting_table, DataFrame):
+                                self.info_need_state.target_schemas[
+                                    relevant_table_id
+                                ] = resulting_table
+
             if modifications_happening:
                 return "Successfully modified the state."
             return "No modification is done."
-        elif (tool == "Materializer Engine" or tool == "materializer_engine"):
+        elif tool == "Materializer Engine" or tool == "materializer_engine":
             self.logger.info(f"Materializer Engine called")
             feedback = None
             if "feedback" in args and args.get("feedback") != "":
@@ -220,7 +279,7 @@ class LLMConductor:
             )
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."
-        elif (tool == "SQL Engine" or tool == "sql_engine"):
+        elif tool == "SQL Engine" or tool == "sql_engine":
             self.logger.info("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_target_schemas_materialized:
@@ -270,7 +329,7 @@ Given an input SQL query, check for syntactic or semantic errors (case sensitivi
 Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible. 
 If no standard equivalent exists, use the closest DuckDB-supported function. 
 Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed. 
-Always output only the corrected SQL query, without explanations."""
+Always output only the corrected SQL query, without explanations.""",
                         ),
                         LLMMessage(
                             role=Role.USER.value,
@@ -289,8 +348,10 @@ Always output only the corrected SQL query, without explanations."""
                     DataFrame(
                         columns=["error"],
                         data=[
-                            [f"Error encountered when executing this SQL: {fixed_sql} on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue and how to fix it."]
-                        ]
+                            [
+                                f"Error encountered when executing this SQL: {fixed_sql} on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue and how to fix it."
+                            ]
+                        ],
                     )
                 ]
                 print(e)

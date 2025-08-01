@@ -12,9 +12,12 @@ def execute_python_code(
 ):
     if logger is not None:
         logger.info(f"Executing this Python code: {python_code}")
-    env = dict()
-    env['tables'] = tables
-    exec(python_code, {"pd": pd, "np": np}, env)
+    try:
+        env = dict()
+        env['tables'] = tables
+        exec(python_code, {"pd": pd, "np": np}, env)
+    except Exception as e:
+        return e
     return env.get("result", None)
 
 

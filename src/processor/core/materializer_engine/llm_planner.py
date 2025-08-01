@@ -20,11 +20,17 @@ from processor.core.materializer_engine.operation.union import union
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import LLMOption
-from processor.utils.json_processor import parse_json
+from processor.utils.json_processor import parse_code, parse_json
 
 
 class LLMPlanner:
-    def __init__(self, llm: AbstractModel, logger: Logger, embed_model: AbstractModel, data_sources: list[str]):
+    def __init__(
+        self,
+        llm: AbstractModel,
+        logger: Logger,
+        embed_model: AbstractModel,
+        data_sources: list[str],
+    ):
         self.logger = logger
         self.logger.info(
             "Initializing LLMPlanner, the core component of Materializer Engine"
@@ -40,6 +46,8 @@ class LLMPlanner:
 
         self.is_feedback_mode = False
         self.feedback_iteration = 0
+
+        self.is_sql_alignment_checked = False
 
     def materialize_target_schemas(
         self,
@@ -77,11 +85,11 @@ class LLMPlanner:
                     operation_description=get_operation_description(),
                     feedback=feedback,
                 ),
-            )            
+            )
 
         num_iterations = 0
         llm_messages = [sys_prompt]
-        while not self.__check_completion(target_schemas):
+        while not self.__check_completion(target_schemas, sqls):
             self.logger.info("Planning next materialization step")
             self.logger.info("Requesting LLM response for plan")
             llm_messages.append(
@@ -123,9 +131,11 @@ class LLMPlanner:
                 if retriever_type == RetrieverType.PNEUMA:
                     docs = self.state.current_retrieved_documents[retriever_type]
                     for doc in docs:
-                        alternative_doc_id = doc.doc_id.split('/')[-1]
+                        alternative_doc_id = doc.doc_id.split("/")[-1]
                         curr_retrieved_docs_tables_only[doc.doc_id] = doc.content
-                        curr_retrieved_docs_tables_only[alternative_doc_id] = doc.content
+                        curr_retrieved_docs_tables_only[alternative_doc_id] = (
+                            doc.content
+                        )
             all_tables = {
                 **curr_retrieved_docs_tables_only,
                 **self.state.intermediate_tables,
@@ -162,7 +172,11 @@ class LLMPlanner:
                 elif op_name == "Document Retriever":
                     prompt: str = op_args["prompt"]
                     self.state.current_retrieved_documents = get_documents(
-                        self.llm, self.embed_model, self.logger, prompt, self.data_sources
+                        self.llm,
+                        self.embed_model,
+                        self.logger,
+                        prompt,
+                        self.data_sources,
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
@@ -170,24 +184,42 @@ class LLMPlanner:
                 elif op_name == "Table Select":
                     self.logger.info(f"Enter Table Select")
                     table_mapping = op_args
-                    for target_schema_id, retrieved_table_id in table_mapping.items():
+                    for target_schema_id, retrieved_table_info in table_mapping.items():
+                        retrieved_table_id: str = retrieved_table_info["id"]
+                        relevant_columns: list[str] = retrieved_table_info["columns"]
+
                         if retrieved_table_id.startswith("Table "):
                             retrieved_table_id = retrieved_table_id[6:]
                         retrieved_table_id = retrieved_table_id.strip()
                         target_schema_id = target_schema_id.strip()
-                        self.logger.info(f"DEBUGGY: target_schema_id: {target_schema_id}; retrieved_table_id: {retrieved_table_id}")
-                        if target_schema_id in target_schemas and retrieved_table_id in all_tables:
-                            self.state.intermediate_tables[target_schema_id] = all_tables[retrieved_table_id]
+                        self.logger.info(
+                            f"DEBUGGY: target_schema_id: {target_schema_id}; retrieved_table_id: {retrieved_table_id}"
+                        )
+                        if (
+                            target_schema_id in target_schemas
+                            and retrieved_table_id in all_tables
+                        ):
+                            # Trying to automatically resolve target and source columns
+                            table = all_tables[retrieved_table_id][relevant_columns]
+                            table.rename(
+                                columns=lambda col: '_'.join(col.lower().split(' ')),
+                                inplace=True
+                            )
+                            self.state.intermediate_tables[target_schema_id] = table
                     self.actions.append(
                         f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match with the ones in target schemas."
                     )
                 elif op_name == "Python Executor":
-                    python_code: str = op_args["code"]
+                    python_code: str = parse_code(op_args["code"])
                     exec_res = execute_python_code(python_code, all_tables, self.logger)
                     if isinstance(exec_res, DataFrame):
                         self.state.intermediate_tables[assign_to] = exec_res
                         self.actions.append(
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
+                        )
+                    elif isinstance(exec_res, Exception):
+                        self.actions.append(
+                            f"Error encountered; adjust your Python code: {exec_res}"
                         )
                     else:
                         if exec_res is None:
@@ -218,7 +250,7 @@ class LLMPlanner:
                 final_result[key] = value
         return final_result
 
-    def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
+    def __check_completion(self, target_schemas: dict[str, DataFrame], sqls: list[str]) -> bool:
         if self.is_feedback_mode and self.feedback_iteration < 3:
             self.feedback_iteration += 1
             return False
@@ -235,18 +267,37 @@ class LLMPlanner:
                 if target_schema_id in materialized_schema_ids:
                     self.logger.info(f"Checking the {target_schema_id}")
                     target_table_columns = set(target_schemas[target_schema_id].columns)
-                    materialized_table_columns = set(self.state.intermediate_tables[target_schema_id].columns)
+                    materialized_table_columns = set(
+                        self.state.intermediate_tables[target_schema_id].columns
+                    )
 
                     self.logger.info(f"target_table_columns {target_table_columns}")
-                    self.logger.info(f"materialized_table_columns {materialized_table_columns}")
+                    self.logger.info(
+                        f"materialized_table_columns {materialized_table_columns}"
+                    )
                     if target_table_columns != materialized_table_columns:
                         is_complete = False
-                        wrong_columns.extend(target_table_columns - materialized_table_columns)
+                        wrong_columns.extend(
+                            target_table_columns - materialized_table_columns
+                        )
         if not is_complete:
             self.actions.append(
-                f"You should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`): {wrong_columns}"
+                f"You either: 1) overselected the columns (i.e., there are unnecessary columns not specified in the target schemas), in which you should remove them, or 2) you should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`)."
             )
             print(self.actions[-1])
+        
+        if is_complete and len(sqls) > 0 and not self.is_sql_alignment_checked:
+            self.actions.append(
+                f"Using Python code, validate that the column values in the materialized tables match the expected SQL formats. Specifically check:\n" \
+"1. Boolean values ('TRUE'/'FALSE' vs 'true'/'false')\n" \
+"2. String case sensitivity\n" \
+"3. Date/timestamp formats\n" \
+"4. Numeric precision\n" \
+"Please analyze and transform any mismatched values to match SQL requirements. If no adjustments are necessary, simply do `result = tables['<table id>']`."
+            )
+            self.is_sql_alignment_checked = True
+            return False
+
         self.logger.info(f"==> is_complete: {is_complete}")
 
         self.logger.info(
