@@ -50,7 +50,7 @@ class LLMConductor:
         self, human_input: str, human_id: str, subsequent_chat: bool
     ) -> str:
         if subsequent_chat:
-            human_input += " (Note: please check the current state (target schemas & sqls), are they still relevant, or do they need any adjustments?)"
+            human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments?)"
         self.logger.info(f"Processing human input: {human_input}")
         # self.logger.info(f"Preliminary step: extracting domain knowledge")
         # domain_knowledge_extraction_messages = [

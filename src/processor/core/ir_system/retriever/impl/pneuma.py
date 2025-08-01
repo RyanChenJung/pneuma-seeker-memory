@@ -4,6 +4,7 @@ from enum import Enum
 import gc
 from math import ceil
 import os
+import re
 from typing import Optional
 from bm25s.tokenization import convert_tokenized_to_string_list
 import time
@@ -121,12 +122,29 @@ class Pneuma(AbstractRetriever):
                     seen_tables.append(table)
                 else:
                     continue
+                
+                actual_table = pd.read_csv(table)
 
+                def clean_column(col):
+                    col = col.lower()
+                    # Replace spaces and hyphens with underscores
+                    col = col.replace('-', '_').replace(' ', '_')
+                    # Replace "(" and ")" with underscores
+                    col = col.replace('(', '_').replace(')', '_')
+                    # Remove anything that's not a letter, digit, or underscore
+                    col = re.sub(r'[^0-9a-z_]', '_', col)
+                    # Collapse multiple underscores into one
+                    col = re.sub(r'_+', '_', col)
+                    # Remove leading/trailing underscores
+                    col = col.strip('_')
+                    return col
+                
+                actual_table.rename(columns=clean_column, inplace=True)
                 retrieval_results.append(
                     Table(
                         doc_id=table[:-4],
                         retriever_type=RetrieverType.PNEUMA,
-                        content=pd.read_csv(table),
+                        content=actual_table,
                         metadata=dict(),
                     )
                 )

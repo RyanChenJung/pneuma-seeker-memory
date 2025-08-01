@@ -213,6 +213,11 @@ class LLMPlanner:
                     python_code: str = parse_code(op_args["code"])
                     exec_res = execute_python_code(python_code, all_tables, self.logger)
                     if isinstance(exec_res, DataFrame):
+                        if len(exec_res) == 0:
+                            self.actions.append(
+                                f"Something is wrong with your code; the table is empty. Plese reflect and adjust the code."
+                            )
+
                         self.state.intermediate_tables[assign_to] = exec_res
                         self.actions.append(
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
@@ -261,6 +266,7 @@ class LLMPlanner:
         self.logger.info(f"==> materialized_schema_ids: {materialized_schema_ids}")
 
         is_complete = all_schema_ids <= materialized_schema_ids
+        already_complete = is_complete
         wrong_columns = []
         if is_complete:
             for target_schema_id in all_schema_ids:
@@ -280,7 +286,7 @@ class LLMPlanner:
                         wrong_columns.extend(
                             target_table_columns - materialized_table_columns
                         )
-        if not is_complete:
+        if already_complete and not is_complete:
             self.actions.append(
                 f"You either: 1) overselected the columns (i.e., there are unnecessary columns not specified in the target schemas), in which you should remove them, or 2) you should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`)."
             )
