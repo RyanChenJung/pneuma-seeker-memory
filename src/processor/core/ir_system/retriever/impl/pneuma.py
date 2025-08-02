@@ -142,7 +142,7 @@ class Pneuma(AbstractRetriever):
                 actual_table.rename(columns=clean_column, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=table[:-4],
+                        doc_id=table[:-4].split('/')[-1],
                         retriever_type=RetrieverType.PNEUMA,
                         content=actual_table,
                         metadata=dict(),

@@ -1,4 +1,5 @@
 from logging import Logger
+from typing import Any
 import duckdb
 from pandas import DataFrame
 from processor.core.interaction_conductor.ic_data_model import Interaction
@@ -146,7 +147,7 @@ class LLMConductor:
             else:
                 if tool is None:
                     tool = intent
-                tool_outcome = self.__execute_tool(tool, args)
+                tool_outcome = self.__execute_tool(tool, args, llm_messages)
                 llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=tool_outcome)
                 )
@@ -165,7 +166,9 @@ class LLMConductor:
             )
         return user_facing_response
 
-    def __execute_tool(self, tool: str, args: str | dict) -> str:
+    def __execute_tool(
+        self, tool: str, args: str | dict, llm_messages: list[LLMMessage]
+    ) -> str:
         if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
             ir_system = LMInterface(
@@ -208,60 +211,81 @@ class LLMConductor:
                 self.info_need_state.is_sql_executed = False
                 modifications_happening = True
 
-                # Check if safe to run the SQL queries on the (materialized) target schemas
-                if (
-                    len(self.info_need_state.target_schemas.keys()) > 0
-                    and self.info_need_state.is_target_schemas_materialized
-                ):
-                    for sql in sqls:
-                        relevant_table_ids = [
-                            i
-                            for i in self.info_need_state.target_schemas.keys()
-                            if i in sql
-                        ]
-                        for relevant_table_id in relevant_table_ids:
-                            validation_messages = [
-                                LLMMessage(
-                                    role=Role.SYSTEM.value,
-                                    content="""You will receive an actual table and SQL query. Your task is to validate and transform the EXISTING table values to match the SQL query requirements.
-
-Example scenario:
-- If SQL has: WHERE status = 'ACTIVE'
-- But table has: status values like 'active' or 'Active'
-- You should transform to match case: df['status'] = df['status'].str.upper()
-
-Rules for Python code:
-1. Work ONLY with the provided table - do not create hypothetical scenarios
-2. Use the actual table from tables["<table_id>"] dictionary
-3. Transform values to match SQL requirements (case, format, etc.)
-4. Return transformed DataFrame in 'result' variable
-5. Available libraries: pandas (as pd) and numpy (as np)
-
-Output only the Python code needed for transformation. If no changes needed, use:
-result = tables["<table_id>"]""",
-                                ),
-                                LLMMessage(
-                                    role=Role.USER.value,
-                                    content=f"""The SQL query: ```{sql}```\n\nThe ACTUAL table content: ```{self.info_need_state.get_table_repr(self.info_need_state.target_schemas[relevant_table_id], relevant_table_id)}```""",
-                                ),
-                            ]
-                            code = parse_code(self.llm.chat(validation_messages))
-                            resulting_table = execute_python_code(
-                                code,
-                                {
-                                    relevant_table_id: self.info_need_state.target_schemas[
-                                        relevant_table_id
-                                    ]
-                                },
-                                self.logger,
-                            )
-                            if isinstance(resulting_table, DataFrame):
-                                self.info_need_state.target_schemas[
-                                    relevant_table_id
-                                ] = resulting_table
-
             if modifications_happening:
-                return "Successfully modified the state."
+                self.logger.info(f"=> Self-loop, sanity checking of state modification")
+                modification_validation_messages = [llm_messages[0]]
+                modification_validation_messages.append(
+                    LLMMessage(
+                        role=Role.ASSISTANT.value,
+                        content=f"Performed state modification: {args}"
+                    )
+                )
+                modification_validation_messages.append(
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content="""You just decided to manipulate the state, so we need to sanity-check the modification, ensuring you do not miss important columns in your design, and the SQLs are indeed based on the target schema IDs.
+To do this, you need to perform an `internal_reasoning` action. Reflect out loud whether the manipulation makes sense given your goal with this change.""",
+                    )
+                )
+                first_action_llm_output = self.llm.chat(
+                    modification_validation_messages, LLMOption(json_mode=True)
+                )
+                internal_reflection_info: dict[str, str] = parse_json(
+                    first_action_llm_output
+                )
+                internal_reflection = internal_reflection_info.get("message", "")
+                self.logger.info(f"==> INTERNAL REFLECTION: {internal_reflection}")
+                modification_validation_messages.extend(
+                    [
+                        LLMMessage(
+                            role=Role.ASSISTANT.value,
+                            content=f"I just reflected internally: {internal_reflection}",
+                        ),
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content="""Now that you have reflected internally, it is time to perform "tool_call": State Manipulation.""",
+                        ),
+                    ]
+                )
+
+                second_action_llm_output = self.llm.chat(
+                    modification_validation_messages, LLMOption(json_mode=True)
+                )
+                state_manipulation_info: dict[str, Any] = parse_json(
+                    second_action_llm_output
+                )
+                state_manipulation_args: None | dict[str, Any] = (
+                    state_manipulation_info.get("args")
+                )
+
+                self.logger.info(f"==> ARGS: {state_manipulation_args}")
+
+                if state_manipulation_args is not None:
+                    target_schemas: dict[str, list[str]] | None = (
+                        state_manipulation_args.get("target_schemas")
+                    )
+                    column_descriptions: dict[str, dict[str, str]] | None = (
+                        state_manipulation_args.get("column_descriptions")
+                    )
+                    sqls: list[str] | None = state_manipulation_args.get("sqls")
+
+                    if target_schemas is not None:
+                        target_schemas_df: dict[str, DataFrame] = dict()
+                        for schema_id in target_schemas:
+                            target_schemas_df[schema_id] = DataFrame(
+                                columns=target_schemas[schema_id]
+                            )
+                        self.info_need_state.target_schemas = target_schemas_df
+                        self.info_need_state.is_target_schemas_materialized = False
+
+                    if column_descriptions is not None:
+                        self.info_need_state.column_descriptions = column_descriptions
+
+                    if sqls is not None:
+                        self.info_need_state.sqls = sqls
+                        self.info_need_state.is_sql_executed = False
+
+                return "Successfully modified the state with sanity-checking."
             return "No modification is done."
         elif tool == "Materializer Engine" or tool == "materializer_engine":
             self.logger.info(f"Materializer Engine called")
@@ -291,6 +315,44 @@ result = tables["<table_id>"]""",
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
+        
+        elif tool == "Categorical Column Information" or tool == "categorical_column_information":
+            if isinstance(args, dict):
+                table_id: str | None = args.get("id")
+                table_columns: list[str] | None = args.get("columns")
+                if table_id is None:
+                    return "The `id` field most not be empty."
+                if table_columns is None:
+                    return "The `columns` field most not be empty."
+                if not isinstance(table_columns, list) or len(table_columns) == 0:
+                    return "The `columns` field must be a non-empty list of strings (column names in the table)"
+                
+                for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
+                    if document.doc_id == table_id:
+                        cat_col_info = ""
+                        table: DataFrame = document.content
+                        for column in table_columns:
+                            if column not in table.columns:
+                                cat_col_info += f"Column `{column}` does not exist in the table.\n"
+                                continue
+
+                            counts = table[column].value_counts()
+                            top_values = counts.index[:10].tolist()
+                            
+                            # Append "truncated" if there are more than 10 unique values
+                            if len(counts) > 10:
+                                top_values.append("truncated")
+
+                            # Convert list to string for cleaner display
+                            top_values_str = ", ".join(str(v) for v in top_values)
+                            column_info = f"{column}: {top_values_str}\n"
+                            cat_col_info += column_info
+                        return cat_col_info
+
+                return f"ID {table_id} does not exist; ensure it exists in the current retrieval results."
+            else:
+                return "Argument must be a specified key-value pairs with keys `id` and `columns`."
+        
         return "Tool calling failed."
 
     def __execute_sqls(self):

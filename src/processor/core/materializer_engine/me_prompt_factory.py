@@ -37,14 +37,16 @@ User note (if any): {user_side_note}
 
 IMPORTANT: There are no other operations, so use ONLY choose among the above operations."""
     
-    def get_fix_python_prompt(self, code: str, available_tables: dict[str, DataFrame]):
+    def get_fix_python_prompt(self, code: str, available_tables: dict[str, DataFrame], error: Exception):
         return f"""You are an expert in Python programming.
 
 This code:
 ```{code}```
 
-It manipulates tables from the following list:
+It manipulates tables from the following list (note that table IDs may look like path):
 ```{self.__format_available_tables(available_tables)}```
+
+Resulting in this error: {error}.
 
 Please provide direct feedback about what is wrong with the code, so the implementor can fix it.
 """
@@ -92,7 +94,13 @@ Plan our next step using either of these formats (depending on the step_type):
 
 {{
   "step_type": "operation",
-  "name": "Document Retriever" | "Python Executor" | "Table Select" | "SQL Executor" | "Standard Inner Join" | "Union",
+  "name": "Document Retriever" | "Table Select",
+  "args": {{"The argument to the operation that we call"}}
+}}
+
+{{
+  "step_type": "operation",
+  "name": "Python Executor"| "SQL Executor" | "Standard Inner Join" | "Union",
   "args": {{"The argument to the operation that we call"}}
   "assign_to": "result_table_id"  # Must match one of the target schema IDs if this is a final result (i.e., correspond to a target schema directly)
 }}

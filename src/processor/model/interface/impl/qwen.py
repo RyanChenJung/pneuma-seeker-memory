@@ -72,8 +72,10 @@ class Qwen(AbstractModel):
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
             0
         ]
-        print(f"QWEN: response: {response}")
         if llm_option.json_mode:
+            if not response.strip().endswith("}"):
+                response = f"{response}}}"
+            print(f"QWEN: response: {response}")
             fixing_iteration = 0
             while not self.is_valid_json(response)[0] and fixing_iteration <= 5:
                 appended_messages = messages + [

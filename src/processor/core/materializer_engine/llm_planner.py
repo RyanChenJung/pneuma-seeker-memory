@@ -209,12 +209,13 @@ class LLMPlanner:
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
                         )
                     elif isinstance(exec_res, Exception):
+                        self.logger.info(f"Exception during execution of the Python code: {exec_res}")
                         # Self-diagnose
                         diagnose_messages = [
                             LLMMessage(
                                 role=Role.SYSTEM.value,
                                 content=self.prompt_factory.get_fix_python_prompt(
-                                    python_code, all_tables
+                                    python_code, all_tables, exec_res
                                 ),
                             )
                         ]
