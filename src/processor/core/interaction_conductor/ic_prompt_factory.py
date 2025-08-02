@@ -139,6 +139,7 @@ CURRENT HUMAN INPUT:
 - After retrieving tables, you must ask the user (using `communicate_with_user`) if there are any ambiguities (e.g., `meet the standard`, you ask what is the standard), or if there are multiple relevant retrieved tables, and it is not clear which one the user wants. For example, suppose there are tables with the same structure but represent different time (e.g., [topic]_2012, [topic]_2013, etc.) or location (e.g., and [topic]_Chicago, [topic]_NYC, etc.). In such cases, you must clear the ambiguity BEFORE you design and materialize target schemas.
 - When designing target schemas and sqls, be careful when defining columns. For example, suppose a relevant table has this schema with interrelated columns: [city, country, city_gdp]. You should not, e.g., leaving city out, as it will introduce ambiguity, i.e., each country has multiple GDP data.
 - Pay close attention to your previous `internal_reasoning` actions as well. If you thought you need to confirm with the user, then perform a "communicate_with_user" action. If you thought you need to adjust the SQL queries, then perform a "state_manipulation" action to do that. And so on.
+- When defining target schemas, make sure to use accurate IDs. For example, you SHOULD NOT define a schema with general name "world city" while materializing it with this note: "City in USA".
 
 Please output your decision for this step in either of the following formats (depending on intent):
 {{

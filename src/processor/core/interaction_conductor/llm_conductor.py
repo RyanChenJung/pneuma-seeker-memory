@@ -46,6 +46,7 @@ class LLMConductor:
             self.llm, self.logger, self.embed_model, data_sources
         )
         self.data_sources = data_sources
+        self.num_iteration = 0
 
     def process_input(
         self, human_input: str, human_id: str, subsequent_chat: bool
@@ -53,40 +54,8 @@ class LLMConductor:
         if subsequent_chat:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
         self.logger.info(f"Processing human input: {human_input}")
-        # self.logger.info(f"Preliminary step: extracting domain knowledge")
-        # domain_knowledge_extraction_messages = [
-        #     LLMMessage(
-        #         role=Role.SYSTEM.value,
-        #         content=self.prompt_factory.get_knowledge_extraction_prompt(
-        #             human_input
-        #         ),
-        #     )
-        # ]
-        # domain_knowledge_extraction_decision = self.llm.chat(
-        #     domain_knowledge_extraction_messages, LLMOption(json_mode=True)
-        # )
-        # extraction_decision_json = parse_json(domain_knowledge_extraction_decision)
-        # if extraction_decision_json["contains_domain_knowledge"]:
-        #     domain_knowledge: list[str] = extraction_decision_json["domain_knowledge"]
-        #     self.logger.info(f"=> Domain knowledge extracted: {domain_knowledge}")
-        #     domain_knowledge_docs: list[AbstractDocument] = [
-        #         Knowledge(
-        #             doc_id="new_doc",
-        #             retriever_type=RetrieverType.KNOWLEDGE_BASE,
-        #             content=curr_domain_knowledge,
-        #             metadata={"type": "global", "user": human_id},
-        #         )
-        #         for curr_domain_knowledge in domain_knowledge
-        #     ]
-        #     ir_system = LMInterface(
-        #         {"llm": self.llm, "embed_model": self.embed_model},
-        #         self.logger,
-        #     )
-        #     ir_system.index_documents(
-        #         RetrieverType.KNOWLEDGE_BASE, domain_knowledge_docs
-        #     )
 
-        num_iteration = 0
+        self.num_iteration = 0
         user_facing_response = ""
         is_user_facing_response = False
         llm_messages = [
@@ -96,13 +65,13 @@ class LLMConductor:
             )
         ]
         actions_taken: list[str] = []
-        while not is_user_facing_response and num_iteration < ITERATION_LIMIT:
-            num_iteration += 1
+        while not is_user_facing_response and self.num_iteration < ITERATION_LIMIT:
+            self.num_iteration += 1
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
-                        num_iteration,
+                        self.num_iteration,
                         ITERATION_LIMIT,
                         self.info_need_state,
                         self.interaction_history,
@@ -127,6 +96,7 @@ class LLMConductor:
             """
             action = parse_json(llm_output)
             intent: str = action.get("intent")
+            actions_taken.append(intent)
             action_message: None | str = action.get("message")
             tool: None | str = action.get("tool")
             args: None | dict = action.get("args")
@@ -135,16 +105,25 @@ class LLMConductor:
                 self.interaction_history.append(
                     Interaction(human_input, action_message)
                 )
-                if num_iteration > 1:
-                    user_facing_response = action_message
-                    is_user_facing_response = True
+                user_facing_response = action_message
+                is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
-                llm_messages.append(
-                    LLMMessage(
-                        role=Role.USER.value,
-                        content=f"You did some internal reasoning: {action_message}",
+                self.logger.info(f"DEBUGGY: num_iteration: {self.num_iteration}")
+                self.logger.info(f"actions_taken[-1]: {actions_taken[-1]}")
+                if self.num_iteration > 1 and actions_taken[-1] == 'internal_reasoning':
+                    llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=f"You cannot select `internal_reasoning` consecutively. Please select a different action!",
+                        )
                     )
-                )
+                else:
+                    llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=f"You did some internal reasoning: {action_message}",
+                        )
+                    )
             else:
                 if tool is None:
                     tool = intent
@@ -220,6 +199,7 @@ class LLMConductor:
 
                 if len(violations) > 0:
                     self.logger.info("VIOLATIONS IN THE SQLS OCCUR!")
+                    self.num_iteration -= 1  # Fixing shouldn't be counted as a cycle, just internal loop
                     return f"""You can ONLY reference tables from the target schemas, not retrieved tables. These are the list of (probably non-exhaustive) violations:\n{violations}"""
 
                 self.info_need_state.sqls = sqls
