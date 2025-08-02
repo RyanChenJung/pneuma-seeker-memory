@@ -1,5 +1,5 @@
-def get_operation_description(side_note: str):
-    return f"""
+def get_operation_description():
+    return """
 - **Document Retriever**
     - Retrieves relevant tabular or textual data from our database based on natural-language prompts
     - Please observe the existing, previously retrieved data, before calling this tool, since this tool erases previously retrieved data (if any). In other words, use this tool only when new or updated data is needed
@@ -25,7 +25,6 @@ def get_operation_description(side_note: str):
                     }}
                 }}
             }}
-    - Consider very carefully user's note (if any): `{side_note}`. If modifications are necessary (e.g., filtering based on condition), you cannot directly choose tables; use Python Executor.
     - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {{"B": "A"}}.
 
 - **SQL Executor**

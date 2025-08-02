@@ -68,8 +68,7 @@ class LLMPlanner:
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
-                operation_description=get_operation_description(user_side_note),
-                user_side_note=user_side_note,
+                operation_description=get_operation_description(),
             ),
         )
 
@@ -86,6 +85,7 @@ class LLMPlanner:
                         self.state.intermediate_tables,
                         self.actions,
                         num_iterations,
+                        user_side_note,
                     ),
                 )
             )
@@ -134,6 +134,9 @@ class LLMPlanner:
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
                 assign_to: str = plan.get("assign_to", "")
+                if assign_to.endswith("_filtered"):
+                    # Just set it to the initial table
+                    assign_to = assign_to[:-9]
                 if op_name == "Standard Inner Join":
                     left_table_id: str = op_args["left_table_id"]
                     right_table_id: str = op_args["right_table_id"]
@@ -157,12 +160,19 @@ class LLMPlanner:
                     )
                 elif op_name == "Document Retriever":
                     prompt: str = op_args["prompt"]
-                    self.state.current_retrieved_documents = get_documents(
+                    extra_documents = get_documents(
                         self.llm,
                         self.embed_model,
                         self.logger,
                         prompt,
                         self.data_sources,
+                    )
+
+                    if len(self.state.current_retrieved_documents.keys()) == 0:
+                        self.state.current_retrieved_documents = extra_documents
+
+                    self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
+                        set(self.state.current_retrieved_documents[RetrieverType.PNEUMA]).union(set(extra_documents[RetrieverType.PNEUMA]))
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'

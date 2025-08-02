@@ -16,7 +16,6 @@ class MEPromptFactory:
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
         operation_description: str,
-        user_side_note = "",
     ) -> str:
         return f"""You are a smart data scientist planning to materialize a set of table schemas that we refer to as Target Schemas:
 ```{json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}```
@@ -32,8 +31,6 @@ You can select, integrate (join, union), transform values of, etc. these retriev
 
 Available Operations:
 ```{operation_description}```
-
-User note (if any): {user_side_note}
 
 IMPORTANT: There are no other operations, so use ONLY choose among the above operations."""
     
@@ -75,6 +72,7 @@ Please provide direct feedback about what is wrong with the code, so the impleme
         intermediate_tables: dict[str, DataFrame],
         recent_actions: list[str],
         num_iterations: int,
+        user_side_note: str,
     ) -> str:
         return f"""So far, we have reacted {num_iterations} times to the instructions. Below is our progress:
 
@@ -84,7 +82,9 @@ Please provide direct feedback about what is wrong with the code, so the impleme
 
 - The documents we previously retrieved (tables and/or textual information): ```{convert_multi_retriever_results_to_str(retrieved_documents)}```
 
-IMPORTANT: Before retrieving new documents, check if existing documents above contain the information we need. Only retrieve new documents if the current ones do not have what we are looking for.
+IMPORTANT:
+- Before retrieving new documents, check if existing documents above contain the information we need. Only retrieve new documents if the current ones do not have what we are looking for.
+- Carefully observe user's note: `{user_side_note}` It may indicate filtering condition (e.g., only get between year x and y), column formatting, etc. If this is the case, you CANNOT use Table Select; use Python code to implement the specified conditions!
 
 Plan our next step using either of these formats (depending on the step_type):
 {{
@@ -102,7 +102,7 @@ Plan our next step using either of these formats (depending on the step_type):
   "step_type": "operation",
   "name": "Python Executor"| "SQL Executor" | "Standard Inner Join" | "Union",
   "args": {{"The argument to the operation that we call"}}
-  "assign_to": "result_table_id"  # Must match one of the target schema IDs if this is a final result (i.e., correspond to a target schema directly)
+  "assign_to": <"result_table_id">  # Must match one of the target schema IDs if this is a final result (i.e., correspond to a target schema directly); don't set the value to literal "result_table_id", adjust with the appropriate id.
 }}
 
 VERY IMPORTANT: If you produce a Python code, NEVER use pd.read_csv. Use tables["<ID>"] in your code (tables is a dict[str, pd.DataFrame] variable), then you will get it directly in a Pandas DataFrame format."""
