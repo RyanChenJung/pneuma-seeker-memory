@@ -68,7 +68,7 @@ class LLMPlanner:
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
-                operation_description=get_operation_description(),
+                operation_description=get_operation_description(user_side_note),
                 user_side_note=user_side_note,
             ),
         )

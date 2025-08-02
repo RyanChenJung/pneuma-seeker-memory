@@ -1,4 +1,5 @@
 from logging import Logger
+import re
 from typing import Any
 import duckdb
 from pandas import DataFrame
@@ -50,7 +51,7 @@ class LLMConductor:
         self, human_input: str, human_id: str, subsequent_chat: bool
     ) -> str:
         if subsequent_chat:
-            human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments?)"
+            human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
         self.logger.info(f"Processing human input: {human_input}")
         # self.logger.info(f"Preliminary step: extracting domain knowledge")
         # domain_knowledge_extraction_messages = [
@@ -189,9 +190,9 @@ class LLMConductor:
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
                 "column_descriptions"
             )
-            sqls: list[str] | None = args.get("sqls", [])
+            sqls: list[str] | None = args.get("sqls")
 
-            modifications_happening = False
+            is_target_schemas_modified = False
             if target_schemas is not None and column_descriptions is not None:
                 if column_descriptions is not None:
                     target_schemas_df: dict[str, DataFrame] = dict()
@@ -202,90 +203,35 @@ class LLMConductor:
                     self.info_need_state.target_schemas = target_schemas_df
                     self.info_need_state.column_descriptions = column_descriptions
                     self.info_need_state.is_target_schemas_materialized = False
-                    modifications_happening = True
+                    is_target_schemas_modified = True
                 else:
                     return "If you want to change target_schemas, make sure to also define column_descriptions."
 
+            is_sqls_modified = False
             if sqls is not None:
+                violations: list[str] = []
+                pattern = r"(?<=\bFROM\b|\bJOIN\b)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)"
+                if len(sqls) > 0:
+                    for sql in sqls:
+                        mentioned_tables = re.findall(pattern, sql, flags=re.IGNORECASE)
+                        for mentioned_table in mentioned_tables:
+                            if mentioned_table not in self.info_need_state.target_schemas.keys():
+                                violations.append(f"The table with ID {mentioned_table} from the SQL query {sql} does not exists.")
+
+                if len(violations) > 0:
+                    self.logger.info("VIOLATIONS IN THE SQLS OCCUR!")
+                    return f"""You can ONLY reference tables from the target schemas, not retrieved tables. These are the list of (probably non-exhaustive) violations:\n{violations}"""
+
                 self.info_need_state.sqls = sqls
                 self.info_need_state.is_sql_executed = False
-                modifications_happening = True
+                is_sqls_modified = True
 
-            if modifications_happening:
-                self.logger.info(f"=> Self-loop, sanity checking of state modification")
-                modification_validation_messages = [llm_messages[0]]
-                modification_validation_messages.append(
-                    LLMMessage(
-                        role=Role.ASSISTANT.value,
-                        content=f"Performed state modification: {args}"
-                    )
-                )
-                modification_validation_messages.append(
-                    LLMMessage(
-                        role=Role.USER.value,
-                        content="""You just decided to manipulate the state, so we need to sanity-check the modification, ensuring you do not miss important columns in your design, and the SQLs are indeed based on the target schema IDs.
-To do this, you need to perform an `internal_reasoning` action. Reflect out loud whether the manipulation makes sense given your goal with this change.""",
-                    )
-                )
-                first_action_llm_output = self.llm.chat(
-                    modification_validation_messages, LLMOption(json_mode=True)
-                )
-                internal_reflection_info: dict[str, str] = parse_json(
-                    first_action_llm_output
-                )
-                internal_reflection = internal_reflection_info.get("message", "")
-                self.logger.info(f"==> INTERNAL REFLECTION: {internal_reflection}")
-                modification_validation_messages.extend(
-                    [
-                        LLMMessage(
-                            role=Role.ASSISTANT.value,
-                            content=f"I just reflected internally: {internal_reflection}",
-                        ),
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content="""Now that you have reflected internally, it is time to perform "tool_call": State Manipulation.""",
-                        ),
-                    ]
-                )
-
-                second_action_llm_output = self.llm.chat(
-                    modification_validation_messages, LLMOption(json_mode=True)
-                )
-                state_manipulation_info: dict[str, Any] = parse_json(
-                    second_action_llm_output
-                )
-                state_manipulation_args: None | dict[str, Any] = (
-                    state_manipulation_info.get("args")
-                )
-
-                self.logger.info(f"==> ARGS: {state_manipulation_args}")
-
-                if state_manipulation_args is not None:
-                    target_schemas: dict[str, list[str]] | None = (
-                        state_manipulation_args.get("target_schemas")
-                    )
-                    column_descriptions: dict[str, dict[str, str]] | None = (
-                        state_manipulation_args.get("column_descriptions")
-                    )
-                    sqls: list[str] | None = state_manipulation_args.get("sqls")
-
-                    if target_schemas is not None:
-                        target_schemas_df: dict[str, DataFrame] = dict()
-                        for schema_id in target_schemas:
-                            target_schemas_df[schema_id] = DataFrame(
-                                columns=target_schemas[schema_id]
-                            )
-                        self.info_need_state.target_schemas = target_schemas_df
-                        self.info_need_state.is_target_schemas_materialized = False
-
-                    if column_descriptions is not None:
-                        self.info_need_state.column_descriptions = column_descriptions
-
-                    if sqls is not None:
-                        self.info_need_state.sqls = sqls
-                        self.info_need_state.is_sql_executed = False
-
-                return "Successfully modified the state with sanity-checking."
+            if is_target_schemas_modified and is_sqls_modified:
+                return "Successfully modified both the target schemas and the SQL queries."
+            elif is_target_schemas_modified:
+                return "Successfully modified the target schemas."
+            elif is_sqls_modified:
+                return "Successfully modified the SQL queries."
             return "No modification is done."
         elif tool == "Materializer Engine" or tool == "materializer_engine":
             self.logger.info(f"Materializer Engine called")
@@ -315,7 +261,6 @@ To do this, you need to perform an `internal_reasoning` action. Reflect out loud
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
-        
         elif tool == "Categorical Column Information" or tool == "categorical_column_information":
             if isinstance(args, dict):
                 table_id: str | None = args.get("id")

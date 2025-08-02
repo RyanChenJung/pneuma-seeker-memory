@@ -1,10 +1,10 @@
-def get_operation_description():
-    return """
+def get_operation_description(side_note: str):
+    return f"""
 - **Document Retriever**
     - Retrieves relevant tabular or textual data from our database based on natural-language prompts
     - Please observe the existing, previously retrieved data, before calling this tool, since this tool erases previously retrieved data (if any). In other words, use this tool only when new or updated data is needed
-    - Args: {"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the the target schema IDs>"}
-    - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
+    - Args: {{"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the the target schema IDs>"}}
+    - Example: {{"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}}
 
 - **Python Executor**
     - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, or list of strings
@@ -13,25 +13,27 @@ def get_operation_description():
     - Because we use Pandas and Numpy, you can transform the values of certain columns as well. For example, if the sqls expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values in this case.
     - All tables, whether retrieved or the ones you formed, are all available in the execution environment in a Python dictionary named "tables". You can simply access the tables you want using their IDs as keys (e.g., tables["table_id"]), and you get them directly in Pandas DataFrame format.
     - Make sure to assign the result to 'result' variable
-    - Args: {"code": "<Python code string>"}
+    - Args: {{"code": "<Python code string>"}}
     - Again, DO NOT try to read a table using, for instance, pd.read_csv. Use tables["<ID>"], and you get it directly in a Pandas DataFrame format.
 
 - **Table Select**
     - Selects retrieved tables directly as the materialized forms of some tables in target schemas.
-    - Args: {"<target schema ID>": {
-                {
-                    "id": "<retrieved table ID>",
-                    "columns": ["<The relevant columns from the selected retrieved table to form target schema ID>"]
-                }
-            }
-    - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {"B": "A"}.
+    - Args: {{"<target schema ID>": {{
+                    {{
+                        "id": "<retrieved table ID>",
+                        "columns": ["<The relevant columns from the selected retrieved table to form target schema ID>"]
+                    }}
+                }}
+            }}
+    - Consider very carefully user's note (if any): `{side_note}`. If modifications are necessary (e.g., filtering based on condition), you cannot directly choose tables; use Python Executor.
+    - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {{"B": "A"}}.
 
 - **SQL Executor**
     - Executes a SQL query on available tables to produce another table, NOT executing the `sqls`.
     - Supports standard SQL syntax
     - Assume all tables are available in the database; reference them using their IDs
-    - Args: {"sql_query": "<SQL query string>"}
-    - Example: {"sql_query": "SELECT * FROM table_1 WHERE date >= '2025-01-01'"}
+    - Args: {{"sql_query": "<SQL query string>"}}
+    - Example: {{"sql_query": "SELECT * FROM table_1 WHERE date >= '2025-01-01'"}}
 
 - Standard Inner Join
     - Joins two tables using the standard inner join
