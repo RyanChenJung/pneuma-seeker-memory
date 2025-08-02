@@ -22,8 +22,6 @@ def parse_json(json_string: str) -> Any:
         json_string = json_string[:-3]
     if json_string.startswith("json"):
         json_string = json_string[4:]
-    if not json_string.endswith("}"):
-        json_string += "}"
     return json.loads(json_string)
 
 def parse_sql(sql_string: str) -> str:
