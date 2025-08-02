@@ -5,6 +5,8 @@ from processor.model.option import EmbeddingModelOption, LLMOption
 from processor.model.llm_message import LLMMessage
 from numpy import ndarray
 
+from processor.utils.json_processor import parse_json
+
 
 class AbstractModel(ABC):
     @abstractmethod
@@ -49,7 +51,7 @@ class AbstractModel(ABC):
 
     def is_valid_json(self, text: str):
         try:
-            json.loads(text)
+            parse_json(text)
             return (True, '')
         except json.JSONDecodeError as j:
             return (False, j)
