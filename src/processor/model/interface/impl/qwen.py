@@ -1,3 +1,5 @@
+import json
+import re
 from typing import Optional
 from numpy import ndarray
 from transformers import (
@@ -10,6 +12,7 @@ from torch import cuda, manual_seed
 from processor.model.interface.abstract_model import AbstractModel
 from processor.model.llm_message import LLMMessage, Role
 from processor.model.option import EmbeddingModelOption, LLMOption
+from processor.utils.json_processor import parse_json
 
 
 class Qwen(AbstractModel):
@@ -25,6 +28,32 @@ class Qwen(AbstractModel):
 
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+    
+    def sanitize_json_output(self, response: str) -> str:
+        # 1. Remove Markdown code fences
+        response = re.sub(r"^```(?:json)?\s*", "", response)
+        response = re.sub(r"\s*```$", "", response)
+
+        # 2. Strip leading/trailing spaces/newlines
+        response = response.strip()
+
+        # 3. If there's text before the first '{', cut it
+        if "{" in response:
+            response = response[response.index("{"):]
+
+        # 4. Escape only newlines inside string values
+        def escape_newlines_in_strings(match):
+            return match.group(0).replace("\n", "\\n")
+        response = re.sub(r'"(.*?)"', escape_newlines_in_strings, response, flags=re.S)
+
+        # 5. Ensure it ends with a closing brace
+        if not response.endswith("}"):
+            response += "}"
+
+        # 6. Validate JSON (raise if invalid)
+        json.loads(response)
+
+        return response
 
     def chat(
         self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
@@ -69,12 +98,12 @@ class Qwen(AbstractModel):
             for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
         ]
 
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
+        response: str = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
             0
         ]
+
         if llm_option.json_mode:
-            if not response.strip().endswith("}"):
-                response = f"{response}}}"
+            response = self.sanitize_json_output(response)
             print(f"QWEN: response: {response}")
             fixing_iteration = 0
             while not self.is_valid_json(response)[0] and fixing_iteration <= 5:
