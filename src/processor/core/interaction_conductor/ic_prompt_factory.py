@@ -84,10 +84,10 @@ Some principles to remember:
     - Materializes (filling the rows) of the current target schemas
     - When to use: You have defined target schemas and are ready to perform SQL operations on the data
     - When NOT to use: During initial exploration phase or user needs are still vague
-    - Args: `{{"feedback": "<error details if previous materialized schemas have undesirable properties, e.g., wrong format of column values>"}}`
+    - Args: `{{"note": "<note regarding the target schemas, e.g., asking to use data from year x, as indicated by the user>"}}`
     - Issue handling:
+        - Fix fundamental materialized data issues (e.g., data based on year x, but user wants year y): Call Materializer Engine with an appropriate note args
         - For SQL query errors: Fix queries via State Manipulation
-        - For data format errors: Provide feedback to Materializer Engine
 
 - **SQL Engine**
     - Executes SQL queries (`sqls`) on materialized table schemas
@@ -127,7 +127,7 @@ PREVIOUSLY RETRIEVED DATA FROM THE IR SYSTEM:
 CURRENT HUMAN INPUT:
 {human_input}
 
-Remember one thing: You MUST ASK the user (using `communicate_with_user`) if there are any ambiguities (e.g., `meet the standard`, you ask what is the standard), or if there are multiple relevant tables, and it is not clear which one the user wants. For example, suppose there are tables with the same structure but represent different time or location (e.g., topic_[year] and topic_[chicago]). This ambiguity has to be clear BEFORE you design and materialize target schemas.
+**Remember one principle**: You MUST ASK the user (using `communicate_with_user`) if there are any ambiguities (e.g., `meet the standard`, you ask what is the standard), or if there are multiple relevant retrieved tables, and it is not clear which one the user wants. For example, suppose there are tables with the same structure but represent different time or location (e.g., topic_[2012] and topic_[chicago]). This ambiguity has to be clear BEFORE you design and materialize target schemas.
 
 Please output your decision for this step in either of the following formats (depending on intent):
 {{

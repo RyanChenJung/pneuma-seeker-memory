@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from logging import Logger
 from pandas import DataFrame
@@ -44,28 +44,24 @@ class LLMPlanner:
         self.actions: list[str] = []
         self.data_sources = data_sources
 
-        self.is_feedback_mode = False
-        self.feedback_iteration = 0
-
         self.is_sql_alignment_checked = False
+
+    def __cleanup_system(self):
+        self.state.reset()
+        self.is_sql_alignment_checked = False
+        self.actions = []
 
     def materialize_target_schemas(
         self,
         target_schemas: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
-        feedback: Optional[str] = None,
+        user_side_note="",
     ) -> dict[str, DataFrame]:
-        if feedback and len(self.state.intermediate_tables) > 0:
-            # This means IC asked to fix previously materialized target schemas (meaning it's feedback mode)
-            self.is_feedback_mode = True
-
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
         )
-
-        if not self.is_feedback_mode:
-            self.state.reset()
+        self.__cleanup_system()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
             content=self.prompt_factory.get_planning_prompt(
@@ -73,19 +69,9 @@ class LLMPlanner:
                 column_descriptions=column_descriptions,
                 sqls=sqls,
                 operation_description=get_operation_description(),
+                user_side_note=user_side_note,
             ),
         )
-        if self.is_feedback_mode:
-            sys_prompt = LLMMessage(
-                role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_planning_prompt_with_feedback(
-                    target_schemas=target_schemas,
-                    column_descriptions=column_descriptions,
-                    sqls=sqls,
-                    operation_description=get_operation_description(),
-                    feedback=feedback,
-                ),
-            )
 
         num_iterations = 0
         llm_messages = [sys_prompt]
@@ -147,7 +133,7 @@ class LLMPlanner:
             elif step_type == "operation":
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
-                assign_to: str = plan.get("assign_to")
+                assign_to: str = plan.get("assign_to", "")
                 if op_name == "Standard Inner Join":
                     left_table_id: str = op_args["left_table_id"]
                     right_table_id: str = op_args["right_table_id"]
@@ -202,8 +188,8 @@ class LLMPlanner:
                             # Trying to automatically resolve target and source columns
                             table = all_tables[retrieved_table_id][relevant_columns]
                             table.rename(
-                                columns=lambda col: '_'.join(col.lower().split(' ')),
-                                inplace=True
+                                columns=lambda col: "_".join(col.lower().split(" ")),
+                                inplace=True,
                             )
                             self.state.intermediate_tables[target_schema_id] = table
                     self.actions.append(
@@ -223,9 +209,17 @@ class LLMPlanner:
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
                         )
                     elif isinstance(exec_res, Exception):
-                        self.actions.append(
-                            f"Error encountered; adjust your Python code: {exec_res}"
-                        )
+                        # Self-diagnose
+                        diagnose_messages = [
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=self.prompt_factory.get_fix_python_prompt(
+                                    python_code, all_tables
+                                ),
+                            )
+                        ]
+                        feedback = self.llm.chat(diagnose_messages)
+                        self.actions.append(feedback)
                     else:
                         if exec_res is None:
                             self.actions.append(
@@ -255,10 +249,9 @@ class LLMPlanner:
                 final_result[key] = value
         return final_result
 
-    def __check_completion(self, target_schemas: dict[str, DataFrame], sqls: list[str]) -> bool:
-        if self.is_feedback_mode and self.feedback_iteration < 3:
-            self.feedback_iteration += 1
-            return False
+    def __check_completion(
+        self, target_schemas: dict[str, DataFrame], sqls: list[str]
+    ) -> bool:
         self.logger.info(f"CHECK COMPLETION")
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.intermediate_tables.keys())
@@ -291,15 +284,15 @@ class LLMPlanner:
                 f"You either: 1) overselected the columns (i.e., there are unnecessary columns not specified in the target schemas), in which you should remove them, or 2) you should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`)."
             )
             print(self.actions[-1])
-        
+
         if is_complete and len(sqls) > 0 and not self.is_sql_alignment_checked:
             self.actions.append(
-                f"Using Python code, validate that the column values in the materialized tables match the expected SQL formats. Specifically check:\n" \
-"1. Boolean values ('TRUE'/'FALSE' vs 'true'/'false')\n" \
-"2. String case sensitivity\n" \
-"3. Date/timestamp formats\n" \
-"4. Numeric precision\n" \
-"Please analyze and transform any mismatched values to match SQL requirements. If no adjustments are necessary, simply do `result = tables['<table id>']`."
+                f"Using Python code, validate that the column values in the materialized tables match the expected SQL formats. Specifically check:\n"
+                "1. Boolean values ('TRUE'/'FALSE' vs 'true'/'false')\n"
+                "2. String case sensitivity\n"
+                "3. Date/timestamp formats\n"
+                "4. Numeric precision\n"
+                "Please analyze and transform any mismatched values to match SQL requirements. If no adjustments are necessary, simply do `result = tables['<table id>']`."
             )
             self.is_sql_alignment_checked = True
             return False

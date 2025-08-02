@@ -16,6 +16,7 @@ class MEPromptFactory:
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
         operation_description: str,
+        user_side_note = "",
     ) -> str:
         return f"""You are a smart data scientist planning to materialize a set of table schemas that we refer to as Target Schemas:
 ```{json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}```
@@ -32,36 +33,39 @@ You can select, integrate (join, union), transform values of, etc. these retriev
 Available Operations:
 ```{operation_description}```
 
+User note (if any): {user_side_note}
+
 IMPORTANT: There are no other operations, so use ONLY choose among the above operations."""
     
-    def get_planning_prompt_with_feedback(
-        self,
-        target_schemas: dict[str, DataFrame],
-        column_descriptions: dict[str, dict[str, str]],
-        sqls: list[str],
-        operation_description: str,
-        feedback: str,
-    ) -> str:
-        return f"""You are a smart data scientist who previously materialized a set of table schemas that we refer to as Target Schemas:
-```{json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}```
+    def get_fix_python_prompt(self, code: str, available_tables: dict[str, DataFrame]):
+        return f"""You are an expert in Python programming.
 
-This is the descriptions of the columns in Target Schemas:
-```{column_descriptions}```
+This code:
+```{code}```
 
-You materialized the Target Schemas by manipulating tables/textual information in our database (retrieved from the Document Retriever).
-You can select, integrate (join, union), transform values of, etc. these retrieved tables using the available operations.
+It manipulates tables from the following list:
+```{self.__format_available_tables(available_tables)}```
 
-The user just executed these SQL queries sequentially on your output (final target tables, i.e., materialized target schemas; observe the expected value format in the queries):
-```{sqls}```
-
-However, the user has some feedback regarding your output: ```{feedback}```. They encountered some error when running the SQL queries.
-This typically means the value formats of some column(s) may not conform to what are expected in the SQL queries.
-For example, the queries expect column A to be YES/NO, but the values of A are actually 1/0. You can, for instance, use the Python Executor to transform the values in this case.
-
-Available Operations:
-```{operation_description}```
-
-IMPORTANT: There are no other operations, so use ONLY choose among the above operations."""
+Please provide direct feedback about what is wrong with the code, so the implementor can fix it.
+"""
+    
+    def __format_available_tables(self, tables: dict[str, DataFrame]):
+        tables_repr = ""
+        for table_id, table in tables.items():
+            tables_repr += (
+                f"\n- Table {table_id}:\ncol: {" | ".join(list(table.columns))}"
+            )
+            if len(table) > 0:
+                # Sample 5 rows to represent the table
+                sample_rows = table.sample(min(5, len(table)), random_state=42)
+                sample_row_idx = 1
+                for _, data in sample_rows.iterrows():
+                    str_data = [str(i) for i in data]
+                    tables_repr += (
+                        f"\nsample row {sample_row_idx}: {" | ".join(str_data)}"
+                    )
+                    sample_row_idx += 1
+        return tables_repr.strip()
 
     def get_context_prompt(
         self,

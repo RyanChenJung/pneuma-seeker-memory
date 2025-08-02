@@ -1,5 +1,4 @@
 from logging import Logger
-from math import floor
 import duckdb
 from pandas import DataFrame
 from processor.core.interaction_conductor.ic_data_model import Interaction
@@ -242,8 +241,8 @@ Output only the Python code needed for transformation. If no changes needed, use
 result = tables["<table_id>"]""",
                                 ),
                                 LLMMessage(
-                                    role=Role.USER.value, 
-                                    content=f"""The SQL query: ```{sql}```\n\nThe ACTUAL table content: ```{self.info_need_state.get_table_repr(self.info_need_state.target_schemas[relevant_table_id], relevant_table_id)}```"""
+                                    role=Role.USER.value,
+                                    content=f"""The SQL query: ```{sql}```\n\nThe ACTUAL table content: ```{self.info_need_state.get_table_repr(self.info_need_state.target_schemas[relevant_table_id], relevant_table_id)}```""",
                                 ),
                             ]
                             code = parse_code(self.llm.chat(validation_messages))
@@ -266,15 +265,15 @@ result = tables["<table_id>"]""",
             return "No modification is done."
         elif tool == "Materializer Engine" or tool == "materializer_engine":
             self.logger.info(f"Materializer Engine called")
-            feedback = None
-            if "feedback" in args and args.get("feedback") != "":
-                feedback = args["feedback"]
+            note = ""
+            if isinstance(args, dict) and "note" in args:
+                note = args.get("note", "")
             self.info_need_state.target_schemas = (
                 self.materializer.materialize_target_schemas(
                     self.info_need_state.target_schemas,
                     self.info_need_state.column_descriptions,
                     self.info_need_state.sqls,
-                    feedback,
+                    note,
                 )
             )
             self.info_need_state.is_target_schemas_materialized = True
@@ -325,7 +324,8 @@ result = tables["<table_id>"]""",
                         LLMMessage(
                             role=Role.SYSTEM.value,
                             content="""You are a SQL query fixer for DuckDB. 
-Given an input SQL query, check for syntactic or semantic errors (case sensitivity, unescaped identifiers, invalid field names, type mismatches, or unsupported functions). 
+Given an input SQL query, check for syntactic or semantic errors (case sensitivity, unescaped identifiers, invalid field names, type mismatches, or unsupported functions).
+Ensure the query ONLY accesses available tables in the target schemas. If not, convert it to an equivalent SQL query.
 Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible. 
 If no standard equivalent exists, use the closest DuckDB-supported function. 
 Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed. 
@@ -349,7 +349,7 @@ Always output only the corrected SQL query, without explanations.""",
                         columns=["error"],
                         data=[
                             [
-                                f"Error encountered when executing this SQL: {fixed_sql} on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue and how to fix it."
+                                f"Error encountered when executing this SQL: ```{fixed_sql}``` on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue (e.g., referencing non-existent tables, non-standard SQL, etc.) and how to fix it."
                             ]
                         ],
                     )
