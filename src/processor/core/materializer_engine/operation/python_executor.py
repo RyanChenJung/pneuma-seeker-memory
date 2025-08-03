@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ def execute_python_code(
     try:
         env = dict()
         env['tables'] = tables
-        exec(python_code, {"pd": pd, "np": np}, env)
+        exec(python_code, {"pd": pd, "np": np, "re": re}, env)
     except Exception as e:
         return e
     return env.get("result", None)
