@@ -134,9 +134,6 @@ class LLMPlanner:
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
                 assign_to: str = plan.get("assign_to", "")
-                if assign_to.endswith("_filtered"):
-                    # Just set it to the initial table
-                    assign_to = assign_to[:-9]
                 if op_name == "Standard Inner Join":
                     left_table_id: str = op_args["left_table_id"]
                     right_table_id: str = op_args["right_table_id"]
