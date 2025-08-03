@@ -160,7 +160,7 @@ class LLMConductor:
                 self.data_sources,
                 10,  # Future-TODO: Change hard-coded sources and k
             )
-            return "Successfully retrieved documents from the IR system. Notice that the `PREVIOUSLY RETRIEVED DATA FROM THE IR SYSTEM` has been updated."
+            return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
         elif (
             tool == "State Manipulation" or tool == "state_manipulation"
         ) and isinstance(args, dict):
@@ -188,19 +188,19 @@ class LLMConductor:
 
             is_sqls_modified = False
             if sqls is not None:
-                violations: list[str] = []
-                pattern = r"(?<=\bFROM\b|\bJOIN\b)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)"
-                if len(sqls) > 0:
-                    for sql in sqls:
-                        mentioned_tables = re.findall(pattern, sql, flags=re.IGNORECASE)
-                        for mentioned_table in mentioned_tables:
-                            if mentioned_table not in self.info_need_state.target_schemas.keys():
-                                violations.append(f"The table with ID {mentioned_table} from the SQL query {sql} does not exists.")
+            #     violations: list[str] = []
+            #     pattern = r"(?<=\bFROM\b|\bJOIN\b)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)"
+            #     if len(sqls) > 0:
+            #         for sql in sqls:
+            #             mentioned_tables = re.findall(pattern, sql, flags=re.IGNORECASE)
+            #             for mentioned_table in mentioned_tables:
+            #                 if mentioned_table not in self.info_need_state.target_schemas.keys():
+            #                     violations.append(f"The table with ID {mentioned_table} from the SQL query {sql} does not exists.")
 
-                if len(violations) > 0:
-                    self.logger.info("VIOLATIONS IN THE SQLS OCCUR!")
-                    self.num_iteration -= 1  # Fixing shouldn't be counted as a cycle, just internal loop
-                    return f"""You can ONLY reference tables from the target schemas, not retrieved tables. These are the list of (probably non-exhaustive) violations:\n{violations}"""
+            #     if len(violations) > 0:
+            #         self.logger.info(f"VIOLATIONS IN THE SQLS OCCUR: {violations}!")
+            #         self.num_iteration -= 1  # Fixing shouldn't be counted as a cycle, just internal loop
+            #         return f"""You can ONLY reference tables from the target schemas, not retrieved tables. These are the list of (probably non-exhaustive) violations:\n{violations}"""
 
                 self.info_need_state.sqls = sqls
                 self.info_need_state.is_sql_executed = False

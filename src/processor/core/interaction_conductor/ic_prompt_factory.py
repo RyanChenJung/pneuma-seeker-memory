@@ -1,5 +1,6 @@
 from processor.core.interaction_conductor.ic_data_model import Interaction
 from processor.core.interaction_conductor.ic_state import InformationNeedState
+from processor.core.interaction_conductor.table_enumerator import table_id_enumerator
 from processor.core.ir_system.ir_data_model import (
     AbstractDocument,
     RetrieverType,
@@ -79,6 +80,9 @@ RECENT USER INTERACTIONS:
 
 RETRIEVED DATA:
 {convert_multi_retriever_results_to_str(curr_retrieval_results)}
+
+OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (LISTED ONLY; NOT RETRIEVED):
+{table_id_enumerator(curr_retrieval_results[RetrieverType.PNEUMA]) if len(curr_retrieval_results.keys()) > 0 else dict()}
 
 CURRENT USER INPUT:
 {human_input}

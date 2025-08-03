@@ -2,9 +2,10 @@ from typing import Any
 
 from logging import Logger
 from pandas import DataFrame
-from processor.core.ir_system.ir_data_model import RetrieverType
+from processor.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
 from processor.core.materializer_engine.me_prompt_factory import MEPromptFactory
 from processor.core.materializer_engine.me_state import MaterializerState
+from processor.core.materializer_engine.operation.table_enumerator import table_enumerator
 from processor.core.materializer_engine.operation.document_retriever import (
     get_documents,
 )
@@ -174,6 +175,26 @@ class LLMPlanner:
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
                     )
+                elif op_name == "Table Enumerator":
+                    self.logger.info(f"Enter Table Enumerator")
+                    pattern: str = op_args["pattern"]
+                    extra_tables: list[AbstractDocument] = table_enumerator(pattern)
+
+                    if len(self.state.current_retrieved_documents.keys()) == 0:
+                        if len(extra_tables) > 0:
+                            self.state.current_retrieved_documents = {RetrieverType.PNEUMA: extra_tables}
+                    else:
+                        self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
+                            set(self.state.current_retrieved_documents[RetrieverType.PNEUMA]).union(set(extra_tables))
+                        )
+                    if len(extra_tables) > 0:
+                        self.actions.append(
+                            f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize target schemas, even if you have not called Document Retriever before, as these tables have been included to "Previously retrieved documents".'
+                        )
+                    else:
+                        self.actions.append(
+                            f'There are no tables that match the pattern.'
+                        )
                 elif op_name == "Table Select":
                     self.logger.info(f"Enter Table Select")
                     table_mapping = op_args
@@ -244,12 +265,17 @@ class LLMPlanner:
                                 f"Successfully executed the Python code, resulting in this: {exec_res}"
                             )
                 elif op_name == "SQL Executor":
-                    sql_query: str = op_args["sql_query"]
-                    exec_res = execute_sql(self.logger, sql_query, all_tables, self.llm)
-                    self.state.intermediate_tables[assign_to] = exec_res
-                    self.actions.append(
-                        f"Successfully executed the SQL query, resulting in a table named {assign_to}"
-                    )
+                    try:
+                        sql_query: str = op_args["sql_query"]
+                        exec_res = execute_sql(self.logger, sql_query, all_tables, self.llm)
+                        self.state.intermediate_tables[assign_to] = exec_res
+                        self.actions.append(
+                            f"Successfully executed the SQL query, resulting in a table named {assign_to}"
+                        )
+                    except Exception as e:
+                        self.actions.append(
+                            f"Error when executing the SQL query: {e}. Please fix it (you may want to quote identifiers with, for instance, `-` symbol)."
+                        )
                 else:
                     self.actions.append(
                         f"Trying to perform/execute {op_name}, but it is not a valid operation."

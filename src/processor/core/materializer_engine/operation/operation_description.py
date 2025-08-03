@@ -6,6 +6,12 @@ def get_operation_description():
     - Args: {{"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the the target schema IDs>"}}
     - Example: {{"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}}
 
+- **Table Enumerator**
+    - Lists all available tables in the database whose names match a given regex pattern
+    - This is useful when you retrieve one table (e.g., `topic_2020`) but suspect there are other related tables (`topic_2021`, `topic_2022`, etc.)
+    - Args: { "pattern": "<regex pattern to match table names>" }
+    - Example: { "pattern": "^sales_\\d{4}$" } will match all tables named like `sales_2020`, `sales_2021`, etc.
+
 - **Python Executor**
     - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, or list of strings
     - Common libraries like pandas and numpy are available (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code

@@ -128,6 +128,7 @@ RULES:
 3. Always match target schema column names exactly (case-sensitive).
 4. Never use `pd.read_csv` — use `tables["<ID>"]` (dict[str, pd.DataFrame]) to access data.
 5. Assign final materialized tables to the correct target schema IDs.
+6. If you retrieve tables and suspect there are other related tables (that were not retrieved) with similar naming patterns (e.g., topic_2019, topic_2020, etc.), but the user has not specified which one(s) they need, use the table_enumerator tool to list all matching table IDs for a better understanding.
 
 Respond with exactly ONE JSON object:
 
@@ -140,7 +141,7 @@ Internal reasoning:
 Operation:
 {{
   "step_type": "operation",
-  "name": "Document Retriever" | "Table Select" | "Python Executor" | "SQL Executor" | "Standard Inner Join" | "Union",
+  "name": "Document Retriever" | "Table Enumerator" | "Table Select" | "Python Executor" | "SQL Executor" | "Standard Inner Join" | "Union",
   "args": {{...}},
   "assign_to": "<target_schema_id_or_intermediate_id>"
 }}"""

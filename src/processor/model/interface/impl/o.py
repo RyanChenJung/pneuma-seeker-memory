@@ -49,6 +49,7 @@ class O(AbstractModel):
         response = ""
         if gpt_output:
             response = gpt_output
+            print(f"O model output: {response}")
         return response
 
     def batch_chat(
