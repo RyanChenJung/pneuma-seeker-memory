@@ -64,7 +64,7 @@ class LLMPlanner:
         self.__cleanup_system()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
-            content=self.prompt_factory.get_planning_prompt(
+            content=self.prompt_factory.get_planning_prompt_brief(
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
@@ -80,7 +80,7 @@ class LLMPlanner:
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
-                    content=self.prompt_factory.get_context_prompt(
+                    content=self.prompt_factory.get_context_prompt_brief(
                         self.state.current_retrieved_documents,
                         self.state.intermediate_tables,
                         self.actions,
@@ -181,6 +181,8 @@ class LLMPlanner:
                     self.logger.info(f"Enter Table Select")
                     table_mapping = op_args
                     for target_schema_id, retrieved_table_info in table_mapping.items():
+                        if isinstance(retrieved_table_info, list):
+                            retrieved_table_info = retrieved_table_info[0]
                         retrieved_table_id: str = retrieved_table_info["id"]
                         relevant_columns: list[str] = retrieved_table_info["columns"]
 
@@ -197,14 +199,18 @@ class LLMPlanner:
                         ):
                             # Trying to automatically resolve target and source columns
                             table = all_tables[retrieved_table_id][relevant_columns]
-                            table.rename(
-                                columns=lambda col: "_".join(col.lower().split(" ")),
-                                inplace=True,
-                            )
                             self.state.intermediate_tables[target_schema_id] = table
-                    self.actions.append(
-                        f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match with the ones in target schemas."
-                    )
+                            self.actions.append(
+                                f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match with the ones in target schemas."
+                            )
+                        elif target_schema_id not in target_schemas:
+                            self.actions.append(
+                                f"Error: The ID {target_schema_id} does not exist in the target schemas. Please fix it."
+                            )
+                        else:
+                            self.actions.append(
+                                f"Error: The ID {retrieved_table_id} does not exist in either the retrieved tables OR the intermediate tables so far. Please fix it."
+                            )
                 elif op_name == "Python Executor":
                     python_code: str = parse_code(op_args["code"])
                     exec_res = execute_python_code(python_code, all_tables, self.logger)
@@ -268,8 +274,13 @@ class LLMPlanner:
         materialized_schema_ids = set(self.state.intermediate_tables.keys())
         self.logger.info(f"==> all_schema_ids: {all_schema_ids}")
         self.logger.info(f"==> materialized_schema_ids: {materialized_schema_ids}")
-
         is_complete = all_schema_ids <= materialized_schema_ids
+
+        if not is_complete:
+            self.actions.append(
+                f"You have not materialized these tables: {all_schema_ids - materialized_schema_ids}"
+            )
+
         already_complete = is_complete
         wrong_columns = []
         if is_complete:
@@ -296,20 +307,7 @@ class LLMPlanner:
             )
             print(self.actions[-1])
 
-        if is_complete and len(sqls) > 0 and not self.is_sql_alignment_checked:
-            self.actions.append(
-                f"Using Python code, validate that the column values in the materialized tables match the expected SQL formats. Specifically check:\n"
-                "1. Boolean values ('TRUE'/'FALSE' vs 'true'/'false')\n"
-                "2. String case sensitivity\n"
-                "3. Date/timestamp formats\n"
-                "4. Numeric precision\n"
-                "Please analyze and transform any mismatched values to match SQL requirements. If no adjustments are necessary, simply do `result = tables['<table id>']`."
-            )
-            self.is_sql_alignment_checked = True
-            return False
-
         self.logger.info(f"==> is_complete: {is_complete}")
-
         self.logger.info(
             f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)"
         )

@@ -61,7 +61,7 @@ class LLMConductor:
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_sys_prompt(ITERATION_LIMIT),
+                content=self.prompt_factory.get_sys_prompt_brief(ITERATION_LIMIT),
             )
         ]
         actions_taken: list[str] = []
@@ -70,7 +70,7 @@ class LLMConductor:
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
-                    content=self.prompt_factory.get_env_state_prompt(
+                    content=self.prompt_factory.get_env_state_prompt_brief(
                         self.num_iteration,
                         ITERATION_LIMIT,
                         self.info_need_state,
