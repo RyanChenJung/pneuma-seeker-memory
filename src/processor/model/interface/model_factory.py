@@ -1,5 +1,6 @@
 from typing import Type
 from processor.model.interface.impl.embed import EmbeddingModel
+from processor.model.interface.impl.o import O
 from processor.model.interface.impl.qwen import Qwen
 from processor.model.interface.impl.gpt import GPT
 from processor.model.interface.impl.gemma import Gemma
@@ -18,6 +19,8 @@ def get_llm(model_path: str) -> Type[AbstractModel]:
         return Gemma
     elif "gpt" in normalized_model_path:
         return GPT
+    elif "o4" in normalized_model_path:
+        return O
     else:
         raise ValueError(f"No interface implementation for this model path: {model_path}")
 
