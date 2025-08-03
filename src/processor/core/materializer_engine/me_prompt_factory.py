@@ -10,6 +10,46 @@ from processor.core.ir_system.ir_data_model import (
 
 
 class MEPromptFactory:
+    def get_planning_prompt_brief(
+    self,
+    target_schemas: dict[str, DataFrame],
+    column_descriptions: dict[str, dict[str, str]],
+    sqls: list[str],
+    operation_description: str,
+) -> str:
+        return f"""You are the Materializer Engine (ME).  
+Your goal is to fill all rows for the target schemas below using retrieved tables and allowed operations.
+
+TARGET SCHEMAS:
+{json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}
+
+COLUMN DESCRIPTIONS:
+{column_descriptions}
+
+REFERENCE SQLs (for value format guidance only):
+{sqls}
+
+AVAILABLE OPERATIONS:
+{operation_description}
+
+Rules:
+- Only use listed operations — no custom methods.
+- Use retrieved tables before calling Document Retriever again (retriever resets previously retrieved data).
+- Assign results to the correct target schema IDs.
+- Always check column names match exactly (case-sensitive) with the schema definition.
+- Handle value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
+- Avoid producing empty tables — if result is empty, revise your approach.
+
+Each iteration, output exactly one JSON object:
+{{
+  "step_type": "internal_reasoning" | "operation",
+  "message": "...",        # if internal_reasoning
+  "name": "<operation>",   # if operation
+  "args": {{...}},         # args for the operation
+  "assign_to": "<target_schema_id or intermediate_table_id>"
+}}
+"""
+
     def get_planning_prompt(
         self,
         target_schemas: dict[str, DataFrame],
@@ -65,6 +105,45 @@ Please provide direct feedback about what is wrong with the code, so the impleme
                     )
                     sample_row_idx += 1
         return tables_repr.strip()
+
+    def get_context_prompt_brief(
+    self,
+    retrieved_documents: dict[RetrieverType, list[AbstractDocument]],
+    intermediate_tables: dict[str, DataFrame],
+    recent_actions: list[str],
+    num_iterations: int,
+    user_side_note: str,
+) -> str:
+        return f"""This is iteration {num_iterations} of materializing the Target Schemas.
+
+CURRENT PROGRESS:
+- Intermediate tables so far: {list(intermediate_tables.keys())}
+- Recent actions: {recent_actions}
+- Retrieved documents (tables/text): {convert_multi_retriever_results_to_str(retrieved_documents)}
+- User note: {user_side_note}
+
+RULES:
+1. Before calling Document Retriever, check if current retrieved docs already contain the needed info.
+2. If user note requires filtering, formatting, or transformation → use Python Executor, NOT Table Select.
+3. Always match target schema column names exactly (case-sensitive).
+4. Never use `pd.read_csv` — use `tables["<ID>"]` (dict[str, pd.DataFrame]) to access data.
+5. Assign final materialized tables to the correct target schema IDs.
+
+Respond with exactly ONE JSON object:
+
+Internal reasoning:
+{{
+  "step_type": "internal_reasoning",
+  "message": "<your private reasoning>"
+}}
+
+Operation:
+{{
+  "step_type": "operation",
+  "name": "Document Retriever" | "Table Select" | "Python Executor" | "SQL Executor" | "Standard Inner Join" | "Union",
+  "args": {{...}},
+  "assign_to": "<target_schema_id_or_intermediate_id>"
+}}"""
 
     def get_context_prompt(
         self,
