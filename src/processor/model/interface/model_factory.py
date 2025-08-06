@@ -19,7 +19,7 @@ def get_llm(model_path: str) -> Type[AbstractModel]:
         return Gemma
     elif "gpt" in normalized_model_path:
         return GPT
-    elif "o4" in normalized_model_path:
+    elif "o3" in normalized_model_path or "o4" in normalized_model_path:
         return O
     else:
         raise ValueError(f"No interface implementation for this model path: {model_path}")
