@@ -1,8 +1,8 @@
 fastapi[standard]>=0.115.11
 torch>=2.6.0
-huggingface_hub>=0.29.1
-transformers>=4.50.0.dev0
-pandas>=2.2.2
+huggingface_hub>=0.34.3
+transformers>=4.53.2
+pandas>=2.2.3
 textdistance>=4.6.3
 sentence-transformers>=3.4.1
 openai>=1.63.2
