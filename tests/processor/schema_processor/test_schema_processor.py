@@ -12,14 +12,14 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
-from processor.conductor_state import ConductorState
-from processor.schema_processor.schema_processor import SchemaProcessor
-from processor.table.representation.impl.df_table import DFTable
-from processor.computation_graph import ComputationGraph, Node
-from processor.model.interface.impl.gpt import GPT
-from processor.utils.string_processor import parse_code_string
-from processor.utils.logger import setup_logger
-from processor.table.store.impl.py_table_store import PyTableStore
+from pneuma_seeker.conductor_state import ConductorState
+from pneuma_seeker.schema_processor.schema_processor import SchemaProcessor
+from pneuma_seeker.table.representation.impl.df_table import DFTable
+from pneuma_seeker.computation_graph import ComputationGraph, Node
+from pneuma_seeker.model.interface.impl.gpt import GPT
+from pneuma_seeker.utils.string_processor import parse_code_string
+from pneuma_seeker.utils.logger import setup_logger
+from pneuma_seeker.table.store.impl.py_table_store import PyTableStore
 
 
 class TestSchemaProcessor(unittest.TestCase):

@@ -13,7 +13,7 @@ export default function StatusPanel({ messages, visible, onToggle }: Props) {
       className={`
         relative bg-white border-gray-300 flex flex-col transition-all duration-500 ease-in-out overflow-hidden
         ${visible
-          ? "md:max-w-[33%] max-w-full border-r md:border-r border-b md:border-b-0 p-6 rounded-t-lg md:rounded-l-lg"
+          ? "md:max-w-[33%] max-w-full border-r md:border-r border-b md:border-b-0 p-6"
           : "max-w-0 border-0 p-0"}
       `}
       style={{ minWidth: 0 }}

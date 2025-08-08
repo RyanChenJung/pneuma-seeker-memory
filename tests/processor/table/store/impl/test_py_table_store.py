@@ -11,9 +11,9 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../src"))
 )
 
-from processor.table.representation.impl.df_table import DFTable
-from processor.table.representation.metadata import TableMetadataType
-from processor.table.store.impl.py_table_store import PyTableStore
+from pneuma_seeker.table.representation.impl.df_table import DFTable
+from pneuma_seeker.table.representation.metadata import TableMetadataType
+from pneuma_seeker.table.store.impl.py_table_store import PyTableStore
 
 
 class TestPyTableStore(unittest.TestCase):

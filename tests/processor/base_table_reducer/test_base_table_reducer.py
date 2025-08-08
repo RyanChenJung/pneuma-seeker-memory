@@ -13,14 +13,14 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
-from processor.conductor_state import ConductorState
-from processor.base_table_reducer.base_table_reducer import BaseTableReducer
-from processor.table.representation.abstract_table import AbstractTable
-from processor.table.representation.impl.df_table import DFTable
-from processor.computation_graph import ComputationGraph
-from processor.model.interface.impl.gpt import GPT
-from processor.utils.logger import setup_logger
-from processor.table.store.impl.py_table_store import PyTableStore
+from pneuma_seeker.conductor_state import ConductorState
+from pneuma_seeker.base_table_reducer.base_table_reducer import BaseTableReducer
+from pneuma_seeker.table.representation.abstract_table import AbstractTable
+from pneuma_seeker.table.representation.impl.df_table import DFTable
+from pneuma_seeker.computation_graph import ComputationGraph
+from pneuma_seeker.model.interface.impl.gpt import GPT
+from pneuma_seeker.utils.logger import setup_logger
+from pneuma_seeker.table.store.impl.py_table_store import PyTableStore
 
 
 class TestBaseTableReducer(unittest.TestCase):
