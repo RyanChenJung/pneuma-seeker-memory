@@ -1,3 +1,4 @@
+'use client';
 import { useState } from "react";
 import { Message as MessageType } from "../models/message";
 import StatusPanel from "./StatusPanel";
@@ -7,7 +8,7 @@ export default function ChatLayout() {
     const [messages, setMessages] = useState<MessageType[]>([
         { text: "Hello! How can I help you today?", sender: "assistant" },
     ]);
-    const [statusVisible, setStatusVisible] = useState(true);
+    const [statusVisible, setStatusVisible] = useState(false);
 
     const addMessage = (text: string) => {
         setMessages((prev) => [...prev, { text, sender: "user" }]);
