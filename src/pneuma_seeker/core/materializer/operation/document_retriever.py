@@ -12,10 +12,8 @@ def get_documents(
     source_datasets: list[str],
 ) -> dict[RetrieverType, list[AbstractDocument]]:
     ir_system = IRSystem(
-        {
-            "llm": llm,
-            "embed_model": embed_model,
-        },
+        llm,
+        embed_model,
         logger,
     )
     return ir_system.retrieve_documents(prompt, source_datasets, 10)

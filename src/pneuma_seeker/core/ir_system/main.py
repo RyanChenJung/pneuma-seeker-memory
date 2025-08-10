@@ -39,14 +39,17 @@ MAX_SANITY_CHECK_ITERATIONS = 3
 
 
 class IRSystem:
-    def __init__(self, models: dict[str, AbstractModel], logger: Logger):
+    def __init__(self, llm: AbstractModel, embed_model: AbstractModel, logger: Logger):
         self.prompt_factory = PromptFactory()
-        self.retriever_factory = RetrieverFactory(models)
-
         self.state = IRState()
-        self.llm = models["llm"]
-        self.embed_model = models["embed_model"]
+        self.llm = llm
+        self.embed_model = embed_model
         self.logger = logger
+
+        self.retriever_factory = RetrieverFactory({
+            "llm": self.llm,
+            "embed_model": self.embed_model,
+        })
 
     def index_documents(
         self, retriever_type: RetrieverType, documents: list[AbstractDocument]

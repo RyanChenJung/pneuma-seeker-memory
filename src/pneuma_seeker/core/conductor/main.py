@@ -114,7 +114,7 @@ class Conductor:
                 if tool is None:
                     tool = intent
                 yield f"LOG: Calling tool: {tool}..."
-                tool_outcome = self.__execute_tool(tool, args, llm_messages)
+                tool_outcome = self.__execute_tool(tool, args)
                 llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=tool_outcome)
                 )
@@ -133,15 +133,10 @@ class Conductor:
             )
         yield user_facing_response
 
-    def __execute_tool(
-        self, tool: str, args: str | dict, llm_messages: list[LLMMessage]
-    ) -> str:
+    def __execute_tool(self, tool: str, args: str | dict) -> str:
         if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
-            ir_system = IRSystem(
-                {"llm": self.llm, "embed_model": self.embed_model},
-                self.logger,
-            )
+            ir_system = IRSystem(self.llm, self.embed_model, self.logger)
             self.current_retrieval_results = ir_system.retrieve_documents(
                 args["prompt"],
                 self.data_sources,
