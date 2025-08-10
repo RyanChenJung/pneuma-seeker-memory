@@ -55,7 +55,7 @@ class LLMConductor:
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_sys_prompt_brief(ITERATION_LIMIT),
+                content=self.prompt_factory.get_sys_prompt(ITERATION_LIMIT),
             )
         ]
         actions_taken: list[str] = []
@@ -64,7 +64,7 @@ class LLMConductor:
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
-                    content=self.prompt_factory.get_env_state_prompt_brief(
+                    content=self.prompt_factory.get_env_state_prompt(
                         self.num_iteration,
                         ITERATION_LIMIT,
                         self.info_need_state,
@@ -80,14 +80,6 @@ class LLMConductor:
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=llm_output)
             )
-            """Format of action:
-            {
-                "intent": "communicate_with_user" | "internal_reasoning" | "tool_call",
-                "message": null | "<string>",
-                "tool": null | "IR System" | "Materializer Engine" | "State Manipulation" | "SQL Engine",
-                "args": null | { ... }
-            }
-            """
             action = parse_json(llm_output)
             intent: str = action.get("intent")
             actions_taken.append(intent)
@@ -299,13 +291,7 @@ class LLMConductor:
                     [
                         LLMMessage(
                             role=Role.SYSTEM.value,
-                            content="""You are a SQL query fixer for DuckDB. 
-Given an input SQL query, check for syntactic or semantic errors (case sensitivity, unescaped identifiers, invalid field names, type mismatches, or unsupported functions).
-Ensure the query ONLY accesses available tables in the target schemas. If not, convert it to an equivalent SQL query.
-Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible. 
-If no standard equivalent exists, use the closest DuckDB-supported function. 
-Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed. 
-Always output only the corrected SQL query, without explanations.""",
+                            content=self.prompt_factory.sql_sanity_checking_prompt(),
                         ),
                         LLMMessage(
                             role=Role.USER.value,
