@@ -1,16 +1,21 @@
-import { Message as MessageType } from "../models/message";
+import { MessageFormat } from "../models/message";
 
 interface Props {
-  message: MessageType;
+  message: MessageFormat;
 }
 
 export default function Message({ message }: Props) {
   const isUser = message.sender === "user";
+  const isLog = message.sender === "log";
 
   return (
     <div
-      className={`max-w-[70%] p-3 my-1 rounded-lg break-words ${
-        isUser ? "bg-[#800000] text-white self-end" : "bg-gray-200 text-black self-start"
+      className={`max-w-[70%] p-3 my-1 break-words ${
+        isLog
+          ? "font-mono text-sm italic text-gray-500 bg-gray-100 rounded-sm self-start"
+          : isUser
+          ? "bg-[#800000] text-white rounded-lg self-end"
+          : "bg-gray-200 text-black rounded-lg self-start"
       }`}
     >
       {message.text}

@@ -1,16 +1,18 @@
 import ChatWindow from "./ChatWindow";
 import ChatInput from "./ChatInput";
-import { Message as MessageType } from "../models/message";
-import { PanelRightClose } from "lucide-react";
+import { MessageFormat as MessageType } from "../models/message";
+import { Eye, EyeOff, PanelRightClose } from "lucide-react";
 
 interface Props {
   messages: MessageType[];
   onSend: (text: string) => void;
   statusVisible: boolean;
-  onToggle: () => void;
+  toolsVisible: boolean;
+  onToggleStatus: () => void;
+  onToggleTools: () => void;
 }
 
-export default function ChatArea({ messages, onSend, statusVisible, onToggle }: Props) {
+export default function ChatArea({ messages, onSend, statusVisible, toolsVisible, onToggleStatus, onToggleTools }: Props) {
   return (
     <main
       className={`
@@ -21,7 +23,7 @@ export default function ChatArea({ messages, onSend, statusVisible, onToggle }: 
     >
       {!statusVisible && (
         <button
-          onClick={onToggle}
+          onClick={onToggleStatus}
           aria-label="Show Status Panel"
           className="absolute top-2 left-2 px-3 py-1 rounded bg-[#800000] text-white hover:bg-[#510400] cursor-pointer transition"
         >
@@ -33,7 +35,24 @@ export default function ChatArea({ messages, onSend, statusVisible, onToggle }: 
         Pneuma-Seeker: Data Assistant System
       </div>
 
-      <ChatWindow messages={messages} />
+      <button
+        onClick={onToggleTools}
+        aria-label="Show Tools"
+        className="absolute top-2 right-2 px-5 py-1 rounded bg-[#800000] text-white hover:bg-[#510400] cursor-pointer transition flex items-center gap-2"
+      >
+        {toolsVisible ? (
+          <>
+            Tools <EyeOff className="w-4 h-4" />
+          </>
+        ) : (
+          <>
+            Tools <Eye className="w-4 h-4" />
+          </>
+        )}
+      </button>
+
+
+      <ChatWindow messages={messages} toolsVisible={toolsVisible} />
       <ChatInput onSend={onSend} />
     </main>
   );

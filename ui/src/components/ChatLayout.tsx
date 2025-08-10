@@ -1,40 +1,51 @@
 'use client';
+import { useChatStore } from "@/stores/chatStore";
+import { sendPrompt } from "@/lib/webSocketHandler";
 import { useState } from "react";
-import { Message as MessageType } from "../models/message";
 import StatusPanel from "./StatusPanel";
 import ChatArea from "./ChatArea";
+import ChatList from "./ChatList";
 
 export default function ChatLayout() {
-    const [messages, setMessages] = useState<MessageType[]>([
-        { text: "Hello! How can I help you today?", sender: "assistant" },
-    ]);
-    const [statusVisible, setStatusVisible] = useState(false);
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const messages = useChatStore((state) => state.messages[currentChatId] || []);
+  const chatList = useChatStore((state) => state.chatList);
+  const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
+  const addChat = useChatStore((state) => state.addChat);
 
-    const addMessage = (text: string) => {
-        setMessages((prev) => [...prev, { text, sender: "user" }]);
-        setTimeout(() => {
-            setMessages((prev) => [
-                ...prev,
-                { text: `You said: ${text}`, sender: "assistant" },
-            ]);
-        }, 1000);
-    };
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [toolsVisible, setToolsVisible] = useState(true);
 
-    const toggleStatus = () => setStatusVisible((v) => !v);
+  const sendMessage = (text: string) => {
+    sendPrompt(currentChatId, text);
+    useChatStore.getState().addMessage(currentChatId, { text, sender: "user" });
+  };
 
-    return (
-        <div
-            className={`border border-gray-300 rounded-lg overflow-hidden shadow-lg h-screen transition-all duration-500 ease-in-out flex
-    flex-col md:flex-row
-  `}
-        >
-            <StatusPanel messages={messages} visible={statusVisible} onToggle={toggleStatus} />
-            <ChatArea
-                messages={messages}
-                onSend={addMessage}
-                statusVisible={statusVisible}
-                onToggle={toggleStatus}
-            />
-        </div>
-    );
+  const toggleStatus = () => setStatusVisible((v) => !v);
+  const toggleTools = () => setToolsVisible((v) => !v);
+
+  const handleAddChat = () => {
+    const newChatId = `chat-${Date.now()}`;
+    addChat(newChatId);
+  };
+
+  return (
+    <div className="flex h-screen border border-gray-300 rounded-lg overflow-hidden shadow-lg">
+      <ChatList
+        chatList={chatList}
+        currentChatId={currentChatId}
+        onSelectChat={setCurrentChatId}
+        onAddChat={handleAddChat}
+      />
+      <StatusPanel messages={messages} visible={statusVisible} onToggleStatus={toggleStatus} />
+      <ChatArea
+        messages={messages}
+        onSend={sendMessage}
+        statusVisible={statusVisible}
+        toolsVisible={toolsVisible}
+        onToggleStatus={toggleStatus}
+        onToggleTools={toggleTools}
+      />
+    </div>
+  );
 }

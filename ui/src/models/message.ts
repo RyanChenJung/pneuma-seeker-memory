@@ -1,6 +1,4 @@
-export type Sender = "user" | "assistant";
-
-export interface Message {
-  sender: Sender;
-  text: string;
+export interface MessageFormat {
+    text: string;
+    sender: 'assistant' | 'user' | 'log';
 }

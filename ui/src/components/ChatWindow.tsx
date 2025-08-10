@@ -1,13 +1,14 @@
 'use client';
 import { useEffect, useRef } from "react";
 import Message from "./Message";
-import { Message as MessageType } from "../models/message";
+import { MessageFormat as MessageType } from "../models/message";
 
 interface Props {
   messages: MessageType[];
+  toolsVisible: boolean;
 }
 
-export default function ChatWindow({ messages }: Props) {
+export default function ChatWindow({ messages, toolsVisible }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -15,6 +16,10 @@ export default function ChatWindow({ messages }: Props) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  if (!toolsVisible) {
+    messages = messages.filter((m) => m.sender !== 'log');
+  }
 
   return (
     <div

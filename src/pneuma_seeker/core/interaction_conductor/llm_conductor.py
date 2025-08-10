@@ -50,10 +50,10 @@ class LLMConductor:
 
     def process_input(
         self, human_input: str, human_id: str, subsequent_chat: bool
-    ) -> str:
+    ):
+        self.logger.info(f"Processing human input: {human_input}")
         if subsequent_chat:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
-        self.logger.info(f"Processing human input: {human_input}")
 
         self.num_iteration = 0
         user_facing_response = ""
@@ -110,6 +110,7 @@ class LLMConductor:
             elif intent == "internal_reasoning" and isinstance(action_message, str):
                 self.logger.info(f"DEBUGGY: num_iteration: {self.num_iteration}")
                 self.logger.info(f"actions_taken[-1]: {actions_taken[-1]}")
+                yield "LOG: Performing internal reasoning..."
                 if self.num_iteration > 1 and actions_taken[-1] == 'internal_reasoning':
                     llm_messages.append(
                         LLMMessage(
@@ -124,9 +125,10 @@ class LLMConductor:
                             content=f"You did some internal reasoning: {action_message}",
                         )
                     )
-            else:
+            elif args is not None:
                 if tool is None:
                     tool = intent
+                yield f"LOG: Calling tool: {tool}..."
                 tool_outcome = self.__execute_tool(tool, args, llm_messages)
                 llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=tool_outcome)
@@ -144,7 +146,7 @@ class LLMConductor:
             self.interaction_history.append(
                 Interaction(human_input, user_facing_response)
             )
-        return user_facing_response
+        yield user_facing_response
 
     def __execute_tool(
         self, tool: str, args: str | dict, llm_messages: list[LLMMessage]

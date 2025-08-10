@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
-import { Message as MessageType } from "../models/message";
+import { MessageFormat } from "../models/message";
 import { getState } from "@/lib/fastapi";
 import { SystemState } from "@/models/systemState";
 
 interface Props {
-  messages: MessageType[];
+  messages: MessageFormat[];
   visible: boolean;
-  onToggle: () => void;
+  onToggleStatus: () => void;
 }
 
 const defaultState = {
@@ -39,7 +39,7 @@ const exampleFilledState = {
   curr_retrieval_results: {},
 }
 
-export default function StatusPanel({ messages, visible, onToggle }: Props) {
+export default function StatusPanel({ messages, visible, onToggleStatus }: Props) {
   const [systemState, setSystemState] = useState<SystemState>(exampleFilledState);
 
   // useEffect(() => {
@@ -63,7 +63,7 @@ export default function StatusPanel({ messages, visible, onToggle }: Props) {
       {visible && (
         <>
           <button
-            onClick={onToggle}
+            onClick={onToggleStatus}
             aria-label="Hide Status Panel"
             className="absolute top-2 right-2 px-3 py-1 rounded bg-[#800000] cursor-pointer text-white hover:bg-[#510400] transition"
           >
