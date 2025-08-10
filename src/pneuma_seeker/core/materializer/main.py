@@ -135,28 +135,7 @@ class Materializer:
                 op_name: str = plan["name"]
                 op_args: dict[str, Any] = plan["args"]
                 assign_to: str = plan.get("assign_to", "")
-                if op_name == "Standard Inner Join":
-                    left_table_id: str = op_args["left_table_id"]
-                    right_table_id: str = op_args["right_table_id"]
-                    join_key: str = op_args["join_key"]
-                    join_res = std_inner_join(
-                        left_table_id,
-                        right_table_id,
-                        all_tables,
-                        join_key,
-                    )
-                    self.state.intermediate_tables[assign_to] = join_res
-                    self.actions.append(
-                        f"Performed standard inner join between {left_table_id} and {right_table_id} with join key {join_key}, resulting in {assign_to}"
-                    )
-                elif op_name == "Union":
-                    table_ids: list[str] = op_args["table_ids"]
-                    union_res = union(all_tables, table_ids)
-                    self.state.intermediate_tables[assign_to] = union_res
-                    self.actions.append(
-                        f"Performed union between these tables: {table_ids}, resulting in {assign_to}"
-                    )
-                elif op_name == "Document Retriever":
+                if op_name == "Document Retriever":
                     prompt: str = op_args["prompt"]
                     extra_documents = get_documents(
                         self.llm,
