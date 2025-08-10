@@ -17,7 +17,7 @@ class PromptFactory:
     sqls: list[str],
     operation_description: str,
 ) -> str:
-        return f"""You are the Materializer Engine (ME).  
+        return f"""You are the Materializer.  
 Your goal is to fill all rows for the target schemas below using retrieved tables and allowed operations.
 
 TARGET SCHEMAS:
