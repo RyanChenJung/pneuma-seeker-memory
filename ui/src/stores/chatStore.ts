@@ -1,4 +1,4 @@
-// stores/chatStore.ts
+// frontend: stores/chatStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -18,6 +18,8 @@ type ChatStore = {
   addMessage: (chatId: string, msg: MessageFormat) => void;
   clearMessages: (chatId: string) => void;
   setSystemState: (chatId: string, state: any) => void;
+  renameChat: (oldChatId: string, newChatId: string) => void;
+  deleteChat: (chatId: string) => void;
 };
 
 export const useChatStore = create<ChatStore>()(
@@ -68,6 +70,53 @@ export const useChatStore = create<ChatStore>()(
             [chatId]: state,
           },
         }));
+      },
+
+      renameChat(oldChatId: string, newChatId: string) {
+        const state = get();
+        if (!state.chatList.includes(oldChatId) || state.chatList.includes(newChatId)) return;
+
+        const newChatList = state.chatList.map((id) => (id === oldChatId ? newChatId : id));
+        const newMessages = { ...state.messages };
+        newMessages[newChatId] = newMessages[oldChatId];
+        delete newMessages[oldChatId];
+
+        const newSystemStates = { ...state.systemStates };
+        if (newSystemStates[oldChatId]) {
+          newSystemStates[newChatId] = newSystemStates[oldChatId];
+          delete newSystemStates[oldChatId];
+        }
+
+        set({
+          chatList: newChatList,
+          messages: newMessages,
+          systemStates: newSystemStates,
+          currentChatId: state.currentChatId === oldChatId ? newChatId : state.currentChatId,
+        });
+      },
+
+      deleteChat(chatId: string) {
+        const state = get();
+        if (!state.chatList.includes(chatId)) return;
+
+        const newChatList = state.chatList.filter((id) => id !== chatId);
+        const newMessages = { ...state.messages };
+        delete newMessages[chatId];
+
+        const newSystemStates = { ...state.systemStates };
+        delete newSystemStates[chatId];
+
+        let newCurrentChatId = state.currentChatId;
+        if (state.currentChatId === chatId) {
+          newCurrentChatId = newChatList.length > 0 ? newChatList[0] : "";
+        }
+
+        set({
+          chatList: newChatList,
+          messages: newMessages,
+          systemStates: newSystemStates,
+          currentChatId: newCurrentChatId,
+        });
       },
     }),
     {

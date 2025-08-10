@@ -1,4 +1,4 @@
-// lib/webSocketHandler.ts
+// frontend: lib/webSocketHandler.ts
 import { useChatStore } from "@/stores/chatStore";
 
 const BASE_URL = "localhost:8000";

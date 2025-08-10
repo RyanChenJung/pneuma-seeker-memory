@@ -12,6 +12,8 @@ export default function ChatLayout() {
   const chatList = useChatStore((state) => state.chatList);
   const setCurrentChatId = useChatStore((state) => state.setCurrentChatId);
   const addChat = useChatStore((state) => state.addChat);
+  const renameChat = useChatStore((state) => state.renameChat);
+  const deleteChat = useChatStore((staet) => staet.deleteChat);
 
   const [statusVisible, setStatusVisible] = useState(false);
   const [toolsVisible, setToolsVisible] = useState(true);
@@ -36,6 +38,8 @@ export default function ChatLayout() {
         currentChatId={currentChatId}
         onSelectChat={setCurrentChatId}
         onAddChat={handleAddChat}
+        onRenameChat={renameChat}
+        onDeleteChat={deleteChat}
       />
       <StatusPanel messages={messages} visible={statusVisible} onToggleStatus={toggleStatus} />
       <ChatArea

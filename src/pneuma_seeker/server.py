@@ -1,7 +1,7 @@
 import os
 
 # from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from torch.backends import cudnn
 
@@ -36,7 +36,7 @@ class ConnectionManager:
         self.active_connections: dict[tuple[str, str], list[WebSocket]] = {}
         # TODO: Handle concurrency issue in the future!
         self.conductors: dict[tuple[str, str], ChatInterface] = {}
-    
+
     def get_conductor(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
         if key not in self.conductors:
@@ -74,11 +74,39 @@ class ConnectionManager:
         for conn in self.active_connections.get(key, []):
             await conn.send_text(message)
 
+    def rename_chat(self, user_id: str, old_chat_id: str, new_chat_id: str):
+        old_key = (user_id, old_chat_id)
+        new_key = (user_id, new_chat_id)
+
+        # Move conductor if exists
+        if old_key in self.conductors:
+            self.conductors[new_key] = self.conductors.pop(old_key)
+
+        # Move active connections if exists
+        if old_key in self.active_connections:
+            self.active_connections[new_key] = self.active_connections.pop(old_key)
+
+    def delete_chat(self, user_id: str, chat_id: str):
+        key = (user_id, chat_id)
+
+        # Close active connections for this chat
+        if key in self.active_connections:
+            for ws in self.active_connections[key]:
+                # Ideally close websocket connections gracefully
+                import asyncio
+                asyncio.create_task(ws.close())
+            del self.active_connections[key]
+
+        # Remove conductor
+        if key in self.conductors:
+            del self.conductors[key]
+
 manager = ConnectionManager(
     llm_path="model/weight/qwen3-8b",
     embed_model_path="model/weight/bge-base",
-    data_sources=["environment"]
+    data_sources=["environment"],
 )
+
 
 @app.websocket("/ws/{user_id}/{chat_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
@@ -92,6 +120,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
                 await manager.send_personal_message(log_message, user_id, chat_id)
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id, chat_id)
+
+
+@app.post("/chat/rename")
+async def rename_chat(user_id: str, old_chat_id: str, new_chat_id: str):
+    manager.rename_chat(user_id, old_chat_id, new_chat_id)
+    return {"status": "ok"}
+
+@app.delete("/chat/delete")
+async def delete_chat(user_id: str, chat_id: str):
+    manager.delete_chat(user_id, chat_id)
+    return {"status": "ok"}
 
 
 # @app.get("/state/")
