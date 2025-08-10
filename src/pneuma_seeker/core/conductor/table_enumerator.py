@@ -1,7 +1,7 @@
 from collections import defaultdict
 import os
 import re
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 
 
 DATASET_PATH = "../../data_src/environment/dataset"

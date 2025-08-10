@@ -1,7 +1,7 @@
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.conductor.table_enumerator import table_id_enumerator
-from pneuma_seeker.core.ir_system.ir_data_model import (
+from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     convert_multi_retriever_results_to_str,

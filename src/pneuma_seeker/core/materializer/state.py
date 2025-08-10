@@ -1,5 +1,5 @@
 from pandas import DataFrame
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 
 
 class MaterializerState:

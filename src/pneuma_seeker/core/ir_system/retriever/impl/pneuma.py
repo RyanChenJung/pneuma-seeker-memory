@@ -15,13 +15,13 @@ import pandas as pd
 from scipy.spatial.distance import cosine
 from torch import cuda
 
-from pneuma_seeker.core.ir_system.ir_data_model import (
+from pneuma_seeker.core.ir_system.data_model import (
     RetrieverType,
     Table,
     TableContext,
     Text,
 )
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from tqdm import tqdm
 from chromadb_deterministic.api import ClientAPI

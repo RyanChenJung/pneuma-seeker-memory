@@ -1,12 +1,12 @@
 from logging import Logger
 from typing import Optional
-from pneuma_seeker.core.ir_system.ir_prompt_factory import IRPromptFactory
-from pneuma_seeker.core.ir_system.ir_data_model import (
+from pneuma_seeker.core.ir_system.prompt_factory import PromptFactory
+from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     IRFeedbackOutputType,
     convert_retrieval_results_to_str,
 )
-from pneuma_seeker.core.ir_system.ir_state import IRState
+from pneuma_seeker.core.ir_system.state import IRState
 from pneuma_seeker.core.ir_system.retriever.retriever_factory import (
     RetrieverType,
     RetrieverFactory,
@@ -38,9 +38,9 @@ RETRIEVER_INFO = [
 MAX_SANITY_CHECK_ITERATIONS = 3
 
 
-class LMInterface:
+class IRSystem:
     def __init__(self, models: dict[str, AbstractModel], logger: Logger):
-        self.prompt_factory = IRPromptFactory()
+        self.prompt_factory = PromptFactory()
         self.retriever_factory = RetrieverFactory(models)
 
         self.state = IRState()

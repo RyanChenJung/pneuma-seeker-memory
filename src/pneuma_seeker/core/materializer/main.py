@@ -2,7 +2,7 @@ from typing import Any
 
 from logging import Logger
 from pandas import DataFrame
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.materializer.prompt_factory import PromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.materializer.operation.table_enumerator import table_enumerator

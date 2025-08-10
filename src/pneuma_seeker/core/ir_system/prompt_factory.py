@@ -1,4 +1,4 @@
-class IRPromptFactory:
+class PromptFactory:
     def get_new_retrieve_prompt(self, requirements: str):
         return f"""Given these requirements: `{requirements}`, please craft a prompt to be given to information retrieval systems."""
 

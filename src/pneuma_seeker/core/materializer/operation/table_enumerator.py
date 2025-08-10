@@ -4,7 +4,7 @@ import re
 import pandas as pd
 
 
-from pneuma_seeker.core.ir_system.ir_data_model import (
+from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,

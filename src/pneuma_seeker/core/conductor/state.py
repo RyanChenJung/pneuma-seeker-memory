@@ -1,7 +1,5 @@
 from pandas import DataFrame
 
-from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
-
 
 class InformationNeedState:
     """

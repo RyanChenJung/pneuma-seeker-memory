@@ -5,8 +5,8 @@ from pandas import DataFrame
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
-from pneuma_seeker.core.ir_system.lm_interface import LMInterface
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.main import IRSystem
 from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
@@ -40,7 +40,7 @@ class Conductor:
         )
 
         self.materializer = Materializer(
-            self.llm, self.logger, self.embed_model, data_sources
+            self.llm, self.logger, self.embed_model, self.data_sources
         )
 
     def process_input(self, human_input: str, human_id: str, subsequent_chat: bool):
@@ -138,7 +138,7 @@ class Conductor:
     ) -> str:
         if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
-            ir_system = LMInterface(
+            ir_system = IRSystem(
                 {"llm": self.llm, "embed_model": self.embed_model},
                 self.logger,
             )
