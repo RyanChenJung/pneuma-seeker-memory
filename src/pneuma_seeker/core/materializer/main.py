@@ -3,28 +3,28 @@ from typing import Any
 from logging import Logger
 from pandas import DataFrame
 from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
-from pneuma_seeker.core.materializer_engine.me_prompt_factory import MEPromptFactory
-from pneuma_seeker.core.materializer_engine.me_state import MaterializerState
-from pneuma_seeker.core.materializer_engine.operation.table_enumerator import table_enumerator
-from pneuma_seeker.core.materializer_engine.operation.document_retriever import (
+from pneuma_seeker.core.materializer.prompt_factory import PromptFactory
+from pneuma_seeker.core.materializer.state import MaterializerState
+from pneuma_seeker.core.materializer.operation.table_enumerator import table_enumerator
+from pneuma_seeker.core.materializer.operation.document_retriever import (
     get_documents,
 )
-from pneuma_seeker.core.materializer_engine.operation.operation_description import (
+from pneuma_seeker.core.materializer.operation.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.materializer_engine.operation.python_executor import (
+from pneuma_seeker.core.materializer.operation.python_executor import (
     execute_python_code,
 )
-from pneuma_seeker.core.materializer_engine.operation.sql_executor import execute_sql
-from pneuma_seeker.core.materializer_engine.operation.std_inner_join import std_inner_join
-from pneuma_seeker.core.materializer_engine.operation.union import union
+from pneuma_seeker.core.materializer.operation.sql_executor import execute_sql
+from pneuma_seeker.core.materializer.operation.std_inner_join import std_inner_join
+from pneuma_seeker.core.materializer.operation.union import union
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.utils.json_processor import parse_code, parse_json
 
 
-class LLMPlanner:
+class Materializer:
     def __init__(
         self,
         llm: AbstractModel,
@@ -39,7 +39,7 @@ class LLMPlanner:
         self.llm = llm
         self.embed_model = embed_model
 
-        self.prompt_factory = MEPromptFactory()
+        self.prompt_factory = PromptFactory()
         self.state = MaterializerState()
 
         self.actions: list[str] = []

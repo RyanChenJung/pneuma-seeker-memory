@@ -1,5 +1,5 @@
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
-from pneuma_seeker.core.conductor.conductor_state import InformationNeedState
+from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.conductor.table_enumerator import table_id_enumerator
 from pneuma_seeker.core.ir_system.ir_data_model import (
     AbstractDocument,

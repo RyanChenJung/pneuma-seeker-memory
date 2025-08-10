@@ -9,7 +9,7 @@ from pneuma_seeker.core.ir_system.ir_data_model import (
 )
 
 
-class MEPromptFactory:
+class PromptFactory:
     def get_planning_prompt_brief(
     self,
     target_schemas: dict[str, DataFrame],

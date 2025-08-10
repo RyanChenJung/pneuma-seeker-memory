@@ -4,10 +4,10 @@ from logging import Logger
 from pandas import DataFrame
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
-from pneuma_seeker.core.conductor.conductor_state import InformationNeedState
+from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.lm_interface import LMInterface
-from pneuma_seeker.core.materializer_engine.llm_planner import LLMPlanner
+from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
@@ -29,27 +29,26 @@ class Conductor:
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
         self.logger = logger
+        self.prompt_factory = ConductorPromptFactory()
+        self.data_sources = data_sources
 
         self.info_need_state = InformationNeedState()
         self.interaction_history: list[HumanConductorInteraction] = []
 
-        self.prompt_factory = ConductorPromptFactory()
         self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
             dict()
         )
 
-        self.materializer = LLMPlanner(
+        self.materializer = Materializer(
             self.llm, self.logger, self.embed_model, data_sources
         )
-        self.data_sources = data_sources
-        self.num_iteration = 0
 
     def process_input(self, human_input: str, human_id: str, subsequent_chat: bool):
         self.logger.info(f"Processing human input: {human_input}")
         if subsequent_chat:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
 
-        self.num_iteration = 0
+        num_actions_taken = 0
         user_facing_response = ""
         is_user_facing_response = False
         llm_messages = [
@@ -59,13 +58,13 @@ class Conductor:
             )
         ]
         actions_taken: list[str] = []
-        while not is_user_facing_response and self.num_iteration < ITERATION_LIMIT:
-            self.num_iteration += 1
+        while not is_user_facing_response and num_actions_taken < ITERATION_LIMIT:
+            num_actions_taken += 1
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
-                        self.num_iteration,
+                        num_actions_taken,
                         ITERATION_LIMIT,
                         self.info_need_state,
                         self.interaction_history,
@@ -94,10 +93,10 @@ class Conductor:
                 user_facing_response = action_message
                 is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
-                self.logger.info(f"DEBUGGY: num_iteration: {self.num_iteration}")
+                self.logger.info(f"DEBUGGY: num_actions_taken: {num_actions_taken}")
                 self.logger.info(f"actions_taken[-1]: {actions_taken[-1]}")
                 yield "LOG: Performing internal reasoning..."
-                if self.num_iteration > 1 and actions_taken[-1] == "internal_reasoning":
+                if num_actions_taken > 1 and actions_taken[-1] == "internal_reasoning":
                     llm_messages.append(
                         LLMMessage(
                             role=Role.USER.value,

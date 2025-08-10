@@ -20,8 +20,6 @@ class InformationNeedState:
         self.sqls: list[str] = []
         self.is_sql_executed = False
 
-        self.interaction_history: list[HumanConductorInteraction] = []
-
     def get_table_repr(self, table: DataFrame, table_id: str):
         table_repr = f"\nTable {table_id}:\ncol: {" | ".join(list(table.columns))}"
         if len(table) > 0:
@@ -60,12 +58,3 @@ Column descriptions of target schemas:
 
 SQLs to be run sequentially over the target schemas (Is executed yet? {self.is_sql_executed}):
 {self.sqls}"""
-
-    def get_current_state_instance(self):
-        return {
-            "target_schemas": self.target_schemas,
-            "is_target_schemas_materialized": self.is_target_schemas_materialized,
-            "column_descriptions": self.column_descriptions,
-            "sqls": self.sqls,
-            "is_sql_executed": self.is_sql_executed,
-        }
