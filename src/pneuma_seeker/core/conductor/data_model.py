@@ -1,4 +1,4 @@
-class Interaction:
+class HumanConductorInteraction:
     """
     Basically keeps track of every call to the process_input() function of LLMConductor
     """

@@ -1,7 +1,7 @@
 from logging import INFO
 from os import path
 
-from pneuma_seeker.core.conductor.llm_conductor import LLMConductor
+from pneuma_seeker.core.conductor.main import Conductor
 from pneuma_seeker.utils.logger import setup_logger
 
 
@@ -23,7 +23,7 @@ class ChatInterface:
             max_bytes=10_000_000,
             backup_count=5,
         )
-        self.llm_conductor = LLMConductor(
+        self.llm_conductor = Conductor(
             llm_path, embed_model_path, logger, data_sources
         )
         self.user_id = user_id

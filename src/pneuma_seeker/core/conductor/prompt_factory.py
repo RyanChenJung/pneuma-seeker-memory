@@ -1,5 +1,5 @@
-from pneuma_seeker.core.conductor.ic_data_model import Interaction
-from pneuma_seeker.core.conductor.ic_state import InformationNeedState
+from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
+from pneuma_seeker.core.conductor.conductor_state import InformationNeedState
 from pneuma_seeker.core.conductor.table_enumerator import table_id_enumerator
 from pneuma_seeker.core.ir_system.ir_data_model import (
     AbstractDocument,
@@ -8,9 +8,9 @@ from pneuma_seeker.core.ir_system.ir_data_model import (
 )
 
 
-class ICPromptFactory:
+class ConductorPromptFactory:
     def get_sys_prompt(self, iteration_limit: int) -> str:
-        return f"""You are the Interaction Conductor (IC).  
+        return f"""You are the Conductor.  
 Your mission is to guide the user from vague needs to a fulfilled answer by:
 1. Defining accurate target schemas and column descriptions.
 2. Materializing those schemas with real data.
@@ -62,7 +62,7 @@ Your output **must** be exactly one JSON object matching one of the above format
     curr_iteration: int,
     max_iteration: int,
     info_need_state: InformationNeedState,
-    interaction_history: list[Interaction],
+    interaction_history: list[HumanConductorInteraction],
     actions_taken: list[str],
     curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
     human_input: str,
@@ -135,7 +135,7 @@ Please output your decision in the following format:
         return """You have reached the iteration limit for this step. Please summarize the actions that you have done.
 You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the summary."""
 
-    def __convert_interactions_to_str(self, interactions: list[Interaction]) -> str:
+    def __convert_interactions_to_str(self, interactions: list[HumanConductorInteraction]) -> str:
         interaction_repr = ""
         for interaction in interactions:
             interaction_repr += f"- {interaction}\n"

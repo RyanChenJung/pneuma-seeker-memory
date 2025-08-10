@@ -2,9 +2,9 @@ import duckdb
 
 from logging import Logger
 from pandas import DataFrame
-from pneuma_seeker.core.conductor.ic_data_model import Interaction
-from pneuma_seeker.core.conductor.ic_prompt_factory import ICPromptFactory
-from pneuma_seeker.core.conductor.ic_state import InformationNeedState
+from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
+from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
+from pneuma_seeker.core.conductor.conductor_state import InformationNeedState
 from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.lm_interface import LMInterface
 from pneuma_seeker.core.materializer_engine.llm_planner import LLMPlanner
@@ -18,7 +18,7 @@ ITERATION_LIMIT = 5
 PAST_INTERACTIONS_LIMIT = 5
 
 
-class LLMConductor:
+class Conductor:
     def __init__(
         self,
         llm_path: str,
@@ -31,9 +31,9 @@ class LLMConductor:
         self.logger = logger
 
         self.info_need_state = InformationNeedState()
-        self.interaction_history: list[Interaction] = []
+        self.interaction_history: list[HumanConductorInteraction] = []
 
-        self.prompt_factory = ICPromptFactory()
+        self.prompt_factory = ConductorPromptFactory()
         self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
             dict()
         )
@@ -89,7 +89,7 @@ class LLMConductor:
 
             if intent == "communicate_with_user" and isinstance(action_message, str):
                 self.interaction_history.append(
-                    Interaction(human_input, action_message)
+                    HumanConductorInteraction(human_input, action_message)
                 )
                 user_facing_response = action_message
                 is_user_facing_response = True
@@ -130,7 +130,7 @@ class LLMConductor:
             )
             user_facing_response = self.llm.chat(llm_messages)
             self.interaction_history.append(
-                Interaction(human_input, user_facing_response)
+                HumanConductorInteraction(human_input, user_facing_response)
             )
         yield user_facing_response
 

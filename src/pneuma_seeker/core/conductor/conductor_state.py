@@ -1,5 +1,7 @@
 from pandas import DataFrame
 
+from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
+
 
 class InformationNeedState:
     """
@@ -14,8 +16,11 @@ class InformationNeedState:
         self.target_schemas: dict[str, DataFrame] = dict()
         self.is_target_schemas_materialized = False
         self.column_descriptions: dict[str, dict[str, str]] = dict()
+
         self.sqls: list[str] = []
         self.is_sql_executed = False
+
+        self.interaction_history: list[HumanConductorInteraction] = []
 
     def get_table_repr(self, table: DataFrame, table_id: str):
         table_repr = f"\nTable {table_id}:\ncol: {" | ".join(list(table.columns))}"
