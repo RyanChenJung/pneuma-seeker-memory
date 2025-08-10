@@ -32,6 +32,21 @@ from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 
 
+def clean_column(col):
+    col = col.lower()
+    # Replace spaces and hyphens with underscores
+    col = col.replace("-", "_").replace(" ", "_")
+    # Replace "(" and ")" with underscores
+    col = col.replace("(", "_").replace(")", "_")
+    # Remove anything that's not a letter, digit, or underscore
+    col = re.sub(r"[^0-9a-z_]", "_", col)
+    # Collapse multiple underscores into one
+    col = re.sub(r"_+", "_", col)
+    # Remove leading/trailing underscores
+    col = col.strip("_")
+    return col
+
+
 class Pneuma(AbstractRetriever):
     """Represents a tabular data retriever."""
 
@@ -83,7 +98,9 @@ class Pneuma(AbstractRetriever):
             dictionary_id_bm25 = dict()
             if retriever.corpus is not None:
                 if len(retriever.corpus) < increased_k:
-                    print(f"Reducing increased_k from {increased_k} to {len(retriever.corpus)}")
+                    print(
+                        f"Reducing increased_k from {increased_k} to {len(retriever.corpus)}"
+                    )
                     increased_k = len(retriever.corpus)
                 dictionary_id_bm25 = {
                     datum["metadata"]["table"]: datum_idx
@@ -122,30 +139,17 @@ class Pneuma(AbstractRetriever):
                     seen_tables.append(table)
                 else:
                     continue
-                
+
                 actual_table = pd.read_csv(table)
 
-                def clean_column(col):
-                    col = col.lower()
-                    # Replace spaces and hyphens with underscores
-                    col = col.replace('-', '_').replace(' ', '_')
-                    # Replace "(" and ")" with underscores
-                    col = col.replace('(', '_').replace(')', '_')
-                    # Remove anything that's not a letter, digit, or underscore
-                    col = re.sub(r'[^0-9a-z_]', '_', col)
-                    # Collapse multiple underscores into one
-                    col = re.sub(r'_+', '_', col)
-                    # Remove leading/trailing underscores
-                    col = col.strip('_')
-                    return col
-                
                 actual_table.rename(columns=clean_column, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=table[:-4].split('/')[-1],
+                        doc_id=table[:-4].split("/")[-1],
                         retriever_type=RetrieverType.PNEUMA,
                         content=actual_table,
                         metadata=dict(),
+                        path=table,
                     )
                 )
         return retrieval_results
@@ -515,7 +519,11 @@ class Pneuma(AbstractRetriever):
         return conversations, conv_tables, conv_cols
 
     def __get_col_description_prompt(
-        self, table_name: str, columns: str, column: str, table_description: Optional[str] = None
+        self,
+        table_name: str,
+        columns: str,
+        column: str,
+        table_description: Optional[str] = None,
     ):
         if table_description is not None:
             return f"""A table with the name {table_name}, which represents ```{table_description}```, has the following columns:

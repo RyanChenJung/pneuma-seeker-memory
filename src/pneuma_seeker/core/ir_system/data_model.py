@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import Enum
-from typing import Any, TypedDict
+from typing import Any, Optional, TypedDict
 
 from pandas import DataFrame
 
@@ -27,11 +27,13 @@ class AbstractDocument(ABC):
         retriever_type: RetrieverType,
         content: Any,
         metadata: dict[str, str],
+        path: Optional[str] = None,
     ):
         self.doc_id = doc_id
         self.retriever_type = retriever_type
         self.content = content
         self.metadata = metadata
+        self.path = path
 
     def __eq__(self, other):
         if not isinstance(other, AbstractDocument):
@@ -57,8 +59,8 @@ class Knowledge(AbstractDocument):
     - metadata: {"type": "local/global", "user": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata):
-        super().__init__(doc_id, retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+        super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
 class Table(AbstractDocument):
@@ -70,8 +72,8 @@ class Table(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: DataFrame, metadata):
-        super().__init__(doc_id, retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: DataFrame, metadata, path: Optional[str] = None):
+        super().__init__(doc_id, retriever_type, content, metadata, path)
     
     def __str__(self) -> str:
         content_representation = ""
@@ -99,8 +101,8 @@ class TableContext(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "...", "type": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata):
-        super().__init__(doc_id, retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+        super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
 class Text(AbstractDocument):
@@ -108,8 +110,8 @@ class Text(AbstractDocument):
     Represents textual document.
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata):
-        super().__init__(doc_id, retriever_type, content, metadata)
+    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+        super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
 def convert_multi_retriever_results_to_str(retrieval_results: dict[RetrieverType, list[AbstractDocument]]):

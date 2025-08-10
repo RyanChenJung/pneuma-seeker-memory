@@ -3,8 +3,9 @@ from pandas import DataFrame
 
 class InformationNeedState:
     """
-    Represents user's information need as a set of target schemas and SQLs to be executed over them.
-    For example, if the user needs to know about the work addresses of faculty members, the target schemas
+    Represents a user's information need as a pair (T,Q), where T is a set of
+    tables and Q is a sequene of SQL queries to be executed over them. For example,
+    if the user needs to know about the work addresses of faculty members, the target schemas
     may be ["name", "work address"], where name represents the names of the members, and work address represents
     the corresponding work address of each of them. After materialized by Materializer Engine, the SQLs can be
     executed sequentially over the materialized tables, and the outcome is useful to answer user's needs.
@@ -56,3 +57,12 @@ Column descriptions of target schemas:
 
 SQLs to be run sequentially over the target schemas (Is executed yet? {self.is_sql_executed}):
 {self.sqls}"""
+
+    def get_current_state_instance(self):
+        return {
+            "T": self.target_schemas,
+            "is_T_materialized": self.is_target_schemas_materialized,
+            "column_descriptions": self.column_descriptions,
+            "Q": self.sqls,
+            "is_Q_executed": self.is_sql_executed,
+        }

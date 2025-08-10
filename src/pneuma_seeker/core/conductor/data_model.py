@@ -1,6 +1,6 @@
 class HumanConductorInteraction:
     """
-    Basically keeps track of every call to the process_input() function of LLMConductor
+    Keeps track of pairs of human input-Conductor (final) response for the input
     """
 
     def __init__(self, human_input: str, llm_response: str) -> None:

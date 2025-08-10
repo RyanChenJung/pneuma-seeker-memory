@@ -29,23 +29,26 @@ class Conductor:
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
         self.logger = logger
-        self.prompt_factory = ConductorPromptFactory()
         self.data_sources = data_sources
 
-        self.info_need_state = InformationNeedState()
-        self.interaction_history: list[HumanConductorInteraction] = []
-
-        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
-            dict()
-        )
-
+        self.prompt_factory = ConductorPromptFactory()
         self.materializer = Materializer(
             self.llm, self.logger, self.embed_model, self.data_sources
         )
 
-    def process_input(self, human_input: str, human_id: str, subsequent_chat: bool):
+        self.info_need_state = InformationNeedState()
+        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
+            dict()
+        )
+
+    def process_input(
+        self,
+        human_input: str,
+        human_id: str,
+        interaction_history: list[HumanConductorInteraction]
+    ):
         self.logger.info(f"Processing human input: {human_input}")
-        if subsequent_chat:
+        if len(interaction_history) > 0:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
 
         num_actions_taken = 0
@@ -67,7 +70,7 @@ class Conductor:
                         num_actions_taken,
                         ITERATION_LIMIT,
                         self.info_need_state,
-                        self.interaction_history,
+                        interaction_history,
                         actions_taken,
                         self.current_retrieval_results,
                         human_input,
@@ -87,9 +90,6 @@ class Conductor:
             args: None | dict = action.get("args")
 
             if intent == "communicate_with_user" and isinstance(action_message, str):
-                self.interaction_history.append(
-                    HumanConductorInteraction(human_input, action_message)
-                )
                 user_facing_response = action_message
                 is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
@@ -128,9 +128,6 @@ class Conductor:
                 )
             )
             user_facing_response = self.llm.chat(llm_messages)
-            self.interaction_history.append(
-                HumanConductorInteraction(human_input, user_facing_response)
-            )
         yield user_facing_response
 
     def __execute_tool(self, tool: str, args: str | dict) -> str:
