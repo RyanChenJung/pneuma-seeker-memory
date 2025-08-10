@@ -1,12 +1,12 @@
+# backend: src/pneuma_seeker/server.py
 import os
 
 # from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from torch.backends import cudnn
 
-from pneuma_seeker.core.interaction_conductor.chat_interface import ChatInterface
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument
+from pneuma_seeker.core.conductor.chat_interface import ChatInterface
 
 # enforce more deterministic behavior
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"

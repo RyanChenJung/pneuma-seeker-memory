@@ -1,17 +1,8 @@
 from logging import INFO
 from os import path
-from typing import TypedDict
 
-from pneuma_seeker.core.interaction_conductor.ic_state import InformationNeedState
-from pneuma_seeker.core.interaction_conductor.llm_conductor import LLMConductor
-from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.conductor.llm_conductor import LLMConductor
 from pneuma_seeker.utils.logger import setup_logger
-
-
-class ChatInterfaceOutputFormat(TypedDict):
-    system_response: str
-    state: InformationNeedState
-    current_retrieval_results: dict[RetrieverType, list[AbstractDocument]]
 
 
 class ChatInterface:
@@ -37,13 +28,12 @@ class ChatInterface:
         )
         self.user_id = user_id
         self.subsequent_chat = False
-    
+
     def process_user_input(self, user_input: str):
         """
         Accepts user prompt and forwards it to the LLM conductor for processing.
         """
         for system_response in self.llm_conductor.process_input(
-        user_input, self.user_id, self.subsequent_chat
+            user_input, self.user_id, self.subsequent_chat
         ):
             yield system_response
-

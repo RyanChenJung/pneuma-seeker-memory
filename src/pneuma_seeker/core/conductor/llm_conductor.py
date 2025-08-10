@@ -1,21 +1,17 @@
-from logging import Logger
-import re
-from typing import Any
 import duckdb
+
+from logging import Logger
 from pandas import DataFrame
-from pneuma_seeker.core.interaction_conductor.ic_data_model import Interaction
-from pneuma_seeker.core.interaction_conductor.ic_prompt_factory import ICPromptFactory
-from pneuma_seeker.core.interaction_conductor.ic_state import InformationNeedState
+from pneuma_seeker.core.conductor.ic_data_model import Interaction
+from pneuma_seeker.core.conductor.ic_prompt_factory import ICPromptFactory
+from pneuma_seeker.core.conductor.ic_state import InformationNeedState
 from pneuma_seeker.core.ir_system.ir_data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.lm_interface import LMInterface
 from pneuma_seeker.core.materializer_engine.llm_planner import LLMPlanner
-from pneuma_seeker.core.materializer_engine.operation.python_executor import (
-    execute_python_code,
-)
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
-from pneuma_seeker.utils.json_processor import parse_code, parse_json, parse_sql
+from pneuma_seeker.utils.json_processor import parse_json, parse_sql
 
 
 ITERATION_LIMIT = 5
@@ -48,9 +44,7 @@ class LLMConductor:
         self.data_sources = data_sources
         self.num_iteration = 0
 
-    def process_input(
-        self, human_input: str, human_id: str, subsequent_chat: bool
-    ):
+    def process_input(self, human_input: str, human_id: str, subsequent_chat: bool):
         self.logger.info(f"Processing human input: {human_input}")
         if subsequent_chat:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
@@ -111,7 +105,7 @@ class LLMConductor:
                 self.logger.info(f"DEBUGGY: num_iteration: {self.num_iteration}")
                 self.logger.info(f"actions_taken[-1]: {actions_taken[-1]}")
                 yield "LOG: Performing internal reasoning..."
-                if self.num_iteration > 1 and actions_taken[-1] == 'internal_reasoning':
+                if self.num_iteration > 1 and actions_taken[-1] == "internal_reasoning":
                     llm_messages.append(
                         LLMMessage(
                             role=Role.USER.value,
@@ -190,26 +184,14 @@ class LLMConductor:
 
             is_sqls_modified = False
             if sqls is not None:
-            #     violations: list[str] = []
-            #     pattern = r"(?<=\bFROM\b|\bJOIN\b)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)"
-            #     if len(sqls) > 0:
-            #         for sql in sqls:
-            #             mentioned_tables = re.findall(pattern, sql, flags=re.IGNORECASE)
-            #             for mentioned_table in mentioned_tables:
-            #                 if mentioned_table not in self.info_need_state.target_schemas.keys():
-            #                     violations.append(f"The table with ID {mentioned_table} from the SQL query {sql} does not exists.")
-
-            #     if len(violations) > 0:
-            #         self.logger.info(f"VIOLATIONS IN THE SQLS OCCUR: {violations}!")
-            #         self.num_iteration -= 1  # Fixing shouldn't be counted as a cycle, just internal loop
-            #         return f"""You can ONLY reference tables from the target schemas, not retrieved tables. These are the list of (probably non-exhaustive) violations:\n{violations}"""
-
                 self.info_need_state.sqls = sqls
                 self.info_need_state.is_sql_executed = False
                 is_sqls_modified = True
 
             if is_target_schemas_modified and is_sqls_modified:
-                return "Successfully modified both the target schemas and the SQL queries."
+                return (
+                    "Successfully modified both the target schemas and the SQL queries."
+                )
             elif is_target_schemas_modified:
                 return "Successfully modified the target schemas."
             elif is_sqls_modified:
@@ -243,7 +225,10 @@ class LLMConductor:
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
-        elif tool == "Categorical Column Information" or tool == "categorical_column_information":
+        elif (
+            tool == "Categorical Column Information"
+            or tool == "categorical_column_information"
+        ):
             if isinstance(args, dict):
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
@@ -253,19 +238,21 @@ class LLMConductor:
                     return "The `columns` field most not be empty."
                 if not isinstance(table_columns, list) or len(table_columns) == 0:
                     return "The `columns` field must be a non-empty list of strings (column names in the table)"
-                
+
                 for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
                     if document.doc_id == table_id:
                         cat_col_info = ""
                         table: DataFrame = document.content
                         for column in table_columns:
                             if column not in table.columns:
-                                cat_col_info += f"Column `{column}` does not exist in the table.\n"
+                                cat_col_info += (
+                                    f"Column `{column}` does not exist in the table.\n"
+                                )
                                 continue
 
                             counts = table[column].value_counts()
                             top_values = counts.index[:10].tolist()
-                            
+
                             # Append "truncated" if there are more than 10 unique values
                             if len(counts) > 10:
                                 top_values.append("truncated")
@@ -279,7 +266,7 @@ class LLMConductor:
                 return f"ID {table_id} does not exist; ensure it exists in the current retrieval results."
             else:
                 return "Argument must be a specified key-value pairs with keys `id` and `columns`."
-        
+
         return "Tool calling failed."
 
     def __execute_sqls(self):

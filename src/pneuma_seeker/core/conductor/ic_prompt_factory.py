@@ -1,6 +1,6 @@
-from pneuma_seeker.core.interaction_conductor.ic_data_model import Interaction
-from pneuma_seeker.core.interaction_conductor.ic_state import InformationNeedState
-from pneuma_seeker.core.interaction_conductor.table_enumerator import table_id_enumerator
+from pneuma_seeker.core.conductor.ic_data_model import Interaction
+from pneuma_seeker.core.conductor.ic_state import InformationNeedState
+from pneuma_seeker.core.conductor.table_enumerator import table_id_enumerator
 from pneuma_seeker.core.ir_system.ir_data_model import (
     AbstractDocument,
     RetrieverType,
