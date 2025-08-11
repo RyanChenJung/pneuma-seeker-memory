@@ -1,4 +1,5 @@
-import ChatLayout from "@/components/ChatLayout";
+// app/page.tsx
+import ChatLayout from "@/ChatLayout";
 
 export default function Home() {
   return <ChatLayout />;

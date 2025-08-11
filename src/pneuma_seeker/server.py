@@ -1,17 +1,29 @@
 # backend: src/pneuma_seeker/server.py
+import json
 import os
 
 # from dotenv import load_dotenv
+from datetime import datetime
+import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from torch.backends import cudnn
 
-from pneuma_seeker.api_data_model import DeleteChatRequest, RenameChatRequest
+from pneuma_seeker.api_data_model import (
+    CreateDeleteChatRequest,
+    RenameChatRequest,
+    UserManipulationRequest,
+)
 from pneuma_seeker.core.conductor.chat_interface import ChatInterface
 from pneuma_seeker.chat_registry_persistence import (
-    add_chat,
+    add_chat_to_db,
+    add_message,
+    delete_user_from_db,
+    get_messages_for_chat,
+    init_registry_db,
     list_chats,
     list_users,
+    register_user_to_db,
     remove_chat,
     rename_chat,
 )
@@ -45,6 +57,8 @@ class ConnectionManager:
         # TODO: Handle concurrency issue in the future!
         self.chat_interfaces: dict[tuple[str, str], ChatInterface] = {}
 
+        init_registry_db()
+
     def get_chat_interface(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
         if key not in self.chat_interfaces:
@@ -55,7 +69,7 @@ class ConnectionManager:
                 chat_id=chat_id,
                 data_sources=self.data_sources,
             )
-            add_chat(user_id, chat_id)
+            add_chat_to_db(user_id, chat_id)
         return self.chat_interfaces[key]
 
     async def connect(self, websocket: WebSocket, user_id: str, chat_id: str):
@@ -72,7 +86,7 @@ class ConnectionManager:
                 chat_id=chat_id,
                 data_sources=self.data_sources,
             )
-            add_chat(user_id, chat_id)
+            add_chat_to_db(user_id, chat_id)
 
     def disconnect(self, websocket: WebSocket, user_id: str, chat_id: str):
         key = (user_id, chat_id)
@@ -81,10 +95,22 @@ class ConnectionManager:
             if not self.active_connections[key]:
                 del self.active_connections[key]
 
-    async def send_personal_message(self, message: str, user_id: str, chat_id: str):
+    async def send_personal_message(
+        self,
+        user_id: str,
+        chat_id: str,
+        role: str,
+        log_message: str,
+        log_message_ts: int,
+    ):
         key = (user_id, chat_id)
         for conn in self.active_connections.get(key, []):
-            await conn.send_text(message)
+            message = {
+                "sender": role,
+                "text": log_message,
+                "time_stamp": log_message_ts,
+            }
+            await conn.send_json(message)
 
     def delete_chat(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
@@ -118,12 +144,48 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     await websocket.accept()
     try:
         while True:
-            data = await websocket.receive_text()
+            data = json.loads(await websocket.receive_text())['prompt']
+            add_message(
+                user_id, chat_id, "user", data, int(datetime.now().timestamp() * 1000)
+            )
             conductor = manager.get_chat_interface(user_id, chat_id)
             for log_message in conductor.process_user_input(data):
-                await manager.send_personal_message(log_message, user_id, chat_id)
+                role = "assistant"
+                if log_message.startswith("LOG"):
+                    role = "log"
+                log_message_ts = int(datetime.now().timestamp() * 1000)
+                add_message(
+                    user_id,
+                    chat_id,
+                    role,
+                    log_message,
+                    log_message_ts,
+                )
+                await manager.send_personal_message(
+                    user_id, chat_id, role, log_message, log_message_ts
+                )
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id, chat_id)
+
+
+@app.post("/chat/create")
+async def create_chat(req: UserManipulationRequest):
+    new_chat_id = str(uuid.uuid4())
+    add_chat_to_db(req.user_id, new_chat_id)
+    return {"chat_id": new_chat_id}
+
+
+@app.get("/chat/messages/{user_id}/{chat_id}")
+async def get_messages(user_id: str, chat_id: str):
+    """
+    Returns all messages for a given chat in the format expected by the frontend.
+    """
+    messages_raw = get_messages_for_chat(user_id, chat_id)
+    messages = [
+        {"sender": sender, "text": text, "timeStamp": timestamp_ms}
+        for sender, text, timestamp_ms in messages_raw
+    ]
+    return {"messages": messages}
 
 
 @app.post("/chat/rename")
@@ -133,8 +195,20 @@ async def rename_chat_title(req: RenameChatRequest):
 
 
 @app.delete("/chat/delete")
-async def delete_chat(req: DeleteChatRequest):
+async def delete_chat(req: CreateDeleteChatRequest):
     manager.delete_chat(req.user_id, req.chat_id)
+    return {"status": "ok"}
+
+
+@app.post("/users/register")
+async def register_user(req: UserManipulationRequest):
+    register_user_to_db(req.user_id)
+    return {"status": "ok"}
+
+
+@app.delete("/users/delete")
+async def delete_user(req: UserManipulationRequest):
+    delete_user_from_db(req.user_id)
     return {"status": "ok"}
 
 

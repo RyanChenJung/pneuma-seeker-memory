@@ -7,6 +7,11 @@ class RenameChatRequest(BaseModel):
     new_title: str
 
 
-class DeleteChatRequest(BaseModel):
+class UserManipulationRequest(BaseModel):
+    # Applies to both user creation and deletion.
+    user_id: str
+
+
+class CreateDeleteChatRequest(BaseModel):
     user_id: str
     chat_id: str

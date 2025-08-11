@@ -1,66 +1,95 @@
-// frontend: lib/webSocketHandler.ts
-import { useChatStore } from "@/stores/chatStore";
+// lib/webSocketHandler.ts
 
-const BASE_URL = "localhost:8000";
-const userId = "testing"; // fix or get from auth later
+let socket: WebSocket | null = null;
+let isConnected = false;
+const pendingMessages: string[] = [];
 
-type SocketEntry = {
-  socket: WebSocket;
-  queue: string[];
-};
+/**
+ * Connect to WebSocket backend
+ * @param url WebSocket URL including userId and chatId path params
+ * @param onMessage Callback for incoming messages
+ * @param onOpen Optional callback when connection opens
+ */
+function connectWebSocket(
+  url: string,
+  onMessage: (event: MessageEvent) => void,
+  onOpen?: () => void
+) {
+  if (socket && isConnected) {
+    // Already connected, just call onOpen if needed
+    onOpen && onOpen();
+    return;
+  }
 
-const sockets: Record<string, SocketEntry> = {};
-
-function connectSocket(chatId: string) {
-  const socket = new WebSocket(`ws://${BASE_URL}/ws/${userId}/${chatId}`);
-
-  sockets[chatId] = { socket, queue: [] };
+  socket = new WebSocket(url);
 
   socket.onopen = () => {
-    console.log(`Socket for chat ${chatId} connected`);
-    // flush queue
-    while (sockets[chatId].queue.length > 0) {
-      const msg = sockets[chatId].queue.shift();
+    console.log("WebSocket connected");
+    isConnected = true;
+    // Send any queued messages
+    while (pendingMessages.length > 0) {
+      const msg = pendingMessages.shift();
       if (msg) {
-        socket.send(msg);
-        console.log(`Sent queued message for ${chatId}:`, msg);
+        socket!.send(msg);
+        console.log("Sent queued message:", msg);
       }
     }
+    if (onOpen) onOpen();
   };
 
   socket.onmessage = (event) => {
-    const msg = event.data;
-    if (msg.startsWith("LOG: ")) {
-      useChatStore.getState().addMessage(chatId, { text: msg.slice(5), sender: "log" });
-    } else {
-      useChatStore.getState().addMessage(chatId, { text: msg, sender: "assistant" });
-    }
+    onMessage(event);
   };
 
   socket.onclose = () => {
-    console.log(`Socket for chat ${chatId} closed, reconnecting in 2s...`);
-    setTimeout(() => connectSocket(chatId), 2000);
+    console.log("WebSocket disconnected");
+    isConnected = false;
+    socket = null;
   };
 
   socket.onerror = (err) => {
-    console.error(`Socket error for chat ${chatId}:`, err);
-    socket.close();
+    console.error("WebSocket error:", err);
   };
 }
 
-// Call once for the initial chat
-connectSocket("chat-1");
+/**
+ * Send a prompt message through the WebSocket
+ * Will connect automatically if not connected yet
+ *
+ * @param userId User identifier (used for URL path)
+ * @param chatId Chat identifier (used for URL path)
+ * @param prompt The prompt message to send
+ * @param onMessage Callback to handle incoming messages
+ * @param baseUrl The WebSocket server base URL, e.g. 'localhost:8000'
+ */
+export function sendPrompt(
+  userId: string,
+  chatId: string,
+  prompt: string,
+  onMessage: (event: MessageEvent) => void,
+  baseUrl = "localhost:8000"
+) {
+  const wsUrl = `ws://${baseUrl}/ws/${userId}/${chatId}`;
+  const message = JSON.stringify({ user_id: userId, chat_id: chatId, prompt });
 
-export function sendPrompt(chatId: string, prompt: string) {
-  const entry = sockets[chatId];
-  if (!entry || entry.socket.readyState === WebSocket.CLOSED) {
-    connectSocket(chatId);
-    sockets[chatId].queue.push(prompt);
-    return;
-  }
-  if (entry.socket.readyState === WebSocket.OPEN) {
-    entry.socket.send(prompt);
+  if (socket && isConnected && socket.readyState === WebSocket.OPEN) {
+    socket.send(message);
   } else {
-    entry.queue.push(prompt);
+    // Not connected or connecting
+    pendingMessages.push(message);
+
+    connectWebSocket(wsUrl, onMessage, () => {
+      // Optionally do something when connection opens (already handled by flush)
+    });
+  }
+}
+
+/** Close the WebSocket connection */
+export function closeWebSocket() {
+  if (socket) {
+    socket.close();
+    socket = null;
+    isConnected = false;
+    pendingMessages.length = 0;
   }
 }
