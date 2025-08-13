@@ -20,14 +20,14 @@ class InformationNeedState:
         self.is_sql_executed = False
 
     def get_table_repr(self, table: DataFrame, table_id: str):
-        table_repr = f"\nTable {table_id}:\ncol: {" | ".join(list(table.columns))}"
+        table_repr = f"\nTable {table_id}:\ncol: {' | '.join(list(table.columns))}"
         if len(table) > 0:
             # Sample 5 rows to represent the table
             sample_rows = table.sample(min(5, len(table)), random_state=42)
             sample_row_idx = 1
             for _, data in sample_rows.iterrows():
                 str_data = [str(i) for i in data]
-                table_repr += f"\n- sample row {sample_row_idx}: {" | ".join(str_data)}"
+                table_repr += f"\n- sample row {sample_row_idx}: {' | '.join(str_data)}"
                 sample_row_idx += 1
         return table_repr
 
@@ -36,7 +36,7 @@ class InformationNeedState:
         for schema_id in self.target_schemas:
             table = self.target_schemas[schema_id]
             target_schemas_repr += (
-                f"\n- Table {schema_id}:\ncol: {" | ".join(list(table.columns))}"
+                f"\n- Table {schema_id}:\ncol: {' | '.join(list(table.columns))}"
             )
             if len(table) > 0:
                 # Sample 5 rows to represent the table
@@ -45,7 +45,7 @@ class InformationNeedState:
                 for _, data in sample_rows.iterrows():
                     str_data = [str(i) for i in data]
                     target_schemas_repr += (
-                        f"\n- sample row {sample_row_idx}: {" | ".join(str_data)}"
+                        f"\n- sample row {sample_row_idx}: {' | '.join(str_data)}"
                     )
                     sample_row_idx += 1
             target_schemas_repr += "\n"

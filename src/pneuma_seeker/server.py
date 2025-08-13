@@ -2,32 +2,18 @@
 import json
 import os
 
-# from dotenv import load_dotenv
+import asyncio
+
+from dotenv import load_dotenv
 from datetime import datetime
-import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from torch.backends import cudnn
 
-from pneuma_seeker.api_data_model import (
-    CreateDeleteChatRequest,
-    RenameChatRequest,
-    UserManipulationRequest,
-)
 from pneuma_seeker.core.conductor.chat_interface import ChatInterface
-from pneuma_seeker.chat_registry_persistence import (
-    add_chat_to_db,
-    add_message,
-    delete_user_from_db,
-    get_messages_for_chat,
-    init_registry_db,
-    list_chats,
-    list_users,
-    register_user_to_db,
-    remove_chat,
-    rename_chat,
-)
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
+
+load_dotenv("../../.env")
 
 # enforce more deterministic behavior
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -38,11 +24,9 @@ cudnn.benchmark = False
 app = FastAPI(title="Pneuma-Seeker")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-    ],  # or ["*"] for all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # ["GET", "POST", ...] if you want to restrict
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -57,8 +41,6 @@ class ConnectionManager:
         # TODO: Handle concurrency issue in the future!
         self.chat_interfaces: dict[tuple[str, str], ChatInterface] = {}
 
-        init_registry_db()
-
     def get_chat_interface(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
         if key not in self.chat_interfaces:
@@ -69,7 +51,6 @@ class ConnectionManager:
                 chat_id=chat_id,
                 data_sources=self.data_sources,
             )
-            add_chat_to_db(user_id, chat_id)
         return self.chat_interfaces[key]
 
     async def connect(self, websocket: WebSocket, user_id: str, chat_id: str):
@@ -86,7 +67,6 @@ class ConnectionManager:
                 chat_id=chat_id,
                 data_sources=self.data_sources,
             )
-            add_chat_to_db(user_id, chat_id)
 
     def disconnect(self, websocket: WebSocket, user_id: str, chat_id: str):
         key = (user_id, chat_id)
@@ -128,11 +108,9 @@ class ConnectionManager:
         if key in self.chat_interfaces:
             del self.chat_interfaces[key]
 
-        remove_chat(user_id, chat_id)
-
 
 manager = ConnectionManager(
-    llm_path="model/weight/qwen3-8b",
+    llm_path="o4-mini",
     embed_model_path="model/weight/bge-base",
     data_sources=["environment"],
 )
@@ -144,82 +122,31 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     await websocket.accept()
     try:
         while True:
-            data = json.loads(await websocket.receive_text())['prompt']
-            add_message(
-                user_id, chat_id, "user", data, int(datetime.now().timestamp() * 1000)
-            )
+            # Receive the prompt from frontend
+            data = json.loads(await websocket.receive_text())["prompt"]
             conductor = manager.get_chat_interface(user_id, chat_id)
-            for log_message in conductor.process_user_input(data):
-                role = "assistant"
-                if log_message.startswith("LOG"):
-                    role = "log"
-                log_message_ts = int(datetime.now().timestamp() * 1000)
-                add_message(
-                    user_id,
-                    chat_id,
-                    role,
-                    log_message,
-                    log_message_ts,
-                )
-                await manager.send_personal_message(
-                    user_id, chat_id, role, log_message, log_message_ts
-                )
+
+            loop = asyncio.get_running_loop()
+
+            # Run the blocking generator in a separate thread
+            def run_generator():
+                for log_message in conductor.process_user_input(data):
+                    # Schedule sending messages back to the websocket asynchronously
+                    asyncio.run_coroutine_threadsafe(
+                        manager.send_personal_message(
+                            user_id,
+                            chat_id,
+                            "log" if log_message.startswith("LOG") else "assistant",
+                            log_message,
+                            int(datetime.now().timestamp() * 1000),
+                        ),
+                        loop,
+                    )
+
+            await asyncio.to_thread(run_generator)
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id, chat_id)
-
-
-@app.post("/chat/create")
-async def create_chat(req: UserManipulationRequest):
-    new_chat_id = str(uuid.uuid4())
-    add_chat_to_db(req.user_id, new_chat_id)
-    return {"chat_id": new_chat_id}
-
-
-@app.get("/chat/messages/{user_id}/{chat_id}")
-async def get_messages(user_id: str, chat_id: str):
-    """
-    Returns all messages for a given chat in the format expected by the frontend.
-    """
-    messages_raw = get_messages_for_chat(user_id, chat_id)
-    messages = [
-        {"sender": sender, "text": text, "timeStamp": timestamp_ms}
-        for sender, text, timestamp_ms in messages_raw
-    ]
-    return {"messages": messages}
-
-
-@app.post("/chat/rename")
-async def rename_chat_title(req: RenameChatRequest):
-    rename_chat(req.user_id, req.chat_id, req.new_title)
-    return {"status": "ok"}
-
-
-@app.delete("/chat/delete")
-async def delete_chat(req: CreateDeleteChatRequest):
-    manager.delete_chat(req.user_id, req.chat_id)
-    return {"status": "ok"}
-
-
-@app.post("/users/register")
-async def register_user(req: UserManipulationRequest):
-    register_user_to_db(req.user_id)
-    return {"status": "ok"}
-
-
-@app.delete("/users/delete")
-async def delete_user(req: UserManipulationRequest):
-    delete_user_from_db(req.user_id)
-    return {"status": "ok"}
-
-
-@app.get("/users")
-async def get_all_users():
-    return {"users": list_users()}
-
-
-@app.get("/users/{user_id}/chats")
-async def get_chats_for_user(user_id: str):
-    return {"chats": list_chats(user_id)}
 
 
 @app.get("/state/{user_id}/{chat_id}")
