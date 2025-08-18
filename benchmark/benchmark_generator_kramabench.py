@@ -50,7 +50,7 @@ def write_jsonl(data, file_path):
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-SOURCE_DIR = "sources (kramabench)"
+SOURCE_DIR = "sources/kramabench"
 KRAMABENCH_SRCS = os.listdir(SOURCE_DIR)
 
 final_bench: list[dict[str, str]] = []
