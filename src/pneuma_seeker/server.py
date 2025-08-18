@@ -6,11 +6,14 @@ import asyncio
 
 from dotenv import load_dotenv
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from torch.backends import cudnn
 
 from pneuma_seeker.core.conductor.chat_interface import ChatInterface
+from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 
 load_dotenv("../../.env")
@@ -114,6 +117,26 @@ manager = ConnectionManager(
     embed_model_path="model/weight/bge-base",
     data_sources=["environment"],
 )
+
+
+templates = Jinja2Templates(directory="templates")
+
+
+@app.get("/state/html/{user_id}/{chat_id}", response_class=HTMLResponse)
+async def read_state_html(request: Request, user_id: str, chat_id: str):
+    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    state = conductor.info_need_state.get_current_state_instance()
+
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "state": state}
+    )
+
+
+@app.get("/helper")
+async def helper():
+    res = persistence.get_unique_user_chat_ids()
+    return {"data": res}
 
 
 @app.websocket("/ws/{user_id}/{chat_id}")

@@ -117,6 +117,20 @@ def load_interactions(user_id: str, chat_id: str) -> List[HumanConductorInteract
     return [HumanConductorInteraction(h, r) for h, r in rows]
 
 
+def get_unique_user_chat_ids():
+    con = duckdb.connect(DB_PATH)
+    query = """
+    SELECT DISTINCT user_id, chat_id
+    FROM interactions
+    UNION
+    SELECT DISTINCT user_id, chat_id
+    FROM chat_state
+    """
+    rows = con.execute(query).fetchall()
+    con.close()
+    return rows
+
+
 def save_interaction(
     user_id: str, chat_id: str, interaction: HumanConductorInteraction
 ):

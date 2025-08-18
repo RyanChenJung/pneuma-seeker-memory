@@ -59,8 +59,12 @@ SQLs to be run sequentially over the target schemas (Is executed yet? {self.is_s
 {self.sqls}"""
 
     def get_current_state_instance(self):
+        MAX_ROWS = 10
         return {
-            "T": self.target_schemas,
+            "T": {
+                table_id: df.head(MAX_ROWS).to_dict(orient="records")  # only first MAX_ROWS
+                for table_id, df in self.target_schemas.items()
+            },
             "is_T_materialized": self.is_target_schemas_materialized,
             "column_descriptions": self.column_descriptions,
             "Q": self.sqls,
