@@ -1,163 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Pneuma-Seeker's State Viewer</title>
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
     <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
 
     <style>
-        body {
-            background-color: #f6f6f6;
-        }
+      body {
+        background-color: #f6f6f6;
+      }
 
-        .card-header {
-            font-weight: bold;
-        }
+      .card-header {
+        font-weight: bold;
+      }
 
-        table {
-            font-size: 0.85rem;
-            white-space: nowrap;
-        }
+      table {
+        font-size: 0.85rem;
+        white-space: nowrap;
+      }
 
-        .table-container {
-            flex: 0 0 auto;
-            max-width: 400px;
-            min-width: 200px;
-        }
+      .table-container {
+        flex: 0 0 auto;
+        max-width: 400px;
+        min-width: 200px;
+      }
 
-        .tables-flex {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            justify-content: flex-start;
-        }
+      .tables-flex {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: flex-start;
+      }
 
-        .table-title {
-            font-weight: bold;
-            font-size: 0.9rem;
-            margin-bottom: 0.25rem;
-        }
+      .table-title {
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+      }
     </style>
-</head>
+  </head>
 
-<body class="p-4">
-
+  <body class="p-4">
     <div class="container">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white d-flex align-items-center">
-                <i class="bi bi-database-fill me-2"></i> Pneuma-Seeker's State
-            </div>
-            <div class="card-body">
-
-                <!-- T (Target Tables) -->
-                <h5 class="mb-3 d-flex align-items-center">
-                    <i class="bi bi-table"></i>
-                    <span class="ms-2">T (Target Tables with Sample Rows)</span>
-                    <span class="badge bg-primary ms-2">
-                        Materialized: <span id="materialized-status">No</span>
-                    </span>
-                </h5>
-                <div id="T" class="tables-flex mb-4"></div>
-
-                <!-- Q (SQL Queries) -->
-                <h5 class="mb-3 d-flex align-items-center">
-                    <i class="bi bi-code-slash"></i>
-                    <span class="ms-2">Q (SQL Queries)</span>
-                    <span class="badge bg-success ms-2">
-                        Executed: <span id="sql-status">No</span>
-                    </span>
-                </h5>
-                <ol id="sql-list" class="list-group list-group-numbered"></ol>
-
-            </div>
+      <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white d-flex align-items-center">
+          <i class="bi bi-database-fill me-2"></i> Pneuma-Seeker's State
         </div>
+        <div class="card-body">
+          <!-- T (Target Tables) -->
+          <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-table"></i>
+            <span class="ms-2">T (Target Tables with Sample Rows)</span>
+            <span class="badge bg-primary ms-2">
+              Materialized: <span id="materialized-status">No</span>
+            </span>
+          </h5>
+          <div id="T" class="tables-flex mb-4"></div>
+
+          <!-- Q (SQL Queries) -->
+          <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-code-slash"></i>
+            <span class="ms-2">Q (SQL Queries)</span>
+            <span class="badge bg-success ms-2">
+              Executed: <span id="sql-status">No</span>
+            </span>
+          </h5>
+          <ol id="sql-list" class="list-group list-group-numbered"></ol>
+        </div>
+      </div>
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // Pass Python dict as JSON to JavaScript
-        const state = {{ state | tojson }};
+      // Pass Python dict as JSON to JavaScript
+      const state = {{ state | tojson }};
 
-        // Update status badges
-        document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
-        document.getElementById("sql-status").textContent = state.is_Q_executed ? "Yes" : "No";
+      // Update status badges
+      document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
+      document.getElementById("sql-status").textContent = state.is_Q_executed ? "Yes" : "No";
 
-        // Populate T (Target Tables)
-        const targetSchemasDiv = document.getElementById("T");
-        for (const [tableName, rows] of Object.entries(state.T)) {
-            const tableContainer = document.createElement("div");
-            tableContainer.className = "table-container";
+      // Populate T (Target Tables)
+      const targetSchemasDiv = document.getElementById("T");
+      for (const [tableName, rows] of Object.entries(state.T)) {
+          const tableContainer = document.createElement("div");
+          tableContainer.className = "table-container";
 
-            const tableTitle = document.createElement("div");
-            tableTitle.className = "table-title";
-            tableTitle.textContent = tableName;
-            tableContainer.appendChild(tableTitle);
+          const tableTitle = document.createElement("div");
+          tableTitle.className = "table-title";
+          tableTitle.textContent = tableName;
+          tableContainer.appendChild(tableTitle);
 
-            const tableEl = document.createElement("table");
-            tableEl.className = "table table-striped table-hover table-bordered align-middle table-sm";
+          const tableEl = document.createElement("table");
+          tableEl.className = "table table-striped table-hover table-bordered align-middle table-sm";
 
-            // Headers with tooltips
-            const thead = document.createElement("thead");
-            const headerRow = document.createElement("tr");
-            Object.keys(rows[0] || {}).forEach(col => {
-                const th = document.createElement("th");
-                th.textContent = col;
-                th.setAttribute("data-bs-toggle", "tooltip");
-                th.setAttribute("title", state.column_descriptions[tableName]?.[col] || "");
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            tableEl.appendChild(thead);
+          // Headers with tooltips
+          const thead = document.createElement("thead");
+          const headerRow = document.createElement("tr");
+          Object.keys(rows[0] || {}).forEach(col => {
+              const th = document.createElement("th");
+              th.textContent = col;
+              th.setAttribute("data-bs-toggle", "tooltip");
+              th.setAttribute("title", state.column_descriptions[tableName]?.[col] || "");
+              headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          tableEl.appendChild(thead);
 
-            // Rows
-            const tbody = document.createElement("tbody");
-            rows.forEach(row => {
-                const tr = document.createElement("tr");
-                Object.values(row).forEach(val => {
-                    const td = document.createElement("td");
-                    td.textContent = val;
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-            tableEl.appendChild(tbody);
+          // Rows
+          const tbody = document.createElement("tbody");
+          rows.forEach(row => {
+              const tr = document.createElement("tr");
+              Object.values(row).forEach(val => {
+                  const td = document.createElement("td");
+                  td.textContent = val;
+                  tr.appendChild(td);
+              });
+              tbody.appendChild(tr);
+          });
+          tableEl.appendChild(tbody);
 
-            // --- Wrap table in a scrollable container ---
-            const scrollWrapper = document.createElement("div");
-            scrollWrapper.style.overflowX = "auto";  // enable horizontal scroll
-            scrollWrapper.style.maxWidth = "100%";   // prevent overflow beyond card
-            scrollWrapper.appendChild(tableEl);
+          // --- Wrap table in a scrollable container ---
+          const scrollWrapper = document.createElement("div");
+          scrollWrapper.style.overflowX = "auto";  // enable horizontal scroll
+          scrollWrapper.style.maxWidth = "100%";   // prevent overflow beyond card
+          scrollWrapper.appendChild(tableEl);
 
-            tableContainer.appendChild(scrollWrapper);
-            targetSchemasDiv.appendChild(tableContainer);
-        }
+          tableContainer.appendChild(scrollWrapper);
+          targetSchemasDiv.appendChild(tableContainer);
+      }
 
-        // Activate Bootstrap tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+      // Activate Bootstrap tooltips
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
 
-        // Populate Q (SQL Queries)
-        const sqlList = document.getElementById("sql-list");
-        state.Q.forEach(sql => {
-            const li = document.createElement("li");
-            li.className = "list-group-item font-monospace";
-            li.textContent = sql;
-            sqlList.appendChild(li);
-        });
-        window.onload = function () {
-            const height = document.body.scrollHeight;
-            parent.postMessage({ type: "resize-iframe", height: height }, "*");
-        };
+      // Populate Q (SQL Queries)
+      const sqlList = document.getElementById("sql-list");
+      state.Q.forEach(sql => {
+          const li = document.createElement("li");
+          li.className = "list-group-item font-monospace";
+          li.textContent = sql;
+          sqlList.appendChild(li);
+      });
+      window.onload = function () {
+          const height = document.body.scrollHeight;
+          parent.postMessage({ type: "resize-iframe", height: height }, "*");
+      };
     </script>
-
-</body>
-
+  </body>
 </html>
