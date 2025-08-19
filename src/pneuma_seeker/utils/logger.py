@@ -6,7 +6,7 @@ from typing import Optional
 
 
 def setup_logger(
-    name: str = "processor_logger",
+    name: str = "pneuma_seeker_logger",
     log_path: Optional[str] = None,
     level: int = logging.INFO,
     max_bytes: int = 10_000_000,
@@ -33,7 +33,7 @@ def setup_logger(
         if log_path:
             # File handler with rotation
             file_handler = RotatingFileHandler(
-                os.path.join(log_path, "processor.log"),
+                os.path.join(log_path, "pneuma_seeker.log"),
                 maxBytes=max_bytes,
                 backupCount=backup_count,
             )
