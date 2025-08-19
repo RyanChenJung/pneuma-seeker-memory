@@ -66,7 +66,7 @@ class Materializer:
         self.__cleanup_system()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
-            content=self.prompt_factory.get_planning_prompt_brief(
+            content=self.prompt_factory.get_planning_prompt(
                 target_schemas=target_schemas,
                 column_descriptions=column_descriptions,
                 sqls=sqls,
@@ -82,7 +82,7 @@ class Materializer:
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
-                    content=self.prompt_factory.get_context_prompt_brief(
+                    content=self.prompt_factory.get_context_prompt(
                         self.state.current_retrieved_documents,
                         self.state.intermediate_tables,
                         self.actions,
