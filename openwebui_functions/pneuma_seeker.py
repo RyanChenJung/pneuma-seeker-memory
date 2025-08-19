@@ -10,10 +10,7 @@ from typing import Callable
 
 class Pipe:
     class Valves(BaseModel):
-        NUM_ITERATION: int = Field(
-            default=2,
-            description="The number of exclamation points to add at the end of prompt.",
-        )
+        pass
 
     def __init__(self):
         self.valves = self.Valves()
@@ -52,7 +49,7 @@ class Pipe:
 
         uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
 
-        async with websockets.connect(uri) as websocket:
+        async with websockets.connect(uri, open_timeout=30) as websocket:
             await websocket.send(json.dumps({"prompt": prompt}))
 
             await __event_emitter__(
@@ -66,7 +63,7 @@ class Pipe:
                 }
             )
 
-            # Listen for streamed messages
+            user_buffer = ""
             while True:
                 try:
                     message = await websocket.recv()
@@ -83,6 +80,15 @@ class Pipe:
                                 },
                             }
                         )
+                    elif message_data["sender"] == "assistant":
+                        await __event_emitter__(
+                            {
+                                "type": "chat:message:delta",
+                                "data": {
+                                    "content": message_data["text"].replace("~", "\\~")
+                                },
+                            }
+                        )
                     else:
                         end = time.time()
                         await __event_emitter__(
@@ -95,14 +101,16 @@ class Pipe:
                                 },
                             }
                         )
-                        await __event_emitter__(
-                            {
-                                "type": "chat:completion",
-                                "data": {
-                                    "content": message_data["text"].replace("~", "\\~")
-                                },
-                            }
-                        )
                         break
                 except websockets.ConnectionClosed:
+                    await __event_emitter__(
+                        {
+                            "type": "status",
+                            "data": {
+                                "description": f"Processing done.",
+                                "done": True,
+                                "hidden": False,
+                            },
+                        }
+                    )
                     break
