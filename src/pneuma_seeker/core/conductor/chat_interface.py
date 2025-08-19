@@ -42,8 +42,10 @@ class ChatInterface:
             interactions,
         ):
             if not system_response.startswith("LOG"):
-                conductor_final_response = system_response
+                conductor_final_response += system_response
             yield system_response
+        
+        yield "DONE"
 
         # Save new interaction
         persistence.save_interaction(

@@ -13,6 +13,7 @@ class LLMOption:
     penalty_alpha: Optional[float] = None
     json_mode: bool = False
     batch_size: Optional[int] = None
+    stream: Optional[bool] = False
 
 @dataclass
 class EmbeddingModelOption:

@@ -16,8 +16,6 @@ from pneuma_seeker.core.materializer.operation.python_executor import (
     execute_python_code,
 )
 from pneuma_seeker.core.materializer.operation.sql_executor import execute_sql
-from pneuma_seeker.core.materializer.operation.std_inner_join import std_inner_join
-from pneuma_seeker.core.materializer.operation.union import union
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
@@ -58,10 +56,13 @@ class Materializer:
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
         user_side_note="",
+        initial_retrieved_documents: dict[RetrieverType, list[AbstractDocument]] = dict(),
     ) -> dict[str, DataFrame]:
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
         )
+        if len(initial_retrieved_documents.keys()) > 0:
+            self.state.current_retrieved_documents = initial_retrieved_documents
         self.__cleanup_system()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
@@ -93,6 +94,7 @@ class Materializer:
 
             num_iterations += 1
             response = self.llm.chat(llm_messages, LLMOption(json_mode=True))
+            response = "".join(response)
             llm_messages.append(
                 LLMMessage(
                     role=Role.ASSISTANT.value,
@@ -233,6 +235,7 @@ class Materializer:
                             )
                         ]
                         feedback = self.llm.chat(diagnose_messages)
+                        feedback = "".join(feedback)
                         self.actions.append(feedback)
                     else:
                         if exec_res is None:

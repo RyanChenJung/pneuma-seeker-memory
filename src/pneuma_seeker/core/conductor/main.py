@@ -1,3 +1,6 @@
+from collections.abc import Generator
+import json
+import re
 import duckdb
 
 from logging import Logger
@@ -45,7 +48,7 @@ class Conductor:
         self,
         human_input: str,
         human_id: str,
-        interaction_history: list[HumanConductorInteraction]
+        interaction_history: list[HumanConductorInteraction],
     ):
         self.logger.info(f"Processing human input: {human_input}")
         if len(interaction_history) > 0:
@@ -78,12 +81,38 @@ class Conductor:
                 )
             )
 
-            llm_output = self.llm.chat(llm_messages, LLMOption(json_mode=True))
-            llm_messages.append(
-                LLMMessage(role=Role.ASSISTANT.value, content=llm_output)
+            # Get streaming generator from LLM
+            llm_output_gen = self.llm.chat(
+                llm_messages, LLMOption(json_mode=True, stream=True)
             )
-            action = parse_json(llm_output)
-            intent: str = action.get("intent")
+
+            # IMPORTANT: stream_message_content_from_chunks returns (stream_gen, raw_buffer)
+            # where raw_buffer is a mutable list the stream helper appends raw chunks into.
+            stream_gen, raw_buffer = stream_message_content_from_chunks(llm_output_gen)
+
+            # Stream user-facing characters immediately (if any).
+            # Do NOT try to build the full_response from these chars — they are ONLY the
+            # user-facing 'message' parts, not the full assistant output (JSON wrappers, etc.).
+            for char in stream_gen:
+                yield char
+                is_user_facing_response = True  # we saw at least one streamed char
+
+            self.logger.info(f"\nDEBUGGYYY: raw_buffer: {raw_buffer} \n")
+
+            full_response = "".join(raw_buffer) if raw_buffer else ""
+            # Append full response to message history (so the next LLM call gets a history)
+            if full_response:
+                llm_messages.append(
+                    LLMMessage(role=Role.ASSISTANT.value, content=full_response)
+                )
+
+            # Parse action from accumulated response
+            try:
+                action = parse_json(full_response)
+            except Exception:
+                action = {}
+
+            intent: str = action.get("intent", "")
             actions_taken.append(intent)
             action_message: None | str = action.get("message")
             tool: None | str = action.get("tool")
@@ -93,8 +122,8 @@ class Conductor:
                 user_facing_response = action_message
                 is_user_facing_response = True
             elif intent == "internal_reasoning" and isinstance(action_message, str):
-                self.logger.info(f"DEBUGGY: num_actions_taken: {num_actions_taken}")
-                self.logger.info(f"actions_taken[-1]: {actions_taken[-1]}")
+                self.logger.debug(f"num_actions_taken: {num_actions_taken}")
+                self.logger.debug(f"actions_taken[-1]: {actions_taken[-1]}")
                 yield "LOG: Performing internal reasoning..."
                 if num_actions_taken > 1 and actions_taken[-1] == "internal_reasoning":
                     llm_messages.append(
@@ -127,8 +156,11 @@ class Conductor:
                     content=self.prompt_factory.get_direct_response_anyway_prompt(),
                 )
             )
-            user_facing_response = self.llm.chat(llm_messages)
-        yield user_facing_response
+            # Consume generator fully
+            user_facing_response = "".join(
+                self.llm.chat(llm_messages, LLMOption(stream=True))
+            )
+            yield user_facing_response
 
     def __execute_tool(self, tool: str, args: str | dict) -> str:
         if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
@@ -191,6 +223,7 @@ class Conductor:
                     self.info_need_state.column_descriptions,
                     self.info_need_state.sqls,
                     note,
+                    self.current_retrieval_results,
                 )
             )
             self.info_need_state.is_target_schemas_materialized = True
@@ -277,20 +310,20 @@ class Conductor:
             for table_id, table in tables.items():
                 if table_id in sql:
                     relevant_tables[table_id] = table
-            fixed_sql = parse_sql(
-                self.llm.chat(
-                    [
-                        LLMMessage(
-                            role=Role.SYSTEM.value,
-                            content=self.prompt_factory.sql_sanity_checking_prompt(),
-                        ),
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content=f"SQL Query: {sql}\n\nRelevant Tables: {self.__format_available_tables(relevant_tables)}",
-                        ),
-                    ]
-                )
+            response = self.llm.chat(
+                [
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=self.prompt_factory.sql_sanity_checking_prompt(),
+                    ),
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content=f"SQL Query: {sql}\n\nRelevant Tables: {self.__format_available_tables(relevant_tables)}",
+                    ),
+                ]
             )
+            response = "".join(response)
+            fixed_sql = parse_sql(response)
             self.info_need_state.sqls[sql_idx] = fixed_sql
             try:
                 self.logger.info(f"Executing Fixed SQL: {fixed_sql}")
@@ -337,3 +370,63 @@ class Conductor:
                     )
                     sample_row_idx += 1
         return tables_repr.strip()
+
+
+def stream_message_content_from_chunks(
+    chunks: Generator[str, None, None],
+) -> tuple[Generator[str, None, None], list[str]]:
+    """
+    Consume chunks from LLM generator and yield only the 'message' content
+    of communicate_with_user intents, ignoring JSON wrappers.
+    Returns:
+        - A generator that streams the message chunks
+        - A mutable list containing the full concatenated output
+    """
+    raw_buffer: list[str] = []
+
+    def _stream():
+        buffer = ""
+        json_regex = re.compile(r"\{.*?\}")
+
+        for chunk in chunks:
+            buffer += chunk
+            raw_buffer.append(chunk)  # accumulate
+
+            while True:
+                match = json_regex.search(buffer)
+                if not match:
+                    break
+
+                json_str = match.group()
+                try:
+                    action = json.loads(json_str)
+                except json.JSONDecodeError:
+                    break
+
+                # Remove matched JSON from buffer
+                buffer = buffer[match.end() :]
+
+                if (
+                    action.get("intent") == "communicate_with_user"
+                    and "message" in action
+                ):
+                    message_text = action["message"]
+                    for char in stream_message_by_whitespace(message_text):
+                        yield char  # stream immediately
+
+    return _stream(), raw_buffer
+
+
+def stream_message_by_whitespace(message: str) -> Generator[str, None, None]:
+    """
+    Yield parts of the message whenever whitespace is encountered,
+    so the frontend receives word-level streaming.
+    """
+    buffer = ""
+    for c in message:
+        buffer += c
+        if c.isspace():
+            yield buffer
+            buffer = ""
+    if buffer:
+        yield buffer

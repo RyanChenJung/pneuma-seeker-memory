@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 import json
 from typing import Optional
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
@@ -27,7 +28,7 @@ class AbstractModel(ABC):
     @abstractmethod
     def chat(
         self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
-    ) -> str:
+    ) -> Generator[str, None, None]:
         """Chats with the model."""
         pass
 

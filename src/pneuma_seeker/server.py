@@ -154,13 +154,20 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
             # Run the blocking generator in a separate thread
             def run_generator():
                 for log_message in conductor.process_user_input(data):
+                    actual_message = log_message
+                    role = "assistant"
+                    if log_message.startswith("LOG"):
+                        role = "log"
+                    elif log_message.startswith("DONE"):
+                        role = "done"
+                        actual_message = ""
                     # Schedule sending messages back to the websocket asynchronously
                     asyncio.run_coroutine_threadsafe(
                         manager.send_personal_message(
                             user_id,
                             chat_id,
-                            "log" if log_message.startswith("LOG") else "assistant",
-                            log_message,
+                            role,
+                            actual_message,
                             int(datetime.now().timestamp() * 1000),
                         ),
                         loop,
