@@ -1,5 +1,0 @@
-enum RetrieverType {
-  PNEUMA = "PNEUMA",
-  KNOWLEDGE_BASE = "KNOWLEDGE_BASE",
-  WEB_SEARCH = "WEB_SEARCH",
-}
