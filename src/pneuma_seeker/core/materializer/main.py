@@ -19,7 +19,7 @@ from pneuma_seeker.core.materializer.operation.sql_executor import execute_sql
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
-from pneuma_seeker.utils.json_processor import parse_code, parse_json
+from pneuma_seeker.utils.parser import parse_code, parse_json
 
 
 class Materializer:

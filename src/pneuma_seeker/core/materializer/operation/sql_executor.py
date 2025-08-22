@@ -5,7 +5,7 @@ from pandas import DataFrame
 
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
-from pneuma_seeker.utils.json_processor import parse_sql
+from pneuma_seeker.utils.parser import parse_sql
 
 
 def format_available_tables(tables: dict[str, DataFrame]):

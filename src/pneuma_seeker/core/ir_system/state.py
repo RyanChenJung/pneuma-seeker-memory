@@ -1,4 +1,4 @@
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import RetrieverType
 from pneuma_seeker.model.llm_message import LLMMessage
 
 

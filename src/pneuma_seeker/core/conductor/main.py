@@ -14,7 +14,7 @@ from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
-from pneuma_seeker.utils.json_processor import parse_json, parse_sql
+from pneuma_seeker.utils.parser import parse_json, parse_sql
 
 
 ITERATION_LIMIT = 5

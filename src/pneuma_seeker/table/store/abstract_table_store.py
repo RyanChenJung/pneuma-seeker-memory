@@ -17,7 +17,7 @@ class AbstractTableStore(ABC):
         pass
     
     @abstractmethod
-    def load_checkpoint(self, db_path: str = None):
+    def load_checkpoint(self, db_path: Optional[str] = None):
         """Loads a table store."""
         pass
 

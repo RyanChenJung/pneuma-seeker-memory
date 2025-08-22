@@ -27,7 +27,7 @@ class PyTableStore(AbstractTableStore):
         except RuntimeError:
             self.checkpoint()
 
-    def load_checkpoint(self, db_path: str = None):
+    def load_checkpoint(self, db_path: Optional[str] = None):
         """Loads a table store."""
         if db_path is None:
             db_path = self.db_path
@@ -148,7 +148,7 @@ class PyTableStore(AbstractTableStore):
         db_schema: str,
         table_id: str,
         metadata_type: TableMetadataType,
-        metadata_info: str,
+        metadata: str,
         overwrite: bool = False,
     ) -> None:
         """
@@ -183,7 +183,7 @@ class PyTableStore(AbstractTableStore):
             Metadata(
                 db_schema=db_schema,
                 table_id=table_id,
-                information=metadata_info,
+                information=metadata,
                 type=metadata_type,
             )
         )

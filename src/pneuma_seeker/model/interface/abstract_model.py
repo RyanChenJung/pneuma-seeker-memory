@@ -6,7 +6,7 @@ from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.model.llm_message import LLMMessage
 from numpy import ndarray
 
-from pneuma_seeker.utils.json_processor import parse_json
+from pneuma_seeker.utils.parser import parse_json
 
 
 class AbstractModel(ABC):

@@ -1,7 +1,7 @@
 import os
 import json
 import duckdb
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import (
@@ -133,30 +133,34 @@ def get_unique_user_chat_ids():
 
 def save_interaction(
     user_id: str, chat_id: str, interaction: HumanConductorInteraction
-):
+) -> None:
     con = duckdb.connect(DB_PATH)
-    next_idx = con.execute(
+
+    row: Tuple[int] | None = con.execute(
         """
         SELECT COALESCE(MAX(idx), -1) + 1
         FROM interactions
         WHERE user_id = ? AND chat_id = ?
-    """,
+        """,
         (user_id, chat_id),
-    ).fetchone()[
-        0
-    ]  # type: ignore
+    ).fetchone()
+
+    # Explicitly assert since COALESCE guarantees a row
+    assert row is not None
+    next_idx = row[0]
+
     con.execute(
         """
         INSERT INTO interactions (user_id, chat_id, idx, human_input, llm_response, ts)
         VALUES (?, ?, ?, ?, ?, ?)
-    """,
+        """,
         (
             user_id,
             chat_id,
             next_idx,
             interaction.human_input,
             interaction.llm_response,
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
         ),
     )
     con.close()

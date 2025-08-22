@@ -1,5 +1,5 @@
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
-from pneuma_seeker.core.ir_system.state import AbstractDocument
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 
 
