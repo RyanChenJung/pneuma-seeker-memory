@@ -172,6 +172,7 @@ def save_state(
     chat_id: str,
     info_need_state: InformationNeedState,
     retrieval_results: Dict[RetrieverType, List[AbstractDocument]],
+    enumerated_table_ids: list[str],
 ):
     """
     Persist info_need_state and retrieval_results as JSON.
@@ -197,6 +198,7 @@ def save_state(
             "column_descriptions": info_need_state.column_descriptions,
             "sqls": info_need_state.sqls,
             "is_sql_executed": info_need_state.is_sql_executed,
+            "enumerated_table_ids": enumerated_table_ids,
         }
     )
 
@@ -240,7 +242,9 @@ def save_state(
 
 def load_state(
     user_id: str, chat_id: str
-) -> Tuple[InformationNeedState, Dict[RetrieverType, List[AbstractDocument]]]:
+) -> Tuple[
+    InformationNeedState, Dict[RetrieverType, List[AbstractDocument]], list[str]
+]:
     con = duckdb.connect(DB_PATH)
     row = con.execute(
         """
@@ -255,13 +259,15 @@ def load_state(
     con.close()
 
     if not row:
-        return InformationNeedState(), {}
+        return InformationNeedState(), {}, []
 
     info_json, retr_json = row
     info_data = json.loads(info_json)
     retr_data = json.loads(retr_json)
 
     info_state = InformationNeedState()
+
+    enumerated_table_ids = info_data.get("enumerated_table_ids", [])
 
     # Reconstruct target_schemas, deserializing DataFrames where appropriate
     raw_target_schemas = info_data.get("target_schemas", {})
@@ -307,4 +313,4 @@ def load_state(
                 )
             )
 
-    return info_state, retr_results
+    return info_state, retr_results, enumerated_table_ids

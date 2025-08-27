@@ -8,6 +8,7 @@ from pandas import DataFrame
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
+from pneuma_seeker.core.conductor.table_enumerator import table_enumerator
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.main import IRSystem
 from pneuma_seeker.core.materializer.main import Materializer
@@ -43,6 +44,7 @@ class Conductor:
         self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
             dict()
         )
+        self.enumerated_table_ids: list[str] = []
 
     def process_input(
         self,
@@ -77,6 +79,7 @@ class Conductor:
                         actions_taken,
                         self.current_retrieval_results,
                         human_input,
+                        self.enumerated_table_ids,
                     ),
                 )
             )
@@ -96,8 +99,6 @@ class Conductor:
             for char in stream_gen:
                 yield char
                 is_user_facing_response = True  # we saw at least one streamed char
-
-            self.logger.info(f"\nDEBUGGYYY: raw_buffer: {raw_buffer} \n")
 
             full_response = "".join(raw_buffer) if raw_buffer else ""
             # Append full response to message history (so the next LLM call gets a history)
@@ -172,6 +173,11 @@ class Conductor:
                 10,  # Future-TODO: Change hard-coded sources and k
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
+        elif tool == "table_enumerator" and isinstance(args, dict):
+            self.logger.info(f"Table Enumerater request with params: {args}")
+            pattern: str = args.get("pattern", "")
+            self.enumerated_table_ids = table_enumerator(pattern)
+            return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
         elif (
             tool == "State Manipulation" or tool == "state_manipulation"
         ) and isinstance(args, dict):
@@ -223,7 +229,6 @@ class Conductor:
                     self.info_need_state.column_descriptions,
                     self.info_need_state.sqls,
                     note,
-                    self.current_retrieval_results,
                 )
             )
             self.info_need_state.is_target_schemas_materialized = True

@@ -1,6 +1,5 @@
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.conductor.table_enumerator import table_id_enumerator
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
@@ -10,7 +9,7 @@ from pneuma_seeker.core.ir_system.data_model import (
 
 class ConductorPromptFactory:
     def get_sys_prompt(self, iteration_limit: int) -> str:
-        return f"""You are the Conductor.  
+        return f"""You are the Conductor.
 Your mission is to guide the user from vague needs to a fulfilled answer by:
 1. Defining accurate target schemas and column descriptions.
 2. Materializing those schemas with real data.
@@ -33,6 +32,10 @@ In each iteration, you **must** choose exactly one action:
 
    Tools:
    - ir_system: Retrieve tables/text. Args: {{"prompt": "<retrieval query>"}}
+   - table_enumerator: List all available tables (names only — not retrieved, just for reference; the materializer will handle actual data) whose names match a regex pattern.  
+     Args: {"pattern": "<regex>"}  
+     You can only call this tool **after** retrieving at least one table with ir_system if you suspect there are other related tables.  
+     - Example: If ir_system retrieves a table named "topic_2020", you may call table_enumerator with {"pattern": "topic_\\d{4}"} to find "topic_2021", "topic_2022", etc.
    - state_manipulation: Update schemas or SQLs.  
      Args:  
        {{ "target_schemas": {{...}}, "column_descriptions": {{...}} }}  
@@ -66,6 +69,7 @@ Your output **must** be exactly one JSON object matching one of the above format
     actions_taken: list[str],
     curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
     human_input: str,
+    relevant_table_ids: list[str],
 ) -> str:
         return f"""Iteration {curr_iteration}/{max_iteration}
 
@@ -81,8 +85,8 @@ RECENT USER INTERACTIONS:
 RETRIEVED DATA:
 {convert_multi_retriever_results_to_str(curr_retrieval_results)}
 
-OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (LISTED ONLY; NOT RETRIEVED):
-{table_id_enumerator(curr_retrieval_results[RetrieverType.PNEUMA]) if len(curr_retrieval_results.keys()) > 0 else dict()}
+OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
+{relevant_table_ids}
 
 CURRENT USER INPUT:
 {human_input}

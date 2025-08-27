@@ -28,9 +28,12 @@ class ChatInterface:
         persistence.init_db()
 
         # Restore previous state
-        info_state, retr_results = persistence.load_state(user_id, chat_id)
+        info_state, retr_results, enumerated_table_ids = persistence.load_state(
+            user_id, chat_id
+        )
         self.llm_conductor.info_need_state = info_state
         self.llm_conductor.current_retrieval_results = retr_results
+        self.llm_conductor.enumerated_table_ids = enumerated_table_ids
 
     def process_user_input(self, user_input: str):
         conductor_final_response = ""
@@ -44,7 +47,7 @@ class ChatInterface:
             if not system_response.startswith("LOG"):
                 conductor_final_response += system_response
             yield system_response
-        
+
         yield "DONE"
 
         # Save new interaction
@@ -60,4 +63,5 @@ class ChatInterface:
             self.chat_id,
             self.llm_conductor.info_need_state,
             self.llm_conductor.current_retrieval_results,
+            self.llm_conductor.enumerated_table_ids,
         )
