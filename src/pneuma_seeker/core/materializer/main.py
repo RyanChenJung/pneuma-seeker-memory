@@ -32,7 +32,7 @@ class Materializer:
     ):
         self.logger = logger
         self.logger.info(
-            "Initializing LLMPlanner, the core component of Materializer Engine"
+            "Initializing Materializer"
         )
         self.llm = llm
         self.embed_model = embed_model
