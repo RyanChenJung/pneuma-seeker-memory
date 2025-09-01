@@ -3,6 +3,10 @@ from typing import Any
 from logging import Logger
 from pandas import DataFrame
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
+    SemanticColumnGenerator,
+)
+from pneuma_seeker.core.materializer.operation.semantic_joiner import SemanticJoiner
 from pneuma_seeker.core.materializer.prompt_factory import PromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.materializer.operation.table_enumerator import table_enumerator
@@ -31,14 +35,15 @@ class Materializer:
         data_sources: list[str],
     ):
         self.logger = logger
-        self.logger.info(
-            "Initializing Materializer"
-        )
+        self.logger.info("Initializing Materializer")
         self.llm = llm
         self.embed_model = embed_model
 
         self.prompt_factory = PromptFactory()
         self.state = MaterializerState()
+
+        self.semantic_joiner = SemanticJoiner(self.embed_model)
+        self.semantic_col_generator = SemanticColumnGenerator(self.llm)
 
         self.actions: list[str] = []
         self.data_sources = data_sources
@@ -56,10 +61,12 @@ class Materializer:
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
         user_side_note="",
-        initial_retrieved_documents: dict[RetrieverType, list[AbstractDocument]] = dict(),
+        initial_retrieved_documents: dict[
+            RetrieverType, list[AbstractDocument]
+        ] = dict(),
     ) -> dict[str, DataFrame]:
         self.logger.info(
-            f"Starting materialization for {len(target_schemas)} target schemas with {len(sqls)} SQLs"
+            f"Starting materialization for {len(target_schemas)} tables with {len(sqls)} SQL queries"
         )
         if len(initial_retrieved_documents.keys()) > 0:
             self.state.current_retrieved_documents = initial_retrieved_documents
@@ -151,7 +158,9 @@ class Materializer:
                         self.state.current_retrieved_documents = extra_documents
 
                     self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
-                        set(self.state.current_retrieved_documents[RetrieverType.PNEUMA]).union(set(extra_documents[RetrieverType.PNEUMA]))
+                        set(
+                            self.state.current_retrieved_documents[RetrieverType.PNEUMA]
+                        ).union(set(extra_documents[RetrieverType.PNEUMA]))
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
@@ -163,10 +172,18 @@ class Materializer:
 
                     if len(self.state.current_retrieved_documents.keys()) == 0:
                         if len(extra_tables) > 0:
-                            self.state.current_retrieved_documents = {RetrieverType.PNEUMA: extra_tables}
+                            self.state.current_retrieved_documents = {
+                                RetrieverType.PNEUMA: extra_tables
+                            }
                     else:
-                        self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
-                            set(self.state.current_retrieved_documents[RetrieverType.PNEUMA]).union(set(extra_tables))
+                        self.state.current_retrieved_documents[RetrieverType.PNEUMA] = (
+                            list(
+                                set(
+                                    self.state.current_retrieved_documents[
+                                        RetrieverType.PNEUMA
+                                    ]
+                                ).union(set(extra_tables))
+                            )
                         )
                     if len(extra_tables) > 0:
                         self.actions.append(
@@ -174,7 +191,7 @@ class Materializer:
                         )
                     else:
                         self.actions.append(
-                            f'There are no tables that match the pattern.'
+                            f"There are no tables that match the pattern."
                         )
                 elif op_name == "Table Select":
                     self.logger.info(f"Enter Table Select")
@@ -210,6 +227,88 @@ class Materializer:
                             self.actions.append(
                                 f"Error: The ID {retrieved_table_id} does not exist in either the retrieved tables OR the intermediate tables so far. Please fix it."
                             )
+                elif op_name == "Semantic Column Generator":
+                    table_id: str | None = op_args.get("table_id")
+                    new_column_name: str | None = op_args.get("new_column_name")
+                    instruction: str | None = op_args.get("instruction")
+
+                    if table_id is None or table_id not in all_tables:
+                        self.actions.append(
+                            f"table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        )
+                        continue
+                    if new_column_name is None:
+                        self.actions.append("new_column_name is not provided.")
+                        continue
+                    if instruction is None:
+                        self.actions.append("instruction is not provided.")
+                        continue
+
+                    new_column_values = self.semantic_col_generator.generate_semantic_column(
+                        all_tables[table_id], new_column_name, instruction
+                    )
+                    all_tables[table_id][new_column_name] = new_column_values
+                    self.actions.append(
+                        f"Successfully added a new column named {new_column_name} to table with ID {table_id}."
+                    )
+
+                elif op_name == "Semantic Join":
+                    left_table_id: str | None = op_args.get("left_table_id")
+                    right_table_id: str | None = op_args.get("right_table_id")
+                    relevant_left_cols: list[str] | None = op_args.get(
+                        "relevant_left_cols"
+                    )
+                    relevant_right_cols: list[str] | None = op_args.get(
+                        "relevant_right_cols"
+                    )
+                    joined_table_id: str | None = op_args.get("joined_table_id")
+
+                    if left_table_id is None or left_table_id not in all_tables:
+                        self.actions.append(
+                            f"left_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        )
+                        continue
+                    if right_table_id is None or right_table_id not in all_tables:
+                        self.actions.append(
+                            f"right_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        )
+                        continue
+
+                    left_table = all_tables[left_table_id]
+                    right_table = all_tables[right_table_id]
+
+                    if relevant_left_cols is None:
+                        self.actions.append(f"relevant_left_cols is not provided.")
+                        continue
+                    if relevant_right_cols is None:
+                        self.actions.append(f"relevant_right_cols is not provided.")
+                        continue
+                    if not set(relevant_left_cols) <= set(list(left_table.columns)):
+                        self.actions.append(
+                            f"relevant_left_cols is not a subseet of left_table's columns."
+                        )
+                        continue
+                    if not set(relevant_right_cols) <= set(list(right_table.columns)):
+                        self.actions.append(
+                            f"relevant_right_cols is not a subseet of right_table's columns."
+                        )
+                        continue
+                    if not joined_table_id:
+                        self.actions.append(f"joined_table_id is not provided.")
+                        continue
+
+                    joined_table = self.semantic_joiner.semantic_join(
+                        left_table,
+                        right_table,
+                        relevant_left_cols,
+                        relevant_right_cols,
+                        0.6,
+                        0.6,
+                    )
+                    self.state.intermediate_tables[joined_table_id] = joined_table
+                    self.actions.append(
+                        f"Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
+                    )
                 elif op_name == "Python Executor":
                     python_code: str = parse_code(op_args["code"])
                     exec_res = execute_python_code(python_code, all_tables, self.logger)
@@ -224,7 +323,9 @@ class Materializer:
                             f"Successfully executed the Python code, resulting in a table named {assign_to}"
                         )
                     elif isinstance(exec_res, Exception):
-                        self.logger.info(f"Exception during execution of the Python code: {exec_res}")
+                        self.logger.info(
+                            f"Exception during execution of the Python code: {exec_res}"
+                        )
                         # Self-diagnose
                         diagnose_messages = [
                             LLMMessage(
@@ -249,7 +350,9 @@ class Materializer:
                 elif op_name == "SQL Executor":
                     try:
                         sql_query: str = op_args["sql_query"]
-                        exec_res = execute_sql(self.logger, sql_query, all_tables, self.llm)
+                        exec_res = execute_sql(
+                            self.logger, sql_query, all_tables, self.llm
+                        )
                         self.state.intermediate_tables[assign_to] = exec_res
                         self.actions.append(
                             f"Successfully executed the SQL query, resulting in a table named {assign_to}"

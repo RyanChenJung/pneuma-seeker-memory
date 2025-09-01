@@ -1,5 +1,7 @@
 import json
+from ast import literal_eval
 from typing import Any
+
 
 def read_jsonl(file_path: str):
     data: list[dict[str, str]] = []
@@ -15,6 +17,7 @@ def write_jsonl(data: list[dict[str, str]], file_path: str):
             file.write(json.dumps(item))
             file.write("\n")
 
+
 def parse_json(json_string: str) -> Any:
     if json_string.startswith("```"):
         json_string = json_string[3:]
@@ -24,6 +27,7 @@ def parse_json(json_string: str) -> Any:
         json_string = json_string[4:]
     return json.loads(json_string)
 
+
 def parse_sql(sql_string: str) -> str:
     if sql_string.startswith("```"):
         sql_string = sql_string[3:]
@@ -32,6 +36,7 @@ def parse_sql(sql_string: str) -> str:
     if sql_string.startswith("sql"):
         sql_string = sql_string[3:]
     return sql_string
+
 
 def parse_code(code: str):
     """
@@ -44,3 +49,13 @@ def parse_code(code: str):
     if code.startswith("python"):
         code = code[6:]
     return code
+
+
+def augmented_literal_eval(text: str):
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    if text.startswith("python"):
+        text = text[6:]
+    return literal_eval(text)

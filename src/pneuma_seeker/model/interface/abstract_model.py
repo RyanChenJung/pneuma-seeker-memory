@@ -34,7 +34,9 @@ class AbstractModel(ABC):
 
     @abstractmethod
     def batch_chat(
-        self, batch_messages: list[list[LLMMessage]], llm_option: Optional[LLMOption] = None
+        self,
+        batch_messages: list[list[LLMMessage]],
+        llm_option: Optional[LLMOption] = None,
     ) -> tuple[list[str], int]:
         """
         Chats (in batch) with the model.
@@ -53,6 +55,6 @@ class AbstractModel(ABC):
     def is_valid_json(self, text: str):
         try:
             parse_json(text)
-            return (True, '')
+            return (True, "")
         except json.JSONDecodeError as j:
             return (False, j)

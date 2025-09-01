@@ -6,6 +6,7 @@ pandas>=2.2.3
 textdistance>=4.6.3
 sentence-transformers>=3.4.1
 openai>=1.63.2
+pyxDamerauLevenshtein>=1.8.0
 
 # Visualization-related
 # graphviz>=0.20.3
