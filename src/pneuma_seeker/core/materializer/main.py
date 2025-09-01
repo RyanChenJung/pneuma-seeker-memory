@@ -230,6 +230,7 @@ class Materializer:
                 elif op_name == "Semantic Column Generator":
                     table_id: str | None = op_args.get("table_id")
                     new_column_name: str | None = op_args.get("new_column_name")
+                    table_relevant_columns: list[str] | None = op_args.get("relevant_columns")
                     instruction: str | None = op_args.get("instruction")
 
                     if table_id is None or table_id not in all_tables:
@@ -240,12 +241,18 @@ class Materializer:
                     if new_column_name is None:
                         self.actions.append("new_column_name is not provided.")
                         continue
+                    if table_relevant_columns is None:
+                        self.actions.append("relevant_columns is not provided.")
+                        continue
+                    if not set(table_relevant_columns) <= set(list(all_tables[table_id].columns)):
+                        self.actions.append(f"relevant_columns must be a subset of the columns of table {table_id}.")
+                        continue
                     if instruction is None:
                         self.actions.append("instruction is not provided.")
                         continue
 
                     new_column_values = self.semantic_col_generator.generate_semantic_column(
-                        all_tables[table_id], new_column_name, instruction
+                        all_tables[table_id][table_relevant_columns], new_column_name, instruction
                     )
                     all_tables[table_id][new_column_name] = new_column_values
                     self.actions.append(

@@ -63,19 +63,22 @@ def get_operation_description():
 
 - **Semantic Column Generator**
     - Creates a new column for an existing table using an LLM, based on a natural-language instruction describing how to derive values.
-    - Assumes:
-        - All columns in the source table are relevant to the generation (irrelevant columns should be removed first).
-        - The instruction already includes the expected domain or possible values of the new column.
+    - Requires:
+        - `relevant_columns` must be explicitly provided and must form a subset of the table's columns.
+        - Only these columns are used to generate the new column values (irrelevant columns are automatically excluded).
+        - The instruction must describe how to compute or infer the new column and should already indicate the expected value domain (e.g., categories, labels).
     - The system automatically batches unique rows for efficiency and caches results to avoid redundant LLM calls.
     - Args: {
         "table_id": "<ID of the table to modify (must exist in retrieved or intermediate tables)>",
         "new_column_name": "<name of the column to add>",
+        "relevant_columns": ["<list of column names to use for generation>"],
         "instruction": "<instruction describing how to generate the new column values>"
       }
     - The new column is added directly to the specified table in-place.
     - Example: {
         "table_id": "products_2024",
         "new_column_name": "category",
-        "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing' based on its description."
+        "relevant_columns": ["product_name", "description"],
+        "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing' based on its name and description."
       }
 """.strip()
