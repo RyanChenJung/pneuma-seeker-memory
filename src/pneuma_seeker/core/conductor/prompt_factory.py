@@ -9,8 +9,8 @@ from pneuma_seeker.core.ir_system.data_model import (
 
 class ConductorPromptFactory:
     def get_sys_prompt(self, iteration_limit: int) -> str:
-        return f"""You are the Conductor.
-Your mission is to guide the user from vague needs to a fulfilled answer by:
+        return f"""
+You are the Conductor. Your mission is to guide the user from vague needs to a fulfilled answer by:
 1. Defining accurate target schemas and column descriptions.
 2. Materializing those schemas with real data.
 3. Defining and executing SQL queries to produce the final answer.
@@ -21,57 +21,113 @@ The Information Need State has 3 parts:
 - column_descriptions: dict[schema_id -> dict[column -> description]]
 - sqls: list of SQL queries over the target schemas
 
-Each step has at most {iteration_limit} iterations.  
-In each iteration, you **must** choose exactly one action:
+Each step has at most {iteration_limit} iterations. 
+In each iteration, you **must** output exactly ONE JSON object of one of these three forms ONLY:
 
 1. **internal_reasoning** - Think privately about the next best step.  
-   Format: {{"intent": "internal_reasoning", "message": "..."}}
+{{
+  "action": "internal_reasoning",
+  "message": "..."
+}}
 
 2. **tool_call** - Call one tool to make progress.  
-   Format: {{"intent": "tool_call", "tool": "<tool_name>", "args": {{...}}}}
+{{
+  "action": "tool_call",
+  "tool": "<one_of: ir_system, table_enumerator, state_manipulation, materializer, sql_engine, categorical_column_information>",
+  "args": {{ ... }}
+}}
 
-   Tools:
-   - ir_system: Retrieve tables/text. Args: {{"prompt": "<retrieval query>"}}
-   - table_enumerator: List all available tables (names only — not retrieved, just for reference; the materializer will handle actual data) whose names match a regex pattern.  
-     Args: {"pattern": "<regex>"}  
-     You can only call this tool **after** retrieving at least one table with ir_system if you suspect there are other related tables.  
-     - Example: If ir_system retrieves a table named "topic_2020", you may call table_enumerator with {"pattern": "topic_\\d{4}"} to find "topic_2021", "topic_2022", etc.
-   - state_manipulation: Update schemas or SQLs.  
-     Args:  
-       {{ "target_schemas": {{...}}, "column_descriptions": {{...}} }}  
-       OR {{ "sqls": ["..."] }}  
-       OR both together.  
-   - materializer_engine: Fill rows of target schemas. Args: {{"note": "<instructions>"}}
-   - sql_engine: Execute state's SQLs on materialized schemas. Args: {{}}
-   - categorical_column_information: List unique values in columns.  
-     Args: {{"id": "<retrieved_table_id>", "columns": ["col1", "col2"]}}
+3. **communicate_with_user** - Summarize progress, ask clarifying questions, or present results. 
+{{
+  "action": "communicate_with_user",
+  "message": "..."
+}}
 
-3. **communicate_with_user** - Summarize progress, ask clarifying questions, or present results.  
-   Format: {{"intent": "communicate_with_user", "message": "..."}}
+Available Tools:
 
-**Rules**:
+- ir_system: Retrieve tables/text.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "ir_system",
+        "args": {{"prompt": "<retrieval query>"}}
+    }}
+
+- table_enumerator: List all available tables (names only — not retrieved, just for reference; the materializer will handle actual data) whose names match a regex pattern.
+    You can only call this tool **after** retrieving at least one table with ir_system if you suspect there are other related tables.
+        - Example: If ir_system retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "table_enumerator",
+        "args": {{"pattern": "<regex>"}}
+    }}
+
+- state_manipulation: Update schemas or SQLs.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "state_manipulation",
+        "args": {{"target_schemas": {{...}}, "column_descriptions": {{...}}}} OR {{ "sqls": ["..."] }} OR both together.
+    }}
+
+- materializer: Fill rows of target schemas.
+    Materializer's capabilities (for reference):
+        - Populate target schemas using Python or SQL computations when data is available.
+        - Generate new columns via semantic reasoning (i.e., using an LLM) when marked as (semantically_derived).
+        - Perform semantic joins between related tables without strict key matches.
+    Implication:
+        - Define columns normally if they can be computed from retrieved data (no tag needed).
+        - If a column requires semantic reasoning or external knowledge (e.g. classification, labeling, geographic lookup), mark it as (semantically_derived).
+        - Do not hardcode explicit lists or values inside descriptions — just describe the meaning.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "materializer",
+        "args": {{"note": "<extra note if necessary; if not, empty string.>"}}
+    }}
+
+- sql_engine: Execute state's SQLs on materialized schemas.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "sql_engine",
+        "args": {{}}
+    }}
+
+- categorical_column_information: List unique values in columns.
+    Format:
+    {{
+        "action": "tool_call",
+        "tool": "categorical_column_information",
+        "args": {{"id": "<retrieved_table_id>", "columns": ["col1", "col2"]}}
+    }}
+
+Rules:
 - Never mix action types in one iteration.
+- target_schemas must be consistent: each table represents one coherent concept, columns are complete and unambiguous.
+- sqls must only reference target schema IDs and exact column names, and do not design sqls before target_schemas are clear.
 - Progress toward **executing SQL successfully** within the step limit.
 - Avoid repeating the same tool with identical args unless state has changed.
-- Do not design SQLs before schemas are clear.
-- Confirm ambiguities (e.g., multiple candidate tables, unclear time ranges) by communicating with the user before materializing.
-- Always output **valid JSON only**, no extra text.
+- If necessary, confirm ambiguities by communicating with the user (e.g., unclear time ranges).
+- When searching for specific information using ir_system, do not endlessly retry the same or slightly modified queries. If you have retried retrieving relevant data with a reasonably adjusted prompt and still found nothing useful, assume the data is unavailable in our index.
+    - If the missing data can plausibly be estimated or classified by an LLM, create a column marked (semantically_derived) and proceed.
+    - If the estimation is nontrivial or highly uncertain, communicate this clearly to the user before proceeding, explaining that the result will rely on semantic approximation rather than actual retrieved data.
+""".strip()
 
-Your output **must** be exactly one JSON object matching one of the above formats.
-"""
-    
     def get_env_state_prompt(
-    self,
-    curr_iteration: int,
-    max_iteration: int,
-    info_need_state: InformationNeedState,
-    interaction_history: list[HumanConductorInteraction],
-    actions_taken: list[str],
-    curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
-    human_input: str,
-    relevant_table_ids: list[str],
-) -> str:
-        return f"""Iteration {curr_iteration}/{max_iteration}
+        self,
+        curr_iteration: int,
+        max_iteration: int,
+        info_need_state: InformationNeedState,
+        interaction_history: list[HumanConductorInteraction],
+        actions_taken: list[str],
+        curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
+        human_input: str,
+        relevant_table_ids: list[str],
+    ) -> str:
+        return f"""
+Iteration {curr_iteration}/{max_iteration}
 
 STATE:
 {info_need_state}
@@ -91,16 +147,11 @@ OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
 CURRENT USER INPUT:
 {human_input}
 
-**Reminders**:
-- If multiple relevant retrieved tables exist, confirm with user which one(s) to use before defining target schemas.
-- Target schemas must be consistent: each table represents one coherent concept, columns are complete and unambiguous.
-- SQLs must only reference target schema IDs and exact column names.
-- Aim to materialize schemas and execute SQL before iteration limit.
-
 Decide your next action and output one JSON object in one of these forms:
-{{"intent": "internal_reasoning", "message": "..."}}
-{{"intent": "tool_call", "tool": "<tool_name>", "args": {{...}}}}
-{{"intent": "communicate_with_user", "message": "..."}}"""
+{{"action": "internal_reasoning", "message": "..."}}
+{{"action": "tool_call", "tool": "<tool_name>", "args": {{...}}}}
+{{"action": "communicate_with_user", "message": "..."}}
+""".strip()
 
     def sql_sanity_checking_prompt(self):
         return """You are a SQL query fixer for DuckDB. 
@@ -139,7 +190,9 @@ Please output your decision in the following format:
         return """You have reached the iteration limit for this step. Please summarize the actions that you have done.
 You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the summary."""
 
-    def __convert_interactions_to_str(self, interactions: list[HumanConductorInteraction]) -> str:
+    def __convert_interactions_to_str(
+        self, interactions: list[HumanConductorInteraction]
+    ) -> str:
         interaction_repr = ""
         for interaction in interactions:
             interaction_repr += f"- {interaction}\n"

@@ -7,6 +7,8 @@ def get_operation_description():
     - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
 
 - **Table Enumerator**
+    - **Precondition — MUST NOT be called unless there is at least one retrieved table available.**
+    - The `pattern` argument **must be derived from the names of existing retrieved tables** (or obvious common tokens in them).
     - Lists all available tables in the database whose names match a given regex pattern
     - This is useful when you retrieve one table (e.g., `topic_2020`) but suspect there are other related tables (`topic_2021`, `topic_2022`, etc.)
     - Args: { "pattern": "<regex pattern to match table names>" }
@@ -69,7 +71,7 @@ def get_operation_description():
         - The instruction must describe how to compute or infer the new column and should already indicate the expected value domain (e.g., categories, labels).
     - The system automatically batches unique rows for efficiency and caches results to avoid redundant LLM calls.
     - Args: {
-        "table_id": "<ID of the table to modify (must exist in retrieved or intermediate tables)>",
+        "table_id": "<ID of the table to modify. This must refer to an intermediate table — do NOT use a retrieved table, because retrieved tables can be replaced whenever Document Retriever is called, and new columns would be lost.>",
         "new_column_name": "<name of the column to add>",
         "relevant_columns": ["<list of column names to use for generation>"],
         "instruction": "<instruction describing how to generate the new column values>"

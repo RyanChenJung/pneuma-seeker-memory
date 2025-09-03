@@ -113,7 +113,7 @@ class Conductor:
             except Exception:
                 action = {}
 
-            intent: str = action.get("intent", "")
+            intent: str = action.get("action", "")
             actions_taken.append(intent)
             action_message: None | str = action.get("message")
             tool: None | str = action.get("tool")
@@ -164,7 +164,8 @@ class Conductor:
             yield user_facing_response
 
     def __execute_tool(self, tool: str, args: str | dict) -> str:
-        if (tool == "IR System" or tool == "ir_system") and isinstance(args, dict):
+        print("EXECUTE TOOL")
+        if tool == "ir_system" and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
             ir_system = IRSystem(self.llm, self.embed_model, self.logger)
             self.current_retrieval_results = ir_system.retrieve_documents(
@@ -178,9 +179,7 @@ class Conductor:
             pattern: str = args.get("pattern", "")
             self.enumerated_table_ids = table_enumerator(pattern)
             return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
-        elif (
-            tool == "State Manipulation" or tool == "state_manipulation"
-        ) and isinstance(args, dict):
+        elif tool == "state_manipulation" and isinstance(args, dict):
             self.logger.info(f"State Manipulation request with params: {args}")
             target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
@@ -218,11 +217,11 @@ class Conductor:
             elif is_sqls_modified:
                 return "Successfully modified the SQL queries."
             return "No modification is done."
-        elif tool == "Materializer Engine" or tool == "materializer_engine":
-            self.logger.info(f"Materializer Engine called")
+        elif tool == "materializer":
             note = ""
             if isinstance(args, dict) and "note" in args:
-                note = args.get("note", "")
+                note = args["note"]
+            self.logger.info(f"Materializer called")
             self.info_need_state.target_schemas = (
                 self.materializer.materialize_target_schemas(
                     self.info_need_state.target_schemas,
@@ -233,23 +232,20 @@ class Conductor:
             )
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."
-        elif tool == "SQL Engine" or tool == "sql_engine":
+        elif tool == "sql_engine":
             self.logger.info("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_target_schemas_materialized:
-                return "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer Engine first, then you can call SQL Engine."
+                return "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
             if len(self.info_need_state.sqls) == 0:
-                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer Engine. Finally, you can call SQL Engine again to execute them."
+                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer. Finally, you can call SQL Engine again to execute them."
             execution_result = self.__execute_sqls()
 
             self.logger.info(f"SQL execution result output: {execution_result}")
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
-        elif (
-            tool == "Categorical Column Information"
-            or tool == "categorical_column_information"
-        ):
+        elif tool == "categorical_column_information":
             if isinstance(args, dict):
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
@@ -395,7 +391,7 @@ def stream_message_content_from_chunks(
 
         for chunk in chunks:
             buffer += chunk
-            raw_buffer.append(chunk)  # accumulate
+            raw_buffer.append(chunk)
 
             while True:
                 match = json_regex.search(buffer)
@@ -408,9 +404,7 @@ def stream_message_content_from_chunks(
                 except json.JSONDecodeError:
                     break
 
-                # Remove matched JSON from buffer
                 buffer = buffer[match.end() :]
-
                 if (
                     action.get("intent") == "communicate_with_user"
                     and "message" in action

@@ -27,7 +27,7 @@ def execute_sql(
     logger: Logger, sql_query: str, tables: dict[str, DataFrame], llm: AbstractModel
 ):
     db = duckdb.connect(database=":memory:")
-    logger.info(f"Executing this SQL query: {sql_query} over these tables: {tables}")
+    logger.info(f"Executing this SQL query: {sql_query}")
 
     # Clear previous tables
     for table in db.execute("SHOW TABLES").fetchall():

@@ -41,9 +41,7 @@ class SemanticColumnGenerator:
             encoded_prompt = [
                 LLMMessage(
                     role=Role.SYSTEM.value,
-                    content="You are given a list of values from a table, "
-                    "and your task is to generate a new column "
-                    "(a Python list of strings) directly without any extra formatting or explanation.",
+                    content="You are given a list of values from a table, and your task is to generate a new column. Output the values directly as a Python list of strings/integers/floats WITHOUT any extra formatting or explanation.",
                 ),
                 LLMMessage(
                     role=Role.USER.value,
@@ -54,8 +52,22 @@ class SemanticColumnGenerator:
                     content=f"Values to transform: {batch}",
                 ),
             ]
-            llm_output = "".join(self.llm.chat(encoded_prompt))
-            transformed_values: list[str] = augmented_literal_eval(llm_output)
+
+            raw_output = "".join(self.llm.chat(encoded_prompt)).strip()
+            start = raw_output.find("[")
+            end = raw_output.rfind("]")
+
+            if start != -1 and end != -1 and start < end:
+                list_str = raw_output[start:end+1]  # include the closing bracket
+                try:
+                    transformed_values = augmented_literal_eval(list_str)
+                except (SyntaxError, ValueError):
+                    # fallback if the content is not valid Python literal
+                    transformed_values = []
+            else:
+                # no valid list delimiters found
+                transformed_values = []
+
             for val_idx, value in enumerate(transformed_values):
                 cached_values[batch[val_idx]] = value
 

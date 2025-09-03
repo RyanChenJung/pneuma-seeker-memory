@@ -60,23 +60,3 @@ We all know that as temperatures rise it makes the rum evaporate and pirates can
 65,california_schools,"Among the cities with the top 10 lowest enrollment for students in grades 1 through 12, which are the top 2 most popular cities to visit?",,Ranking,Knowledge,"[""Death Valley"", ""Shaver Lake""]"
 952,formula_1,"Of the constructors that have been ranked 1 in 2014, which has the most prestige?",,Ranking,Knowledge,Ferrari
 1000,formula_1,"Of the 5 racetracks that hosted the most recent races, rank the locations by distance to the equator.",,Ranking,Knowledge,"[""Mexico City"", ""Sao Paulo"", ""Abu Dhabi"", ""Austin"", ""Suzuka""]"
-81,california_schools,Summarize the qualities of the schools with an average score in Math under 600 in the SAT test and are exclusively virtual.,List the schools with an average score in Math under 600 in the SAT test and are exclusively virtual.,Aggregation,Reasoning,
-82,california_schools,Summarize the qualities of the schools in Riverside which the average math score for SAT is greater than 400.,List the schools in Riverside which the average math score for SAT is greater than 400.,Aggregation,Reasoning,
-85,codebase_community,Summarize common characteristics of the titles of the posts owned by the user csgillespie.,List the titles of the posts owned by the user csgillespie.,Aggregation,Reasoning,
-86,codebase_community,What qualities are represented by the badges obtained by csgillespie?,List by the badges obtained by csgillespie?,Aggregation,Reasoning,
-87,codebase_community,"What is the average sentiment of the posts owned by the user csgillespie, Positive or Negative?","List the body of the posts owned by the user csgillespie, Positive or Negative?",Aggregation,Reasoning,
-88,codebase_community,Summarize qualities of the comments made by user 'A Lion.',List the text of the comments made by user 'A Lion.',Aggregation,Reasoning,
-89,codebase_community,Summarize the comments made on the post titled 'How does gentle boosting differ from AdaBoost?' to answer the original question,List the text of the comments of the post titled 'How does gentle boosting differ from AdaBoost?',Aggregation,Reasoning,
-90,codebase_community,Summarize the issues described in the comments on Neil McGuigan's posts.,List the text of the comments on Neil McGuigan's posts.,Aggregation,Reasoning,
-91,codebase_community,Summarize the comments added to the post with the highest score.,List the text of the comments on the post with the highest score.,Aggregation,Reasoning,
-92,formula_1,Summarize the track characteristics of the circuits in Germany.,List the names of the circuits in Germany.,Aggregation,Reasoning,
-93,formula_1,Summarize the track characteristics of the circuits in Spain.,List the names of the circuits in Spain.,Aggregation,Reasoning,
-94,formula_1,Provide information about the races held on Sepang International Circuit.,List the names of races held on Sepang International Circuit.,Aggregation,Reasoning,
-95,formula_1,Summarize the qualities of all the drivers who finished the game in race No. 872.,List the names of the drivers who finished the game in race No. 872.,Aggregation,Reasoning,
-96,formula_1,"Summarize the track characteristiscs of the circuits in Lisbon, Portugal.","List the names of the circuits in Lisbon, Portugal.",Aggregation,Reasoning,
-97,formula_1,Summarize the track characteristics of the US circuits.,List the names of the US circuits.,Aggregation,Reasoning,
-99,formula_1,Summarize information about the French constructors that have a lap number of over 50.,List French constructors that have a lap number of over 50.,Aggregation,Reasoning,
-100,formula_1,Summarize the track characteristics of the circuits in Italy.,List the track names of the circuits in Italy.,Aggregation,Reasoning,
-101,european_football_2,Summarize attributes of the players with an overall rating of over 88 from 2008 to 2010?,List players with an overall rating of over 88 from 2008 to 2010?,Aggregation,Reasoning,
-102,european_football_2,Identify common characteristics of the players whose volley score and dribbling score are over 87.,List the players whose volley score and dribbling score are over 87.,Aggregation,Reasoning,
-103,european_football_2,Summarize attributes of the 10 heaviest players.,,Aggregation,Reasoning,

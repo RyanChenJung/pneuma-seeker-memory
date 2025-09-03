@@ -43,7 +43,7 @@ class Materializer:
         self.state = MaterializerState()
 
         self.semantic_joiner = SemanticJoiner(self.embed_model)
-        self.semantic_col_generator = SemanticColumnGenerator(self.llm)
+        self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20) # Try 20
 
         self.actions: list[str] = []
         self.data_sources = data_sources
@@ -83,7 +83,7 @@ class Materializer:
 
         num_iterations = 0
         llm_messages = [sys_prompt]
-        while not self.__check_completion(target_schemas, sqls):
+        while not self.__check_completion(target_schemas):
             self.logger.info("Planning next materialization step")
             self.logger.info("Requesting LLM response for plan")
             llm_messages.append(
@@ -146,21 +146,12 @@ class Materializer:
                 assign_to: str = plan.get("assign_to", "")
                 if op_name == "Document Retriever":
                     prompt: str = op_args["prompt"]
-                    extra_documents = get_documents(
+                    self.state.current_retrieved_documents = get_documents(
                         self.llm,
                         self.embed_model,
                         self.logger,
                         prompt,
                         self.data_sources,
-                    )
-
-                    if len(self.state.current_retrieved_documents.keys()) == 0:
-                        self.state.current_retrieved_documents = extra_documents
-
-                    self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
-                        set(
-                            self.state.current_retrieved_documents[RetrieverType.PNEUMA]
-                        ).union(set(extra_documents[RetrieverType.PNEUMA]))
                     )
                     self.actions.append(
                         f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
@@ -168,7 +159,9 @@ class Materializer:
                 elif op_name == "Table Enumerator":
                     self.logger.info(f"Enter Table Enumerator")
                     pattern: str = op_args["pattern"]
-                    extra_tables: list[AbstractDocument] = table_enumerator(pattern)
+                    extra_tables: list[AbstractDocument] = table_enumerator(
+                        pattern, self.data_sources
+                    )
 
                     if len(self.state.current_retrieved_documents.keys()) == 0:
                         if len(extra_tables) > 0:
@@ -230,7 +223,9 @@ class Materializer:
                 elif op_name == "Semantic Column Generator":
                     table_id: str | None = op_args.get("table_id")
                     new_column_name: str | None = op_args.get("new_column_name")
-                    table_relevant_columns: list[str] | None = op_args.get("relevant_columns")
+                    table_relevant_columns: list[str] | None = op_args.get(
+                        "relevant_columns"
+                    )
                     instruction: str | None = op_args.get("instruction")
 
                     if table_id is None or table_id not in all_tables:
@@ -244,15 +239,23 @@ class Materializer:
                     if table_relevant_columns is None:
                         self.actions.append("relevant_columns is not provided.")
                         continue
-                    if not set(table_relevant_columns) <= set(list(all_tables[table_id].columns)):
-                        self.actions.append(f"relevant_columns must be a subset of the columns of table {table_id}.")
+                    if not set(table_relevant_columns) <= set(
+                        list(all_tables[table_id].columns)
+                    ):
+                        self.actions.append(
+                            f"relevant_columns must be a subset of the columns of table {table_id}."
+                        )
                         continue
                     if instruction is None:
                         self.actions.append("instruction is not provided.")
                         continue
 
-                    new_column_values = self.semantic_col_generator.generate_semantic_column(
-                        all_tables[table_id][table_relevant_columns], new_column_name, instruction
+                    new_column_values = (
+                        self.semantic_col_generator.generate_semantic_column(
+                            all_tables[table_id][table_relevant_columns],
+                            new_column_name,
+                            instruction,
+                        )
                     )
                     all_tables[table_id][new_column_name] = new_column_values
                     self.actions.append(
@@ -381,12 +384,11 @@ class Materializer:
                 final_result[key] = value
         return final_result
 
-    def __check_completion(
-        self, target_schemas: dict[str, DataFrame], sqls: list[str]
-    ) -> bool:
+    def __check_completion(self, target_schemas: dict[str, DataFrame]) -> bool:
         self.logger.info(f"CHECK COMPLETION")
         all_schema_ids = set(target_schemas.keys())
         materialized_schema_ids = set(self.state.intermediate_tables.keys())
+
         self.logger.info(f"==> all_schema_ids: {all_schema_ids}")
         self.logger.info(f"==> materialized_schema_ids: {materialized_schema_ids}")
         is_complete = all_schema_ids <= materialized_schema_ids
@@ -397,30 +399,41 @@ class Materializer:
             )
 
         already_complete = is_complete
-        wrong_columns = []
+        column_issues: list[str] = []
+
         if is_complete:
             for target_schema_id in all_schema_ids:
                 if target_schema_id in materialized_schema_ids:
-                    self.logger.info(f"Checking the {target_schema_id}")
-                    target_table_columns = set(target_schemas[target_schema_id].columns)
-                    materialized_table_columns = set(
+                    self.logger.info(f"Checking the target schema {target_schema_id}.")
+
+                    target_cols = set(target_schemas[target_schema_id].columns)
+                    materialized_cols = set(
                         self.state.intermediate_tables[target_schema_id].columns
                     )
 
-                    self.logger.info(f"target_table_columns {target_table_columns}")
-                    self.logger.info(
-                        f"materialized_table_columns {materialized_table_columns}"
-                    )
-                    if target_table_columns != materialized_table_columns:
+                    self.logger.info(f"target_cols {target_cols}")
+                    self.logger.info(f"materialized_cols {materialized_cols}")
+
+                    missing_cols = target_cols - materialized_cols
+                    extra_cols = materialized_cols - target_cols
+
+                    if missing_cols or extra_cols:
                         is_complete = False
-                        wrong_columns.extend(
-                            target_table_columns - materialized_table_columns
-                        )
+                        issue_msg = f"For table `{target_schema_id}`: "
+
+                        if missing_cols:
+                            issue_msg += f"missing columns {sorted(missing_cols)}. "
+                        if extra_cols:
+                            issue_msg += f"unexpected columns {sorted(extra_cols)}. "
+
+                        column_issues.append(issue_msg.strip())
+
         if already_complete and not is_complete:
+            for issue in column_issues:
+                self.actions.append(issue)
             self.actions.append(
-                f"You either: 1) overselected the columns (i.e., there are unnecessary columns not specified in the target schemas), in which you should remove them, or 2) you should rename some column names using a Python code, as these columns may have different names in the materialized schemas (e.g., `Doc ID` instead of `doc_id`)."
+                "Fix the above column issues. If some columns have different names (e.g., `Doc ID` vs `doc_id`), rename them using Python."
             )
-            print(self.actions[-1])
 
         self.logger.info(f"==> is_complete: {is_complete}")
         self.logger.info(

@@ -14,6 +14,7 @@ class ChatInterface:
         user_id: str,
         chat_id: str,
         data_sources: list[str],
+        enable_persistence = True
     ):
         logger = setup_logger(
             name="processor_logger",
@@ -25,19 +26,27 @@ class ChatInterface:
         self.llm_conductor = Conductor(llm_path, embed_model_path, logger, data_sources)
         self.user_id = user_id
         self.chat_id = chat_id
-        persistence.init_db()
+        self.enable_persistence = enable_persistence
 
-        # Restore previous state
-        info_state, retr_results, enumerated_table_ids = persistence.load_state(
-            user_id, chat_id
-        )
-        self.llm_conductor.info_need_state = info_state
-        self.llm_conductor.current_retrieval_results = retr_results
-        self.llm_conductor.enumerated_table_ids = enumerated_table_ids
+        if self.enable_persistence:
+            persistence.init_db()
 
-    def process_user_input(self, user_input: str):
+            # Restore previous state
+            info_state, retr_results, enumerated_table_ids = persistence.load_state(
+                user_id, chat_id
+            )
+            self.llm_conductor.info_need_state = info_state
+            self.llm_conductor.current_retrieval_results = retr_results
+            self.llm_conductor.enumerated_table_ids = enumerated_table_ids
+
+    def process_user_input(self, user_input: str, interactions: list[HumanConductorInteraction] = []):
+        """
+        Processes user input. If persistence is enabled, the `interactions` argument is ignored.
+        If not enabled, then interactions must be passed.
+        """
         conductor_final_response = ""
-        interactions = persistence.load_interactions(self.user_id, self.chat_id)
+        if self.enable_persistence:
+            interactions = persistence.load_interactions(self.user_id, self.chat_id)
 
         for system_response in self.llm_conductor.process_input(
             user_input,
@@ -50,18 +59,19 @@ class ChatInterface:
 
         yield "DONE"
 
-        # Save new interaction
-        persistence.save_interaction(
-            self.user_id,
-            self.chat_id,
-            HumanConductorInteraction(user_input, conductor_final_response),
-        )
+        if self.enable_persistence:
+            # Save new interaction
+            persistence.save_interaction(
+                self.user_id,
+                self.chat_id,
+                HumanConductorInteraction(user_input, conductor_final_response),
+            )
 
-        # Save current state of Conductor
-        persistence.save_state(
-            self.user_id,
-            self.chat_id,
-            self.llm_conductor.info_need_state,
-            self.llm_conductor.current_retrieval_results,
-            self.llm_conductor.enumerated_table_ids,
-        )
+            # Save current state of Conductor
+            persistence.save_state(
+                self.user_id,
+                self.chat_id,
+                self.llm_conductor.info_need_state,
+                self.llm_conductor.current_retrieval_results,
+                self.llm_conductor.enumerated_table_ids,
+            )
