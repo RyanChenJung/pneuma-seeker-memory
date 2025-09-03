@@ -2,12 +2,12 @@ from typing import Any
 
 from logging import Logger
 from pandas import DataFrame
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType, Table
 from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
     SemanticColumnGenerator,
 )
 from pneuma_seeker.core.materializer.operation.semantic_joiner import SemanticJoiner
-from pneuma_seeker.core.materializer.prompt_factory import PromptFactory
+from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.materializer.operation.table_enumerator import table_enumerator
 from pneuma_seeker.core.materializer.operation.document_retriever import (
@@ -39,7 +39,7 @@ class Materializer:
         self.llm = llm
         self.embed_model = embed_model
 
-        self.prompt_factory = PromptFactory()
+        self.prompt_factory = MaterializerPromptFactory()
         self.state = MaterializerState()
 
         self.semantic_joiner = SemanticJoiner(self.embed_model)
@@ -61,15 +61,11 @@ class Materializer:
         column_descriptions: dict[str, dict[str, str]],
         sqls: list[str],
         user_side_note="",
-        initial_retrieved_documents: dict[
-            RetrieverType, list[AbstractDocument]
-        ] = dict(),
+        external_data: list[AbstractDocument] = [],
     ) -> dict[str, DataFrame]:
         self.logger.info(
             f"Starting materialization for {len(target_schemas)} tables with {len(sqls)} SQL queries"
         )
-        if len(initial_retrieved_documents.keys()) > 0:
-            self.state.current_retrieved_documents = initial_retrieved_documents
         self.__cleanup_system()
         sys_prompt = LLMMessage(
             role=Role.SYSTEM.value,
@@ -95,6 +91,7 @@ class Materializer:
                         self.actions,
                         num_iterations,
                         user_side_note,
+                        external_data,
                     ),
                 )
             )
@@ -127,14 +124,17 @@ class Materializer:
                 if retriever_type == RetrieverType.PNEUMA:
                     docs = self.state.current_retrieved_documents[retriever_type]
                     for doc in docs:
-                        alternative_doc_id = doc.doc_id.split("/")[-1]
                         curr_retrieved_docs_tables_only[doc.doc_id] = doc.content
-                        curr_retrieved_docs_tables_only[alternative_doc_id] = (
-                            doc.content
-                        )
+            
+            external_data_tables_only: dict[str, DataFrame] = dict()
+            for datum in external_data:
+                if isinstance(datum, Table):
+                    external_data_tables_only[datum.doc_id] = datum.content
+
             all_tables = {
                 **curr_retrieved_docs_tables_only,
                 **self.state.intermediate_tables,
+                **external_data_tables_only,
             }
 
             if step_type == "internal_reasoning":

@@ -1,9 +1,8 @@
 import os
 import json
 import duckdb
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Dict, Any, Tuple
-from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import (
     AbstractDocument,
     RetrieverType,
@@ -76,18 +75,6 @@ def init_db():
     con = duckdb.connect(DB_PATH)
     con.execute(
         """
-    CREATE TABLE IF NOT EXISTS interactions (
-        user_id TEXT,
-        chat_id TEXT,
-        idx INTEGER,
-        human_input TEXT,
-        llm_response TEXT,
-        ts TIMESTAMP
-    )
-    """
-    )
-    con.execute(
-        """
     CREATE TABLE IF NOT EXISTS chat_state (
         user_id TEXT,
         chat_id TEXT,
@@ -100,70 +87,15 @@ def init_db():
     con.close()
 
 
-# -------------------- INTERACTIONS --------------------
-def load_interactions(user_id: str, chat_id: str) -> List[HumanConductorInteraction]:
-    con = duckdb.connect(DB_PATH)
-    rows = con.execute(
-        """
-        SELECT human_input, llm_response
-        FROM interactions
-        WHERE user_id = ? AND chat_id = ?
-        ORDER BY idx ASC
-    """,
-        (user_id, chat_id),
-    ).fetchall()
-    con.close()
-
-    return [HumanConductorInteraction(h, r) for h, r in rows]
-
-
 def get_unique_user_chat_ids():
     con = duckdb.connect(DB_PATH)
     query = """
-    SELECT DISTINCT user_id, chat_id
-    FROM interactions
-    UNION
     SELECT DISTINCT user_id, chat_id
     FROM chat_state
     """
     rows = con.execute(query).fetchall()
     con.close()
     return rows
-
-
-def save_interaction(
-    user_id: str, chat_id: str, interaction: HumanConductorInteraction
-) -> None:
-    con = duckdb.connect(DB_PATH)
-
-    row: Tuple[int] | None = con.execute(
-        """
-        SELECT COALESCE(MAX(idx), -1) + 1
-        FROM interactions
-        WHERE user_id = ? AND chat_id = ?
-        """,
-        (user_id, chat_id),
-    ).fetchone()
-
-    # Explicitly assert since COALESCE guarantees a row
-    assert row is not None
-    next_idx = row[0]
-
-    con.execute(
-        """
-        INSERT INTO interactions (user_id, chat_id, idx, human_input, llm_response, ts)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            user_id,
-            chat_id,
-            next_idx,
-            interaction.human_input,
-            interaction.llm_response,
-            datetime.now(timezone.utc),
-        ),
-    )
-    con.close()
 
 
 # -------------------- CHAT STATE --------------------
@@ -240,10 +172,10 @@ def save_state(
     con.close()
 
 
-def load_state(
-    user_id: str, chat_id: str
-) -> Tuple[
-    InformationNeedState, Dict[RetrieverType, List[AbstractDocument]], list[str]
+def load_state(user_id: str, chat_id: str) -> Tuple[
+    InformationNeedState,
+    Dict[RetrieverType, List[AbstractDocument]],
+    list[str],
 ]:
     con = duckdb.connect(DB_PATH)
     row = con.execute(

@@ -6,10 +6,11 @@ from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     convert_multi_retriever_results_to_str,
+    convert_retrieval_results_to_str,
 )
 
 
-class PromptFactory:
+class MaterializerPromptFactory:
     def get_planning_prompt(
     self,
     target_schemas: dict[str, DataFrame],
@@ -18,7 +19,12 @@ class PromptFactory:
     operation_description: str,
 ) -> str:
         return f"""
-You are the Materializer. Your task is to fill all rows for the target schemas below using retrieved tables and allowed operations.
+You are the Materializer. Your task is to fill all rows for the target schemas using:
+1. Retrieved internal data
+2. User-provided external data
+3. Allowed operations described below
+
+Treat external data just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
 
 TARGET SCHEMAS:
 {json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}
@@ -34,15 +40,16 @@ AVAILABLE OPERATIONS:
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
-2. Prefer using already retrieved tables before calling Document Retriever again (retrieved data is reset each time Document Retriever is used).
-3. Always assign results to the correct target schema IDs, matching column names **exactly (case-sensitive)**.
-4. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
+2. Use external data if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
+3. Internal data is reset each time Document Retriever is used; external data persists.
+4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
+5. Always assign results to the correct target schema IDs, matching column names **exactly (case-sensitive)**.
+6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
 
 COLUMN HANDLING:
-- Column annotations like (semantically_derived) and user notes are **hints, not guarantees**.
-- If reliable data exists for a column (tagged or untagged), compute it normally using Python Executor or SQL Executor — no semantic generation needed.
+- (semantically_derived) and user notes are hints, not guarantees.
+- If reliable data exists for a column (tagged or untagged), fill it normally using Python Executor or SQL Executor — no semantic generation needed.
 - If no reliable data exists to fill a column, use the Semantic Column Generator as a fallback — whether or not the column is tagged.
-- If a user note suggests semantic computation, consider it as context — but still verify whether data is available before deciding.
 
 OUTPUT FORMAT:
 Produce exactly ONE JSON object:
@@ -62,6 +69,7 @@ Produce exactly ONE JSON object:
     recent_actions: list[str],
     num_iterations: int,
     user_side_note: str,
+    user_provided_external_data: list[AbstractDocument]
 ) -> str:
         return f"""
 This is iteration {num_iterations} of materializing the Target Schemas.
@@ -69,25 +77,25 @@ This is iteration {num_iterations} of materializing the Target Schemas.
 CURRENT PROGRESS:
 - Intermediate tables so far: {list(intermediate_tables.keys())}
 - Recent actions: {recent_actions}
-- Retrieved documents (tables/text): {convert_multi_retriever_results_to_str(retrieved_documents)}
+- Retrieved internal data: {convert_multi_retriever_results_to_str(retrieved_documents)}
+- User-provided external data: {convert_retrieval_results_to_str(user_provided_external_data)}
 - User note: {user_side_note}
 
-RULES:
-CORE:
-1. Use currently retrieved documents before calling Document Retriever again.
-2. Always match target schema column names exactly (case-sensitive).
-3. Assign completed tables only to their correct target schema IDs.
+CORE RULES:
+1. Use external data if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
+2. Internal data is reset each time Document Retriever is used; external data persists.
+3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
+4. Always match target schema column names exactly (case-sensitive).
+5. Assign completed tables only to their correct target schema IDs.
 
 COLUMN HANDLING:
-- Treat column annotations (e.g., (semantically_derived)) as **hints, not absolute truth**. 
-- If data exists for a tagged column, compute normally using Python or SQL. 
-- If no data exists for an untagged column, use the Semantic Column Generator as fallback.
-- In other words: **don't let your user's mistakes block you — use whichever method best populates the column accurately.**
+- Treat (semantically_derived) and user notes as hints only.
+- If reliable data exists, compute normally using Python Executor or SQL Executor.
+- Use Semantic Column Generator only when no reliable direct computation is available.
 
 TOOL USAGE:
-1. Never use `pd.read_csv` — use `tables["<ID>"]` (dict[str, pd.DataFrame]) to access retrieved data.
-2. If you retrieve tables and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use Table Enumerator to list all matching table IDs.
-3. Use Semantic Column Generator only when no reliable direct computation is available.
+- If you retrieve tables and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use Table Enumerator to list all matching table IDs.
+- Use Semantic Column Generator only when no reliable direct computation is available.
 
 OUTPUT FORMAT:
 Return exactly ONE JSON object per iteration:

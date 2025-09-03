@@ -3,6 +3,7 @@ import json
 import os
 
 import asyncio
+from typing import Any
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -15,6 +16,7 @@ from torch.backends import cudnn
 from pneuma_seeker.core.conductor.chat_interface import ChatInterface
 from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.model.llm_message import LLMMessage
 
 load_dotenv("../../.env")
 
@@ -32,6 +34,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+FRONTEND_PATH = "http://localhost:8080"
 
 
 class ConnectionManager:
@@ -146,14 +151,23 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     try:
         while True:
             # Receive the prompt from frontend
-            data = json.loads(await websocket.receive_text())["prompt"]
+            data_from_frontend: dict[str, Any] = json.loads(await websocket.receive_text())
+            chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
+            url_paths: list[str] = [data_from_frontend["file_url_paths"]]
+
+            # Normalize paths
+            for idx, url_path in enumerate(url_paths):
+                if not url_path.startswith("/"):
+                    url_paths[idx] = f"/{url_path}"
+
+            file_urls = [f"{FRONTEND_PATH}{i}" for i in url_paths]
             conductor = manager.get_chat_interface(user_id, chat_id)
 
             loop = asyncio.get_running_loop()
 
             # Run the blocking generator in a separate thread
             def run_generator():
-                for log_message in conductor.process_user_input(data):
+                for log_message in conductor.process_user_input(chat_messages, file_urls):
                     actual_message = log_message
                     role = "assistant"
                     if log_message.startswith("LOG"):

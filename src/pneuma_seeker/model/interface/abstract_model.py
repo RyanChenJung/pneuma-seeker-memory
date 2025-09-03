@@ -11,7 +11,7 @@ from pneuma_seeker.utils.parser import parse_json
 
 class AbstractModel(ABC):
     @abstractmethod
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, **kwargs):
         """All implementors must accept a model_name in the constructor."""
         pass
 

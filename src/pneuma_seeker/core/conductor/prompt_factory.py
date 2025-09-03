@@ -4,6 +4,7 @@ from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     convert_multi_retriever_results_to_str,
+    convert_retrieval_results_to_str,
 )
 
 
@@ -12,7 +13,7 @@ class ConductorPromptFactory:
         return f"""
 You are the Conductor. Your mission is to guide the user from vague needs to a fulfilled answer by:
 1. Defining accurate target schemas and column descriptions.
-2. Materializing those schemas with real data.
+2. Materializing those schemas with real data (from internal or external sources).
 3. Defining and executing SQL queries to produce the final answer.
 4. Communicating results clearly.
 
@@ -43,9 +44,13 @@ In each iteration, you **must** output exactly ONE JSON object of one of these t
   "message": "..."
 }}
 
+Available Data Sources:
+- **Internal data**: Retrieved using ir_system and related tools.
+- **External data**: User-uploaded tables outside ir_system's index. Treat them as authoritative if provided, and integrate them into target_schemas just like internal tables. Do not attempt to re-retrieve them from ir_system.
+
 Available Tools:
 
-- ir_system: Retrieve tables/text.
+- ir_system: Retrieve tables/text from the internal index.
     Format:
     {{
         "action": "tool_call",
@@ -53,7 +58,7 @@ Available Tools:
         "args": {{"prompt": "<retrieval query>"}}
     }}
 
-- table_enumerator: List all available tables (names only — not retrieved, just for reference; the materializer will handle actual data) whose names match a regex pattern.
+- table_enumerator: List all available internal tables (names only — not retrieved, just for reference; the materializer will handle actual data) whose names match a regex pattern.
     You can only call this tool **after** retrieving at least one table with ir_system if you suspect there are other related tables.
         - Example: If ir_system retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
     Format:
@@ -71,8 +76,8 @@ Available Tools:
         "args": {{"target_schemas": {{...}}, "column_descriptions": {{...}}}} OR {{ "sqls": ["..."] }} OR both together.
     }}
 
-- materializer: Fill rows of target schemas.
-    Materializer's capabilities (for reference):
+- materializer: Fill rows of target schemas from internal or external data.
+    Capabilities:
         - Populate target schemas using Python or SQL computations when data is available.
         - Generate new columns via semantic reasoning (i.e., using an LLM) when marked as (semantically_derived).
         - Perform semantic joins between related tables without strict key matches.
@@ -124,7 +129,8 @@ Rules:
         actions_taken: list[str],
         curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
         human_input: str,
-        relevant_table_ids: list[str],
+        enumerated_table_ids: list[str],
+        external_data: list[AbstractDocument],
     ) -> str:
         return f"""
 Iteration {curr_iteration}/{max_iteration}
@@ -142,7 +148,10 @@ RETRIEVED DATA:
 {convert_multi_retriever_results_to_str(curr_retrieval_results)}
 
 OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
-{relevant_table_ids}
+{enumerated_table_ids}
+
+USER-PROVIDED EXTERNAL DATA:
+{convert_retrieval_results_to_str(external_data)}
 
 CURRENT USER INPUT:
 {human_input}

@@ -1,16 +1,24 @@
 from collections.abc import Generator
 import json
+import os
 import re
+from typing import Optional
+
 import duckdb
+import pandas as pd
 
 from logging import Logger
-from pandas import DataFrame
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.conductor.table_enumerator import table_enumerator
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+)
 from pneuma_seeker.core.ir_system.main import IRSystem
+from pneuma_seeker.core.ir_system.retriever.impl.pneuma import clean_name
 from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
@@ -29,6 +37,8 @@ class Conductor:
         embed_model_path: str,
         logger: Logger,
         data_sources: list[str],
+        env_name: Optional[str] = None,
+        base_url: Optional[str] = None,
     ) -> None:
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
@@ -44,6 +54,7 @@ class Conductor:
         self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
             dict()
         )
+        self.external_data: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
 
     def process_input(
@@ -51,10 +62,15 @@ class Conductor:
         human_input: str,
         human_id: str,
         interaction_history: list[HumanConductorInteraction],
+        external_data_paths: list[str],
     ):
         self.logger.info(f"Processing human input: {human_input}")
         if len(interaction_history) > 0:
             human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
+
+        if len(external_data_paths) > 0:
+            self.logger.info("Utilizing external data...")
+            self.external_data = self.__unpack_external_data(external_data_paths)
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -80,6 +96,7 @@ class Conductor:
                         self.current_retrieval_results,
                         human_input,
                         self.enumerated_table_ids,
+                        self.external_data,
                     ),
                 )
             )
@@ -163,8 +180,72 @@ class Conductor:
             )
             yield user_facing_response
 
+    def __unpack_external_data(
+        self, external_data_paths: list[str]
+    ) -> list[AbstractDocument]:
+        external_docs: list[AbstractDocument] = []
+        for data_path in external_data_paths:
+            if data_path.startswith("http"):
+                raise ValueError("API reading is not implemented yet.")
+            else:
+                external_docs.extend(self.__read_external_data_content(data_path))
+        return external_docs
+
+    def __read_external_data_content(self, path: str) -> list[AbstractDocument]:
+        """
+        Reads external data (CSV or Excel) and returns a list of Table documents.
+
+        Args:
+            path (str): Path to the input file.
+
+        Returns:
+            list[AbstractDocument]: A list of Table documents.
+        """
+        retriever_type = RetrieverType.USER
+        external_data_content: list[AbstractDocument] = []
+
+        def extract_file_stem(filepath: str) -> str:
+            """Extracts the filename without extension."""
+            return os.path.splitext(filepath)[0].split("/")[-1]
+
+        if path.endswith((".xls", ".xlsx")):
+            excel_name = extract_file_stem(path)
+
+            sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
+            for original_name, df in sheets.items():
+                standardized_name = (
+                    f"{clean_name(excel_name)}_{clean_name(original_name)}"
+                )
+                standardized_df = df.rename(columns=clean_name)
+
+                external_data_content.append(
+                    Table(
+                        doc_id=standardized_name,
+                        retriever_type=retriever_type,
+                        content=standardized_df,
+                        metadata={"sheet_name": original_name},  # provenance kept
+                        path=path,
+                    )
+                )
+        elif path.endswith(".csv"):
+            file_stem = extract_file_stem(path)
+            df = pd.read_csv(path).rename(columns=clean_name)
+
+            external_data_content.append(
+                Table(
+                    doc_id=clean_name(file_stem),
+                    retriever_type=retriever_type,
+                    content=df,
+                    metadata={},
+                    path=path,
+                )
+            )
+        else:
+            raise ValueError(f"Unsupported file format: {path}")
+
+        return external_data_content
+
     def __execute_tool(self, tool: str, args: str | dict) -> str:
-        print("EXECUTE TOOL")
         if tool == "ir_system" and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
             ir_system = IRSystem(self.llm, self.embed_model, self.logger)
@@ -190,9 +271,9 @@ class Conductor:
             is_target_schemas_modified = False
             if target_schemas is not None and column_descriptions is not None:
                 if column_descriptions is not None:
-                    target_schemas_df: dict[str, DataFrame] = dict()
+                    target_schemas_df: dict[str, pd.DataFrame] = dict()
                     for schema_id in target_schemas:
-                        target_schemas_df[schema_id] = DataFrame(
+                        target_schemas_df[schema_id] = pd.DataFrame(
                             columns=target_schemas[schema_id]
                         )
                     self.info_need_state.target_schemas = target_schemas_df
@@ -259,7 +340,7 @@ class Conductor:
                 for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
                     if document.doc_id == table_id:
                         cat_col_info = ""
-                        table: DataFrame = document.content
+                        table: pd.DataFrame = document.content
                         for column in table_columns:
                             if column not in table.columns:
                                 cat_col_info += (
@@ -293,7 +374,7 @@ class Conductor:
         """
         # Create an in-memory DuckDB connection
         con = duckdb.connect(database=":memory:")
-        tables: dict[str, DataFrame] = self.info_need_state.target_schemas
+        tables: dict[str, pd.DataFrame] = self.info_need_state.target_schemas
         sqls: list[str] = self.info_need_state.sqls
 
         self.logger.info(
@@ -304,10 +385,10 @@ class Conductor:
         for table_name, df in tables.items():
             con.register(table_name, df)
 
-        results: list[DataFrame] = []
+        results: list[pd.DataFrame] = []
         for sql_idx, sql in enumerate(sqls):
             self.logger.info(f"Sanity checking the SQL query {sql}")
-            relevant_tables: dict[str, DataFrame] = dict()
+            relevant_tables: dict[str, pd.DataFrame] = dict()
             for table_id, table in tables.items():
                 if table_id in sql:
                     relevant_tables[table_id] = table
@@ -332,7 +413,7 @@ class Conductor:
                 results.append(result)
             except Exception as e:
                 results = [
-                    DataFrame(
+                    pd.DataFrame(
                         columns=["error"],
                         data=[
                             [
@@ -354,7 +435,7 @@ class Conductor:
                 final_output.append(str(result))
         return final_output
 
-    def __format_available_tables(self, tables: dict[str, DataFrame]):
+    def __format_available_tables(self, tables: dict[str, pd.DataFrame]):
         tables_repr = ""
         for table_id, table in tables.items():
             tables_repr += (

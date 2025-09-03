@@ -32,7 +32,7 @@ from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 
 
-def clean_column(col):
+def clean_name(col: str):
     col = col.lower()
     # Replace spaces and hyphens with underscores
     col = col.replace("-", "_").replace(" ", "_")
@@ -45,7 +45,6 @@ def clean_column(col):
     # Remove leading/trailing underscores
     col = col.strip("_")
     return col
-
 
 class Pneuma(AbstractRetriever):
     """Represents a tabular data retriever."""
@@ -142,10 +141,10 @@ class Pneuma(AbstractRetriever):
 
                 actual_table = pd.read_csv(table)
 
-                actual_table.rename(columns=clean_column, inplace=True)
+                actual_table.rename(columns=clean_name, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=table[:-4].split("/")[-1],
+                        doc_id=clean_name(table[:-4].split("/")[-1]),
                         retriever_type=RetrieverType.PNEUMA,
                         content=actual_table,
                         metadata=dict(),

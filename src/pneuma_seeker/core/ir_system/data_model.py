@@ -9,6 +9,7 @@ class RetrieverType(Enum):
     PNEUMA = "Pneuma"
     KNOWLEDGE_BASE = "Knowledge Base"
     WEB_SEARCH = "Web Search"
+    USER = "User"
 
 
 class IRFeedbackOutputType(TypedDict):
@@ -45,7 +46,7 @@ class AbstractDocument(ABC):
 
     def __hash__(self):
         return hash((self.doc_id, self.retriever_type))
-    
+
     def __str__(self) -> str:
         return f"ID: {self.doc_id} ; Content: {self.content}"
 
@@ -59,7 +60,9 @@ class Knowledge(AbstractDocument):
     - metadata: {"type": "local/global", "user": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+    def __init__(
+        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+    ):
         super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
@@ -72,13 +75,22 @@ class Table(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: DataFrame, metadata, path: Optional[str] = None):
+    def __init__(
+        self,
+        doc_id,
+        retriever_type,
+        content: DataFrame,
+        metadata,
+        path: Optional[str] = None,
+    ):
         super().__init__(doc_id, retriever_type, content, metadata, path)
-    
+
     def __str__(self) -> str:
         content_representation = ""
         table: DataFrame = self.content
-        content_representation += f"Table {self.doc_id}:\ncol: {" | ".join(table.columns)}"
+        content_representation += (
+            f"Table {self.doc_id}:\ncol: {" | ".join(table.columns)}"
+        )
         if len(table) > 0:
             # Sample 5 rows to represent the table
             sample_rows = table.sample(min(5, len(table)), random_state=42)
@@ -101,7 +113,9 @@ class TableContext(AbstractDocument):
     - metadata: {"table_name": "...", "dataset_name": "...", "type": "..."}
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+    def __init__(
+        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+    ):
         super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
@@ -110,15 +124,20 @@ class Text(AbstractDocument):
     Represents textual document.
     """
 
-    def __init__(self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None):
+    def __init__(
+        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+    ):
         super().__init__(doc_id, retriever_type, content, metadata, path)
 
 
-def convert_multi_retriever_results_to_str(retrieval_results: dict[RetrieverType, list[AbstractDocument]]):
+def convert_multi_retriever_results_to_str(
+    retrieval_results: dict[RetrieverType, list[AbstractDocument]],
+):
     representation = ""
     for retriever_type in retrieval_results.keys():
         representation += f"Retriever {retriever_type}:\n{convert_retrieval_results_to_str(retrieval_results[retriever_type])}\n"
     return representation
+
 
 def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument]):
     representation = ""

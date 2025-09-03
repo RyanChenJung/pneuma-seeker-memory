@@ -1,10 +1,9 @@
 import json
 import time
 import websockets
-import re
 
 from fastapi import Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Callable
 
 
@@ -33,9 +32,8 @@ class Pipe:
         start = time.time()
         user_id = __metadata__["user_id"]
         chat_id = __metadata__["chat_id"]
-        prompt: str = body.get("messages")[-1]["content"]
-        prompt = re.sub(r"\{\{HTML_FILE_ID_.*\}\}$", "", prompt).strip()
 
+        chat_messages = [i for i in body["messages"] if i["role"] != "system"]
         await __event_emitter__(
             {
                 "type": "status",
@@ -48,9 +46,19 @@ class Pipe:
         )
 
         uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
+        files = []
+        if __metadata__ is not None and __metadata__["files"] is not None:
+            files = [i["url"] for i in __metadata__["files"]]
 
         async with websockets.connect(uri, open_timeout=30) as websocket:
-            await websocket.send(json.dumps({"prompt": prompt}))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "chat_messages": chat_messages,
+                        "files": files,
+                    }
+                )
+            )
 
             await __event_emitter__(
                 {

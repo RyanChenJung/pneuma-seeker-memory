@@ -1,50 +1,51 @@
 def get_operation_description():
     return """
 - **Document Retriever**
-    - Retrieves relevant tabular or textual data from our database based on natural-language prompts
-    - Please observe the existing, previously retrieved data before calling this tool, since this tool erases previously retrieved data (if any). In other words, use this tool only when new or updated data is needed
+    - Retrieves relevant tabular or textual data from the internal database based on natural-language prompts.
+    - Does not affect user-provided external data. Internal data is replaced each time this tool is called.
     - Args: {"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the target schema IDs>"}
     - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
 
 - **Table Enumerator**
-    - **Precondition — MUST NOT be called unless there is at least one retrieved table available.**
-    - The `pattern` argument **must be derived from the names of existing retrieved tables** (or obvious common tokens in them).
-    - Lists all available tables in the database whose names match a given regex pattern
+    - **Precondition — MUST NOT be called unless there is at least one internal table already retrieved.**
+    - The `pattern` argument **must be derived from the names of existing internal tables** (or obvious common tokens in them).
+    - Lists other available internal tables in the database whose names match a given regex pattern.
     - This is useful when you retrieve one table (e.g., `topic_2020`) but suspect there are other related tables (`topic_2021`, `topic_2022`, etc.)
-    - Args: { "pattern": "<regex pattern to match table names>" }
-    - Example: { "pattern": "^sales_\\d{4}$" } will match all tables named like `sales_2020`, `sales_2021`, etc.
+    - Does not affect user-provided external data.
+    - Args: {"pattern": "<regex pattern to match table names>"}
+    - Example: {"pattern": "^sales_\\d{4}$"} will match all tables named like `sales_2020`, `sales_2021`, etc.
 
 - **Python Executor**
-    - Executes Python code to transform data, the output can be a table (Pandas DataFrame), strings, or list of strings
-    - Common libraries like pandas and numpy are available (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
-    - Ensure your code uses Pandas DataFrame if you want to manipulate tables
-    - Because we use Pandas and Numpy, you can transform the values of certain columns as well. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values in this case.
-    - All tables, whether retrieved or ones you formed, are available in the execution environment in a Python dictionary named "tables". You can simply access the tables you want using their IDs as keys (e.g., tables["table_id"]), and you get them directly in Pandas DataFrame format.
+    - Executes Python code to transform and/or combine data. Output can be a new table (Pandas DataFrame), string, or list of strings.
+    - All tables — whether internal, external, or intermediate — are available via `tables["<ID>"]` (Pandas DataFrame).
+    - Never use `pd.read_csv`; tables are already provided in memory.
+    - Common libraries like pandas and numpy are available for data manipulation (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
+    - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result to a variable named 'result'
     - Args: {"code": "<Python code string>"}
-    - Again, DO NOT try to read a table using, for instance, pd.read_csv. Use tables["<ID>"], and you get it directly in a Pandas DataFrame format.
 
 - **Table Select**
-    - Selects retrieved tables directly as the materialized forms of some tables in target schemas.
-    - Args: {"<target schema ID>": {
+    - Directly maps an existing table (internal, external, or intermediate) to a target schema (or a subset of its columns).
+    - Args: {"<target_schema_id>": {
                     {
-                        "id": "<retrieved table ID>",
-                        "columns": ["<The relevant columns from the selected retrieved table to form target schema ID>"]
+                        "id": "<source_table_id>",
+                        "columns": ["<subset of columns from source table to use>"]
                     }
                 }
             }
-    - This is useful, for example, if you retrieve a table A that directly matches a target schema B. In this case, you do not need to create SQL queries or Python code to select table A to represent target schema B; just provide a mapping as args {"B": "A"}.
+    - Example use case: If table A has columns that match some columns of target schema B, you can select it directly instead of creating SQL queries or Python code.
 
 - **SQL Executor**
-    - Executes a SQL query on available tables to produce another table, NOT executing the `sqls`.
+    - Executes SQL queries on available tables (internal, external, or intermediate).
     - Supports standard SQL syntax
-    - Assume all tables are available in the database; reference them using their IDs
     - Args: {"sql_query": "<SQL query string>"}
     - Example: {"sql_query": "SELECT * FROM table_1 WHERE date >= '2025-01-01'"}
 
 - **Semantic Join**
-    - Joins two tables by computing semantic similarity between specified columns using both embedding-based cosine similarity and string edit similarity.
-    - This is useful when the user explicitly asks for it, or when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM").  
+    - Joins two tables (internal, external, or intermediate) by computing semantic similarity between specified columns.
+    - Similarity uses a weighted combination of embedding cosine similarity and normalized Damerau-Levenshtein edit similarity.
+    - Produces a new joined table containing matched rows and a similarity_score column.
+    - Use case: when the user explicitly asks for it, or when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM").  
       Even if both tables share a key column (e.g., "product_id"), the user may prefer semantic matching — for instance, comparing product descriptions between catalogs from different years to detect essentially identical products that were renumbered but now sold at different prices.
     - Args: {
         "left_table_id": "<ID of left table (must exist in retrieved or intermediate tables)>",
@@ -53,8 +54,6 @@ def get_operation_description():
         "relevant_right_cols": ["<list of columns from right table used for semantic comparison>"],
         "joined_table_id": "<ID to store the resulting joined table>"
       }
-    - Similarity is computed as a weighted combination of cosine similarity (from embeddings) and normalized Damerau-Levenshtein edit similarity. Default weight α=0.6, default join threshold=0.6.
-    - The output is a new table where each row corresponds to a semantically matched pair, with a similarity_score column.
     - Example: {
         "left_table_id": "companies_2024",
         "right_table_id": "clients_2024",
@@ -64,23 +63,20 @@ def get_operation_description():
       }
 
 - **Semantic Column Generator**
-    - Creates a new column for an existing table using an LLM, based on a natural-language instruction describing how to derive values.
-    - Requires:
-        - `relevant_columns` must be explicitly provided and must form a subset of the table's columns.
-        - Only these columns are used to generate the new column values (irrelevant columns are automatically excluded).
-        - The instruction must describe how to compute or infer the new column and should already indicate the expected value domain (e.g., categories, labels).
+    - Adds a new column to an *intermediate* table using an LLM.
+    - The column is derived from specified `relevant_columns` only — no other columns are used.
+    - External and internal tables should first be transformed into intermediate tables if new columns are needed, because retrieved internal tables can be replaced.
     - The system automatically batches unique rows for efficiency and caches results to avoid redundant LLM calls.
     - Args: {
-        "table_id": "<ID of the table to modify. This must refer to an intermediate table — do NOT use a retrieved table, because retrieved tables can be replaced whenever Document Retriever is called, and new columns would be lost.>",
-        "new_column_name": "<name of the column to add>",
-        "relevant_columns": ["<list of column names to use for generation>"],
+        "table_id": "<intermediate_table_id>",
+        "new_column_name": "<column to add>",
+        "relevant_columns": ["<list of source columns for generation>"],
         "instruction": "<instruction describing how to generate the new column values>"
       }
-    - The new column is added directly to the specified table in-place.
     - Example: {
         "table_id": "products_2024",
         "new_column_name": "category",
         "relevant_columns": ["product_name", "description"],
-        "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing' based on its name and description."
+        "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing'."
       }
 """.strip()
