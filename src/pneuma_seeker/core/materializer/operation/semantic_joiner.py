@@ -1,12 +1,22 @@
 import numpy as np
 import pandas as pd
 
+from enum import Enum
 from typing import Optional, Union
 
 from pyxdameraulevenshtein import damerau_levenshtein_distance
 from tqdm.auto import tqdm
 
+from sklearn.feature_extraction.text import CountVectorizer
+import numpy as np
+
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+
+
+class SyntacticSimMetric(Enum):
+    NONE = None
+    EDIT_DIST = "Edit Distance"
+    JACCARD_QGRAM = "Jaccard QGram"
 
 
 class SemanticJoiner:
@@ -20,9 +30,10 @@ class SemanticJoiner:
         left_cols: list[str],
         right_cols: list[str],
         alpha: float = 0.5,
-        threshold: float = 0.75,
+        top_k: int = 3,
         delimiter: str = " [SEP] ",
         embed_batch_size: Optional[int] = 30,
+        syntactic_sim_metric: SyntacticSimMetric = SyntacticSimMetric.EDIT_DIST,
     ) -> pd.DataFrame:
         """
         Join rows from left_df and right_df using semantic similarity.
@@ -30,7 +41,7 @@ class SemanticJoiner:
         Parameters:
             left_cols / right_cols: columns to use for semantic comparison
             alpha: weight for cosine vs edit similarity (0 to 1)
-            threshold: minimum similarity to join
+            top_k: number of best matches to keep for each row in left_df
             delimiter: used when concatenating text
             embed_batch_size: outer batching size for embeddings (progress via tqdm).
                           Set to None or <=0 to disable outer batching.
@@ -69,34 +80,35 @@ class SemanticJoiner:
         cos_mat = self.__pairwise_cosine_sim_matrix(left_emb, right_emb)
 
         # Compute pairwise edit similarities (L x R)
-        edit_mat = self.__pairwise_edit_sim_matrix(
-            left_values, right_values, desc="Edit similarity (concat)"
-        )
-
-        # Linearly combine both similarity measures
-        score_mat = alpha * cos_mat + (1.0 - alpha) * edit_mat
-
-        # Find matches that exceed the threshold
-        matches = np.where(score_mat >= float(threshold))
-        left_indices = matches[0]
-        right_indices = matches[1]
-
-        # Materialize matching rows
-        joined_rows: list[dict[str, object]] = []
-        for li, ri in tqdm(
-            zip(left_indices, right_indices),
-            total=len(left_indices),
-            desc="Materializing joined rows",
-        ):
-            lrow = left_df.iloc[int(li)]
-            rrow = right_df.iloc[int(ri)]
-            joined_rows.append(
-                {
-                    **{f"left_{k}": lrow[k] for k in left_df.columns},
-                    **{f"right_{k}": rrow[k] for k in right_df.columns},
-                    "similarity_score": float(score_mat[li, ri]),
-                }
+        if syntactic_sim_metric == SyntacticSimMetric.NONE:
+            score_mat = cos_mat
+        elif syntactic_sim_metric == SyntacticSimMetric.EDIT_DIST:
+            edit_mat = self.__pairwise_edit_sim_matrix(
+                left_values, right_values, desc="Edit similarity (concat)"
             )
+            score_mat = alpha * cos_mat + (1.0 - alpha) * edit_mat
+        else:
+            jaccard_qgram_mat = self.__pairwise_jaccard_qgram_matrix_sklearn(
+                left_values, right_values
+            )
+            score_mat = alpha * cos_mat + (1.0 - alpha) * jaccard_qgram_mat
+
+        # For each left row, take top-k right matches
+        joined_rows: list[dict[str, object]] = []
+        for li in tqdm(range(score_mat.shape[0]), desc="Materializing joined rows"):
+            row_scores = score_mat[li, :]
+            top_indices = np.argsort(-row_scores)[:top_k]  # descending order
+
+            lrow = left_df.iloc[int(li)]
+            for ri in top_indices:
+                rrow = right_df.iloc[int(ri)]
+                joined_rows.append(
+                    {
+                        **{f"left_{k}": lrow[k] for k in left_df.columns},
+                        **{f"right_{k}": rrow[k] for k in right_df.columns},
+                        "similarity_score": float(row_scores[ri]),
+                    }
+                )
 
         return pd.DataFrame(joined_rows)
 
@@ -204,3 +216,81 @@ class SemanticJoiner:
         max_len = max(len(a), len(b))
         d = float(damerau_levenshtein_distance(a, b))
         return max(0.0, min(1.0, 1.0 - (d / max_len)))
+
+    def __pairwise_jaccard_qgram_matrix_sklearn(
+        self,
+        left_texts,
+        right_texts,
+        q: int = 3,
+        pad: bool = False,
+        dtype=np.float32,
+    ):
+        def pad_text(s):
+            return ('^'*(q-1) + s + '$'*(q-1)) if pad else s
+
+        left_texts = [pad_text(s) for s in left_texts]
+        right_texts = [pad_text(s) for s in right_texts]
+
+        vectorizer = CountVectorizer(analyzer='char', ngram_range=(q, q), binary=True)
+        union_texts = left_texts + right_texts
+        X_union = vectorizer.fit_transform(union_texts)
+        L = len(left_texts)
+        X_left = X_union[:L, :] # type: ignore
+        X_right = X_union[L:, :] # type: ignore
+
+        # intersection counts via sparse dot product
+        intersect = X_left @ X_right.T   # shape (L, R), csr_matrix
+        intersect = intersect.toarray().astype(np.float32) # type: ignore
+
+        # sizes of sets
+        left_sizes = np.array(X_left.sum(axis=1)).ravel()
+        right_sizes = np.array(X_right.sum(axis=1)).ravel()
+
+        # union = |A| + |B| - |A∩B|
+        union = left_sizes[:, None] + right_sizes[None, :] - intersect
+        sim = np.divide(intersect, union, out=np.zeros_like(intersect), where=union > 0)
+
+        return sim.astype(dtype)
+
+    def __pairwise_jaccard_qgram_matrix(
+        self,
+        left_texts: list[str],
+        right_texts: list[str],
+        q: int = 3,
+        pad: bool = False,
+        desc: str = "Jaccard q-gram similarity",
+    ) -> np.ndarray:
+        """
+        Computes pairwise Jaccard q-gram similarity matrix (L x R).
+        """
+        L = len(left_texts)
+        R = len(right_texts)
+        M = np.zeros((L, R), dtype=np.float32)
+        for i in tqdm(range(L), desc=desc, total=L):
+            a = left_texts[i]
+            row_vals = []
+            for b in right_texts:
+                row_vals.append(self.__jaccard_qgram(a, b, q=q, pad=pad))
+            M[i, :] = row_vals
+        return M
+
+    def __jaccard_qgram(self, a: str, b: str, q: int = 3, pad: bool = False) -> float:
+        """
+        Computes Jaccard q-gram similarity between two strings.
+        """
+        A = set(self.__qgrams(a, q, pad))
+        B = set(self.__qgrams(b, q, pad))
+        if not A and not B:
+            return 1.0
+        return len(A & B) / len(A | B)
+
+    def __qgrams(self, s: str, q: int = 3, pad: bool = False):
+        """
+        Generate q-grams from a string, with optional padding.
+        """
+        if pad:
+            s = '^'*(q-1) + s + '$'*(q-1)
+        if len(s) < q:
+            return [s]
+        return [s[i:i+q] for i in range(len(s)-q+1)]
+
