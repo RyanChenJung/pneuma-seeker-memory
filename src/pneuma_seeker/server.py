@@ -124,7 +124,7 @@ manager = ConnectionManager(
 )
 
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="template")
 
 
 @app.get("/state/html/{user_id}/{chat_id}", response_class=HTMLResponse)
