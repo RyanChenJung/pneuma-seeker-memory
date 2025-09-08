@@ -16,10 +16,18 @@ class AzureOpenAILLM(AbstractModel):
         self,
         model_name: str = "o4-mini",
     ):
+        azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        api_key = os.getenv("AZURE_OPENAI_API_KEY")
+
+        if azure_openai_endpoint is None:
+            raise ValueError("Please set the `AZURE_OPENAI_ENDPOINT`environment variable.")
+        if api_key is None:
+            raise ValueError("Please set the `AZURE_OPENAI_API_KEY`environment variable.")
+
         self.client = AzureOpenAI(
-            azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"), 
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),  
-            api_version="2024-12-01-preview"
+            azure_endpoint=azure_openai_endpoint,
+            api_key=api_key,
+            api_version="2024-12-01-preview",
         )
         self.model_name = model_name
 
