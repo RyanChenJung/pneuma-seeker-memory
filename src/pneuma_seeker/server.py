@@ -133,8 +133,7 @@ async def read_state_html(request: Request, user_id: str, chat_id: str):
     state = conductor.info_need_state.get_current_state_instance()
 
     return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "state": state}
+        "index.html", {"request": request, "state": state}
     )
 
 
@@ -151,7 +150,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     try:
         while True:
             # Receive the prompt from frontend
-            data_from_frontend: dict[str, Any] = json.loads(await websocket.receive_text())
+            data_from_frontend: dict[str, Any] = json.loads(
+                await websocket.receive_text()
+            )
             chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
             url_paths: list[str] = [data_from_frontend["file_url_paths"]]
 
@@ -167,7 +168,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
 
             # Run the blocking generator in a separate thread
             def run_generator():
-                for log_message in conductor.process_user_input(chat_messages, file_urls):
+                for log_message in conductor.process_user_input(
+                    chat_messages, file_urls
+                ):
                     actual_message = log_message
                     role = "assistant"
                     if log_message.startswith("LOG"):
