@@ -1,6 +1,5 @@
 from logging import INFO
 from os import path
-from typing import Optional
 from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
@@ -17,8 +16,6 @@ class ChatInterface:
         chat_id: str,
         data_sources: list[str],
         enable_persistence=True,
-        env_name: Optional[str] = None,
-        base_url: Optional[str] = None,
     ):
         logger = setup_logger(
             name="processor_logger",
@@ -28,7 +25,7 @@ class ChatInterface:
             backup_count=5,
         )
         self.llm_conductor = Conductor(
-            llm_path, embed_model_path, logger, data_sources, env_name, base_url
+            llm_path, embed_model_path, logger, data_sources
         )
         self.user_id = user_id
         self.chat_id = chat_id

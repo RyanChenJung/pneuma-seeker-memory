@@ -37,10 +37,8 @@ class Conductor:
         embed_model_path: str,
         logger: Logger,
         data_sources: list[str],
-        env_name: Optional[str] = None,
-        base_url: Optional[str] = None,
     ) -> None:
-        self.llm = get_llm(llm_path)(llm_path, env_name=env_name, base_url=base_url)
+        self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
         self.logger = logger
         self.data_sources = data_sources

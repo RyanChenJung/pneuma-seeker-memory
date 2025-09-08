@@ -6,7 +6,7 @@ from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverT
 from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
     SemanticColumnGenerator,
 )
-from pneuma_seeker.core.materializer.operation.semantic_joiner import SemanticJoiner
+from pneuma_seeker.core.materializer.operation.semantic_joiner import SemanticJoiner, SyntacticSimMetric
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.materializer.operation.table_enumerator import table_enumerator
@@ -42,7 +42,7 @@ class Materializer:
         self.prompt_factory = MaterializerPromptFactory()
         self.state = MaterializerState()
 
-        self.semantic_joiner = SemanticJoiner(self.embed_model)
+        self.semantic_joiner = SemanticJoiner(self.llm, self.embed_model)
         self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20) # Try 20
 
         self.actions: list[str] = []
@@ -312,8 +312,8 @@ class Materializer:
                         right_table,
                         relevant_left_cols,
                         relevant_right_cols,
-                        0.6,
-                        0.6,
+                        syntactic_sim_metric=SyntacticSimMetric.JACCARD_QGRAM,
+                        top_k=2,
                     )
                     self.state.intermediate_tables[joined_table_id] = joined_table
                     self.actions.append(
