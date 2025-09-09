@@ -2,7 +2,6 @@ from collections.abc import Generator
 import json
 import os
 import re
-from typing import Optional
 
 import duckdb
 import pandas as pd
@@ -18,16 +17,20 @@ from pneuma_seeker.core.ir_system.data_model import (
     Table,
 )
 from pneuma_seeker.core.ir_system.main import IRSystem
-from pneuma_seeker.core.ir_system.retriever.impl.pneuma import clean_name
 from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
+from pneuma_seeker.provenance.graph import (
+    ProvenanceGraph,
+    ProvenanceNode,
+    ProvenanceNodeType,
+)
+from pneuma_seeker.utils.cleaner import clean_column_table_name
 from pneuma_seeker.utils.parser import parse_json, parse_sql
 
 
 ITERATION_LIMIT = 5
-PAST_INTERACTIONS_LIMIT = 5
 
 
 class Conductor:
@@ -40,12 +43,15 @@ class Conductor:
     ) -> None:
         self.llm = get_llm(llm_path)(llm_path)
         self.embed_model = get_embed_model()(embed_model_path)
+
         self.logger = logger
         self.data_sources = data_sources
+        self.prov_graph = ProvenanceGraph(self.logger)
 
         self.prompt_factory = ConductorPromptFactory()
+        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.materializer = Materializer(
-            self.llm, self.logger, self.embed_model, self.data_sources
+            self.llm, self.logger, self.embed_model, self.data_sources, self.prov_graph
         )
 
         self.info_need_state = InformationNeedState()
@@ -57,18 +63,31 @@ class Conductor:
 
     def process_input(
         self,
-        human_input: str,
-        human_id: str,
+        user_input: str,
+        user_id: str,
         interaction_history: list[HumanConductorInteraction],
         external_data_paths: list[str],
     ):
-        self.logger.info(f"Processing human input: {human_input}")
+        self.logger.info(f"Processing human input: {user_input}")
+
         if len(interaction_history) > 0:
-            human_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
+            user_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
 
         if len(external_data_paths) > 0:
             self.logger.info("Utilizing external data...")
             self.external_data = self.__unpack_external_data(external_data_paths)
+
+            external_data_node = self.prov_graph.get_node(RetrieverType.USER.value)
+            if external_data_node is None:
+                external_data_node = ProvenanceNode(
+                    node_id=RetrieverType.USER.value,
+                    data_ref=external_data_paths,
+                    description="User-uploaded external data",
+                    node_type=ProvenanceNodeType.INPUT,
+                )
+            else:
+                external_data_node.data_ref = external_data_paths
+            self.prov_graph.add_node(external_data_node, True)
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -92,7 +111,7 @@ class Conductor:
                         interaction_history,
                         actions_taken,
                         self.current_retrieval_results,
-                        human_input,
+                        user_input,
                         self.enumerated_table_ids,
                         self.external_data,
                     ),
@@ -212,9 +231,9 @@ class Conductor:
             sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
             for original_name, df in sheets.items():
                 standardized_name = (
-                    f"{clean_name(excel_name)}_{clean_name(original_name)}"
+                    f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
                 )
-                standardized_df = df.rename(columns=clean_name)
+                standardized_df = df.rename(columns=clean_column_table_name)
 
                 external_data_content.append(
                     Table(
@@ -227,11 +246,11 @@ class Conductor:
                 )
         elif path.endswith(".csv"):
             file_stem = extract_file_stem(path)
-            df = pd.read_csv(path).rename(columns=clean_name)
+            df = pd.read_csv(path).rename(columns=clean_column_table_name)
 
             external_data_content.append(
                 Table(
-                    doc_id=clean_name(file_stem),
+                    doc_id=clean_column_table_name(file_stem),
                     retriever_type=retriever_type,
                     content=df,
                     metadata={},
@@ -246,11 +265,12 @@ class Conductor:
     def __execute_tool(self, tool: str, args: str | dict) -> str:
         if tool == "ir_system" and isinstance(args, dict):
             self.logger.info(f"IR System request with params: {args}")
-            ir_system = IRSystem(self.llm, self.embed_model, self.logger)
-            self.current_retrieval_results = ir_system.retrieve_documents(
-                args["prompt"],
-                self.data_sources,
-                10,  # Future-TODO: Change hard-coded sources and k
+            self.current_retrieval_results = (
+                self.ir_system.retrieve_multisource_documents(
+                    args["prompt"],
+                    self.data_sources,
+                    10,  # Future-TODO: Change hard-coded sources and k
+                )
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
         elif tool == "table_enumerator" and isinstance(args, dict):

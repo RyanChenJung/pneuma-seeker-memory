@@ -30,21 +30,8 @@ from chromadb_deterministic.api.models.Collection import Collection
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.utils.cleaner import clean_column_table_name
 
-
-def clean_name(col: str):
-    col = col.lower()
-    # Replace spaces and hyphens with underscores
-    col = col.replace("-", "_").replace(" ", "_")
-    # Replace "(" and ")" with underscores
-    col = col.replace("(", "_").replace(")", "_")
-    # Remove anything that's not a letter, digit, or underscore
-    col = re.sub(r"[^0-9a-z_]", "_", col)
-    # Collapse multiple underscores into one
-    col = re.sub(r"_+", "_", col)
-    # Remove leading/trailing underscores
-    col = col.strip("_")
-    return col
 
 class Pneuma(AbstractRetriever):
     """Represents a tabular data retriever."""
@@ -141,10 +128,10 @@ class Pneuma(AbstractRetriever):
 
                 actual_table = pd.read_csv(table)
 
-                actual_table.rename(columns=clean_name, inplace=True)
+                actual_table.rename(columns=clean_column_table_name, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=clean_name(table[:-4].split("/")[-1]),
+                        doc_id=clean_column_table_name(table[:-4].split("/")[-1]),
                         retriever_type=RetrieverType.PNEUMA,
                         content=actual_table,
                         metadata=dict(),
