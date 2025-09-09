@@ -10,7 +10,6 @@ from logging import Logger
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.conductor.table_enumerator import table_enumerator
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
@@ -82,7 +81,7 @@ class Conductor:
                 external_data_node = ProvenanceNode(
                     node_id=RetrieverType.USER.value,
                     data_ref=external_data_paths,
-                    description="User-uploaded external data",
+                    description=RetrieverType.USER.value,
                     node_type=ProvenanceNodeType.INPUT,
                 )
             else:
@@ -276,7 +275,10 @@ class Conductor:
         elif tool == "table_enumerator" and isinstance(args, dict):
             self.logger.info(f"Table Enumerater request with params: {args}")
             pattern: str = args.get("pattern", "")
-            self.enumerated_table_ids = table_enumerator(pattern)
+            enumerated_tables = self.ir_system.retrieve_documents(
+                RetrieverType.ENUMERATOR, pattern, self.data_sources,
+            )
+            self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
             return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
         elif tool == "state_manipulation" and isinstance(args, dict):
             self.logger.info(f"State Manipulation request with params: {args}")
