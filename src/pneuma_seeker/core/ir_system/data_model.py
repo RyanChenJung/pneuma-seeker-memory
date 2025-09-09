@@ -6,8 +6,15 @@ from pandas import DataFrame
 
 
 class RetrieverType(Enum):
+    """
+    Represents all type of data in Pneuma-Seeker's domain,
+    not only internally available data from IR System but also
+    user-provided and Materializer-produced intermediate data.
+    """
     PNEUMA = "Pneuma"
-    KNOWLEDGE_BASE = "Knowledge Base"
+    ENUMERATOR = "Enumerator"
+    MATERIALIZER = "Materializer"
+    DOCUMENT_DB = "Document DB"
     WEB_SEARCH = "Web Search"
     USER = "User"
 
