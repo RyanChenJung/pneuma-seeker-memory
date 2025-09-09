@@ -16,4 +16,4 @@ def get_documents(
         embed_model,
         logger,
     )
-    return ir_system.retrieve_documents(prompt, source_datasets, 10)
+    return ir_system.retrieve_multisource_documents(prompt, source_datasets, 10)
