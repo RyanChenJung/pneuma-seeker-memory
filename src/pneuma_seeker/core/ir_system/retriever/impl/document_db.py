@@ -13,8 +13,8 @@ from pneuma_seeker.core.ir_system.data_model import (
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 
 
-class KnowledgeBase(AbstractRetriever):
-    """Represents a local knowledge retriever."""
+class DocumentDB(AbstractRetriever):
+    """Represents a domain knowledge retriever."""
 
     def __init__(self, models):
         super().__init__(models)
@@ -35,7 +35,7 @@ class KnowledgeBase(AbstractRetriever):
         """
         Defines the type of the retriever.
         """
-        return RetrieverType.KNOWLEDGE_BASE
+        return RetrieverType.DOCUMENT_DB
 
     def load(self):
         """
@@ -91,7 +91,7 @@ class KnowledgeBase(AbstractRetriever):
             retrieval_results.append(
                 Text(
                     doc_id=result["metadata"]["doc_id"],
-                    retriever_type=RetrieverType.KNOWLEDGE_BASE,
+                    retriever_type=RetrieverType.DOCUMENT_DB,
                     content=result["text"],
                     metadata={
                         "type": result["metadata"]["type"],
