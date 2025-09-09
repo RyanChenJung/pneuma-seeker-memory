@@ -4,6 +4,8 @@ from typing import Any, Optional, TypedDict
 
 from pandas import DataFrame
 
+from pneuma_seeker.model.interface.abstract_model import AbstractModel
+
 
 class RetrieverType(Enum):
     """
@@ -11,6 +13,7 @@ class RetrieverType(Enum):
     not only internally available data from IR System but also
     user-provided and Materializer-produced intermediate data.
     """
+
     PNEUMA = "Pneuma"
     ENUMERATOR = "Enumerator"
     MATERIALIZER = "Materializer"
@@ -19,9 +22,9 @@ class RetrieverType(Enum):
     USER = "User"
 
 
-class IRFeedbackOutputType(TypedDict):
-    irrelevant_doc_ids: list[str]
-    feedback: str
+class RetrieverModel(TypedDict):
+    llm: AbstractModel
+    embed_model: AbstractModel
 
 
 class AbstractDocument(ABC):
