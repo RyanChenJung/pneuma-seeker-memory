@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
-from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.core.ir_system.retriever.retriever_factory import RetrieverModel
 
 
 class AbstractRetriever(ABC):
-    def __init__(self, models: dict[str, AbstractModel]):
+    def __init__(self, models: RetrieverModel):
         """
         Initialize the Retriever class
         """
