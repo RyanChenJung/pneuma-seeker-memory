@@ -13,7 +13,7 @@ from pneuma_seeker.core.ir_system.data_model import (
 class MaterializerPromptFactory:
     def get_planning_prompt(
     self,
-    target_schemas: dict[str, DataFrame],
+    T: dict[str, DataFrame],
     column_descriptions: dict[str, dict[str, str]],
     sqls: list[str],
     operation_description: str,
@@ -27,7 +27,7 @@ You are the Materializer. Your task is to fill all rows for the target schemas u
 Treat external data just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
 
 TARGET SCHEMAS:
-{json.dumps({k: list(df.columns) for k, df in target_schemas.items()}, indent=2)}
+{json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
 
 COLUMN DESCRIPTIONS:
 {column_descriptions}
@@ -65,17 +65,17 @@ Produce exactly ONE JSON object:
     def get_context_prompt(
     self,
     retrieved_documents: dict[RetrieverType, list[AbstractDocument]],
-    intermediate_tables: dict[str, DataFrame],
+    intermediate_tables: list[AbstractDocument],
     recent_actions: list[str],
     num_iterations: int,
     user_side_note: str,
-    user_provided_external_data: list[AbstractDocument]
+    user_provided_external_data: list[AbstractDocument],
 ) -> str:
         return f"""
 This is iteration {num_iterations} of materializing the Target Schemas.
 
 CURRENT PROGRESS:
-- Intermediate tables so far: {list(intermediate_tables.keys())}
+- Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
 - Retrieved internal data: {convert_multi_retriever_results_to_str(retrieved_documents)}
 - User-provided external data: {convert_retrieval_results_to_str(user_provided_external_data)}

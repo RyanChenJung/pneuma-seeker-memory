@@ -39,12 +39,16 @@ class AbstractDocument(ABC):
         content: Any,
         metadata: dict[str, str],
         path: Optional[str] = None,
+        last_node_id: Optional[
+            str
+        ] = None,  # Keep track of last transformation that returns this data
     ):
         self.doc_id = doc_id
         self.retriever_type = retriever_type
         self.content = content
         self.metadata = metadata
         self.path = path
+        self.last_node_id = last_node_id
 
     def __eq__(self, other):
         if not isinstance(other, AbstractDocument):
@@ -71,9 +75,15 @@ class Knowledge(AbstractDocument):
     """
 
     def __init__(
-        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+        self,
+        doc_id: str,
+        retriever_type: RetrieverType,
+        content: str,
+        metadata: dict[str, str],
+        path: str | None = None,
+        last_node_id: str | None = None,
     ):
-        super().__init__(doc_id, retriever_type, content, metadata, path)
+        super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
 
 class Table(AbstractDocument):
@@ -87,13 +97,14 @@ class Table(AbstractDocument):
 
     def __init__(
         self,
-        doc_id,
-        retriever_type,
+        doc_id: str,
+        retriever_type: RetrieverType,
         content: DataFrame,
-        metadata,
-        path: Optional[str] = None,
+        metadata: dict[str, str],
+        path: str | None = None,
+        last_node_id: str | None = None,
     ):
-        super().__init__(doc_id, retriever_type, content, metadata, path)
+        super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
     def __str__(self) -> str:
         content_representation = ""
@@ -124,9 +135,15 @@ class TableContext(AbstractDocument):
     """
 
     def __init__(
-        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+        self,
+        doc_id: str,
+        retriever_type: RetrieverType,
+        content: str,
+        metadata: dict[str, str],
+        path: str | None = None,
+        last_node_id: str | None = None,
     ):
-        super().__init__(doc_id, retriever_type, content, metadata, path)
+        super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
 
 class Text(AbstractDocument):
@@ -135,9 +152,15 @@ class Text(AbstractDocument):
     """
 
     def __init__(
-        self, doc_id, retriever_type, content: str, metadata, path: Optional[str] = None
+        self,
+        doc_id: str,
+        retriever_type: RetrieverType,
+        content: str,
+        metadata: dict[str, str],
+        path: str | None = None,
+        last_node_id: str | None = None,
     ):
-        super().__init__(doc_id, retriever_type, content, metadata, path)
+        super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
 
 def convert_multi_retriever_results_to_str(

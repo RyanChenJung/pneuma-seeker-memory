@@ -23,7 +23,6 @@ from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import (
     ProvenanceGraph,
     ProvenanceNode,
-    ProvenanceNodeType,
 )
 from pneuma_seeker.utils.cleaner import clean_column_table_name
 from pneuma_seeker.utils.parser import parse_json, parse_sql
@@ -57,7 +56,7 @@ class Conductor:
         self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
             dict()
         )
-        self.external_data: list[AbstractDocument] = []
+        self.external_documents: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
 
     def process_input(
@@ -74,19 +73,17 @@ class Conductor:
 
         if len(external_data_paths) > 0:
             self.logger.info("Utilizing external data...")
-            self.external_data = self.__unpack_external_data(external_data_paths)
-
-            external_data_node = self.prov_graph.get_node(RetrieverType.USER.value)
-            if external_data_node is None:
-                external_data_node = ProvenanceNode(
-                    node_id=RetrieverType.USER.value,
-                    data_ref=external_data_paths,
-                    description=RetrieverType.USER.value,
-                    node_type=ProvenanceNodeType.INPUT,
+            self.external_documents = self.__unpack_external_data(external_data_paths)
+            for doc in self.external_documents:
+                new_node = ProvenanceNode(
+                    data_ref=doc.path,
+                    source_retriever=RetrieverType.USER,
                 )
-            else:
-                external_data_node.data_ref = external_data_paths
-            self.prov_graph.add_node(external_data_node, True)
+                self.prov_graph.add_node(
+                    new_node,
+                    True
+                )
+                doc.last_node_id = new_node.id
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -112,7 +109,7 @@ class Conductor:
                         self.current_retrieval_results,
                         user_input,
                         self.enumerated_table_ids,
-                        self.external_data,
+                        self.external_documents,
                     ),
                 )
             )
@@ -324,7 +321,7 @@ class Conductor:
                 note = args["note"]
             self.logger.info(f"Materializer called")
             self.info_need_state.target_schemas = (
-                self.materializer.materialize_target_schemas(
+                self.materializer.materialize_T(
                     self.info_need_state.target_schemas,
                     self.info_need_state.column_descriptions,
                     self.info_need_state.sqls,

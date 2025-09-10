@@ -1,31 +1,53 @@
+import ast
 import re
-from typing import Optional
 import numpy as np
 import pandas as pd
 
 from logging import Logger
 
-
-def execute_python_code(
-    python_code: str,
-    tables: dict[str, pd.DataFrame],
-    logger: Optional[Logger] = None,
-):
-    if logger is not None:
-        logger.info(f"Executing this Python code: {python_code}")
-    try:
-        env = dict()
-        env['tables'] = tables
-        exec(python_code, {"pd": pd, "np": np, "re": re}, env)
-    except Exception as e:
-        return e
-    return env.get("result", None)
+from pneuma_seeker.core.materializer.data_model import ExecutorOutput
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 
 
-if __name__ == "__main__":
-    tables = {
-        "table_1": pd.DataFrame(columns=["col_1", "col_2"])
-    }
-    python_code = """result = tables["table_1"].describe()"""
-    result = execute_python_code(python_code, tables)
-    print(result)
+
+
+
+class PythonExecutor:
+    def __init__(self, logger: Logger, prov_graph: ProvenanceGraph) -> None:
+        self.logger = logger
+        self.prov_graph = prov_graph
+
+    def execute_code(
+        self,
+        tables: dict[str, pd.DataFrame],
+        code: str,
+    ) -> ExecutorOutput:
+        self.logger.info(f"Executing this Python code: {code}")
+        try:
+            env = dict()
+            env["tables"] = tables
+            exec(code, {"pd": pd, "np": np, "re": re}, env)
+        except Exception as e:
+            return {"exec_res": e, "used_table_ids": []}
+        return {
+            "exec_res": env.get("result", None),
+            "used_table_ids": self.__extract_table_ids(code),
+        }
+
+    def __extract_table_ids(self, code: str):
+        tree = ast.parse(code)
+        ids = []
+
+        class TableVisitor(ast.NodeVisitor):
+            def visit_Subscript(self, node):
+                # Check if it's "tables[...]"
+                if isinstance(node.value, ast.Name) and node.value.id == "tables":
+                    # Extract key inside tables["..."]
+                    if isinstance(node.slice, ast.Constant) and isinstance(
+                        node.slice.value, str
+                    ):
+                        ids.append(node.slice.value)
+                self.generic_visit(node)
+
+        TableVisitor().visit(tree)
+        return ids
