@@ -12,7 +12,8 @@ from pneuma_seeker.core.conductor.main import (
 # new import
 import pandas as pd
 
-from pneuma_seeker.core.materializer.operation.table_enumerator import clean_column
+from pneuma_seeker.utils.cleaner import clean_column_table_name
+
 
 DB_PATH = os.path.join(".", "pneuma_seeker_state.duckdb")
 
@@ -229,7 +230,7 @@ def load_state(user_id: str, chat_id: str) -> Tuple[
             if d.get("path"):
                 try:
                     content = pd.read_csv(d["path"])
-                    content.rename(columns=clean_column, inplace=True)
+                    content.rename(columns=clean_column_table_name, inplace=True)
                 except Exception as e:
                     # Optional: log or handle missing/corrupt file gracefully
                     content = None
