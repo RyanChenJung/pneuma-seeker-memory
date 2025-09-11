@@ -12,6 +12,7 @@ class Config:
         self.OPENWEBUI_BASE_URL = os.getenv(
             "OPENWEBUI_BASE_URL", "http://localhost:8080/"
         )
+        self.OPENWEBUI_API_KEY = os.getenv("OPENWEBUI_API_KEY", "")
 
     def __get_use_azure(self):
         use_azure = os.getenv("USE_AZURE", "false").lower()

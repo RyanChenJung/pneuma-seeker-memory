@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import io
 import json
 import os
 import re
@@ -7,6 +8,8 @@ import duckdb
 import pandas as pd
 
 from logging import Logger
+
+import requests
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
@@ -197,9 +200,40 @@ class Conductor:
         self, external_data_paths: list[str]
     ) -> list[AbstractDocument]:
         external_docs: list[AbstractDocument] = []
+        os.makedirs("temp", exist_ok=True)
         for data_path in external_data_paths:
-            if data_path.startswith("http"):
-                raise ValueError("API reading is not implemented yet.")
+            if data_path.startswith("/api") or data_path.startswith("api"):
+                if self.config.OPENWEBUI_BASE_URL.endswith(
+                    "/"
+                ) and data_path.startswith("/"):
+                    data_path = data_path[1:]
+                data_url = self.config.OPENWEBUI_BASE_URL + data_path
+
+                resp = requests.get(
+                    data_url,
+                    headers={
+                        "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
+                    },
+                )
+                resp.raise_for_status()
+
+                content_type = resp.headers.get("Content-Type", "").lower()
+                if "csv" in content_type or data_url.endswith(".csv"):
+                    ext = ".csv"
+                else:
+                    ext = ".xlsx"
+
+                local_path = os.path.join("temp", f"downloaded{ext}")
+                with open(local_path, "wb") as f:
+                    f.write(resp.content)
+
+                try:
+                    external_docs.extend(self.__read_external_data_content(local_path))
+                finally:
+                    try:
+                        os.remove(local_path)
+                    except OSError:
+                        pass
             else:
                 external_docs.extend(self.__read_external_data_content(data_path))
         return external_docs
