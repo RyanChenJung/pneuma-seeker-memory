@@ -82,8 +82,10 @@ class Conductor:
             self.external_documents = self.__unpack_external_data(external_data_paths)
             for doc in self.external_documents:
                 new_node = ProvenanceNode(
-                    data_ref=doc.path,
+                    output_data_id=doc.doc_id,
+                    output_data_ref=doc.path,
                     source_retriever=RetrieverType.USER,
+                    op_description=f"User-uploaded data",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

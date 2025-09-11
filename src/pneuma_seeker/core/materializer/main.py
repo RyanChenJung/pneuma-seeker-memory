@@ -172,8 +172,10 @@ class Materializer:
                 for doc in self.state.current_retrieved_documents[RetrieverType.PNEUMA]:
                     if doc.path is not None:
                         new_node = ProvenanceNode(
-                            data_ref={"doc_path": doc.path},
+                            output_data_id=doc.doc_id,
+                            output_data_ref={"doc_path": doc.path},
                             source_retriever=RetrieverType.PNEUMA,
+                            op_description="Data retrieved from Pneuma",
                         )
                         self.prov_graph.add_node(new_node, True)
                         doc.last_node_id = new_node.id
@@ -182,8 +184,10 @@ class Materializer:
                     RetrieverType.DOCUMENT_DB
                 ]:
                     new_node = ProvenanceNode(
-                        data_ref={"doc_content": doc.content},
+                        output_data_id=doc.doc_id,
+                        output_data_ref={"doc_content": doc.content},
                         source_retriever=RetrieverType.DOCUMENT_DB,
+                        op_description="Data retrieved from Document DB"
                     )
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
@@ -201,8 +205,10 @@ class Materializer:
                 for extra_table in extra_tables:
                     if extra_table.path is not None:
                         new_node = ProvenanceNode(
-                            data_ref={"extra_table_path": extra_table.path},
+                            output_data_id=extra_table.doc_id,
+                            output_data_ref={"extra_table_path": extra_table.path},
                             source_retriever=RetrieverType.ENUMERATOR,
+                            op_description=f"Enumerate tables using this pattern: {pattern}"
                         )
                         self.prov_graph.add_node(new_node, True)
                         extra_table.last_node_id = new_node.id
@@ -259,8 +265,10 @@ class Materializer:
                             and table_to_select_doc.last_node_id is not None
                         ):
                             child_node = ProvenanceNode(
-                                data_ref={"selected_table": table_to_select},
+                                output_data_id=table_to_select_doc.doc_id,
+                                output_data_ref={"selected_table": table_to_select},
                                 source_retriever=RetrieverType.MATERIALIZER,
+                                op_description="Directly select a relevant retrieved table",
                             )
                             parent_node = self.prov_graph.get_node_by_id(
                                 table_to_select_doc.last_node_id
@@ -341,9 +349,10 @@ class Materializer:
                 )
 
                 new_node = ProvenanceNode(
-                    data_ref={"new_column_values": new_column_values},
+                    output_data_id=conditioned_table_doc.doc_id,
+                    output_data_ref={"new_column_values": new_column_values},
                     source_retriever=RetrieverType.MATERIALIZER,
-                    description="Generates column semantically",
+                    op_description="Generates column semantically",
                 )
                 self.prov_graph.add_node(new_node, True)
                 parent_node = self.prov_graph.get_node_by_id(
@@ -443,9 +452,10 @@ class Materializer:
                 )
 
                 new_node = ProvenanceNode(
-                    data_ref={"joined_table": joined_table},
+                    output_data_id=joined_table_id,
+                    output_data_ref={"joined_table": joined_table},
                     source_retriever=RetrieverType.MATERIALIZER,
-                    description="Joins tables semantically",
+                    op_description="Joins tables semantically",
                 )
                 parent_node_1 = self.prov_graph.get_node_by_id(
                     left_table_doc.last_node_id or ""
@@ -503,9 +513,10 @@ class Materializer:
 
                 if isinstance(exec_res, DataFrame):
                     new_node = ProvenanceNode(
-                        data_ref={"exec_res": exec_res},
+                        output_data_id=assign_to,
+                        output_data_ref={"exec_res": exec_res},
                         source_retriever=RetrieverType.MATERIALIZER,
-                        description=f"Executes this Python code: {python_code}",
+                        op_description=f"Executes this Python code: {python_code}",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -549,9 +560,10 @@ class Materializer:
                             f"Successfully executed the Python code, resulting in this: {exec_res}"
                         )
                         new_node = ProvenanceNode(
-                            data_ref={"exec_res": exec_res},
+                            output_data_id="",
+                            output_data_ref={"exec_res": exec_res},
                             source_retriever=RetrieverType.MATERIALIZER,
-                            description=f"Executes this Python code: {python_code}",
+                            op_description=f"Executes this Python code: {python_code}",
                         )
                         self.prov_graph.add_node(new_node, True)
                         for parent_node in parent_nodes:
@@ -580,9 +592,10 @@ class Materializer:
                             parent_nodes.append(parent_node)
 
                     new_node = ProvenanceNode(
-                        data_ref=exec_res,
+                        output_data_id=assign_to,
+                        output_data_ref=exec_res,
                         source_retriever=RetrieverType.MATERIALIZER,
-                        description=f"Executes this SQL query: {sql_query}",
+                        op_description=f"Executes this SQL query: {sql_query}",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:

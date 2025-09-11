@@ -137,6 +137,13 @@ async def read_state_html(request: Request, user_id: str, chat_id: str):
     )
 
 
+@app.get("/graph/html/{user_id}/{chat_id}", response_class=HTMLResponse)
+async def read_graph_html(request: Request, user_id: str, chat_id: str):
+    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    prov_graph = conductor.prov_graph
+    return prov_graph.get_graph_visualization()
+
+
 @app.get("/helper")
 async def helper():
     res = persistence.get_unique_user_chat_ids()
