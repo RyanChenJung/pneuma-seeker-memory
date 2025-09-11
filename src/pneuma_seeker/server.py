@@ -5,7 +5,6 @@ import os
 import asyncio
 from typing import Any
 
-from dotenv import load_dotenv
 from datetime import datetime
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +17,6 @@ from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.model.llm_message import LLMMessage
 
-load_dotenv("../../.env")
 
 # enforce more deterministic behavior
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -58,6 +56,7 @@ class ConnectionManager:
                 user_id=user_id,
                 chat_id=chat_id,
                 data_sources=self.data_sources,
+                env_path="../../.env",
             )
         return self.chat_interfaces[key]
 
@@ -74,6 +73,7 @@ class ConnectionManager:
                 user_id=user_id,
                 chat_id=chat_id,
                 data_sources=self.data_sources,
+                env_path="../../.env",
             )
 
     def disconnect(self, websocket: WebSocket, user_id: str, chat_id: str):

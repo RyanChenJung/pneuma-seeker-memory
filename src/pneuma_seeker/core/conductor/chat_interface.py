@@ -17,6 +17,7 @@ class ChatInterface:
         chat_id: str,
         data_sources: list[str],
         enable_persistence=True,
+        env_path=".env",
     ):
         logger = setup_logger(
             name="processor_logger",
@@ -25,7 +26,7 @@ class ChatInterface:
             max_bytes=10_000_000,
             backup_count=5,
         )
-        self.config = Config()
+        self.config = Config(env_path=env_path)
         self.llm_conductor = Conductor(
             llm_path, embed_model_path, logger, data_sources, self.config
         )
