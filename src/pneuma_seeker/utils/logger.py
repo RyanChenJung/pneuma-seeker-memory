@@ -31,7 +31,7 @@ def setup_logger(
         logger.addHandler(stream_handler)
 
         if log_path:
-            # File handler with rotation
+            os.makedirs(log_path, exist_ok=True)
             file_handler = RotatingFileHandler(
                 os.path.join(log_path, "pneuma_seeker.log"),
                 maxBytes=max_bytes,
