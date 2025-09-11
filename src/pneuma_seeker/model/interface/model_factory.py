@@ -9,9 +9,10 @@ from pneuma_seeker.model.interface.impl.gpt import GPT
 from pneuma_seeker.model.interface.impl.gemma import Gemma
 from pneuma_seeker.model.interface.impl.llama import Llama
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.utils.config import Config
 
 
-def get_llm(model_path: str) -> Type[AbstractModel]:
+def get_llm(model_path: str, config: Config) -> Type[AbstractModel]:
     """Factory function to return the correct LLM instance."""
     normalized_model_path = model_path.lower()
     if "qwen" in normalized_model_path:
@@ -23,8 +24,7 @@ def get_llm(model_path: str) -> Type[AbstractModel]:
     elif "gpt" in normalized_model_path:
         return GPT
     elif "o3" in normalized_model_path or "o4" in normalized_model_path:
-        use_azure = os.getenv("USE_AZURE")
-        if use_azure is not None and use_azure.lower() == "true":
+        if config.USE_AZURE:
             return AzureOpenAILLM
         return O
     else:

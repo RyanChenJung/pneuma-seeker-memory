@@ -25,6 +25,7 @@ from pneuma_seeker.provenance.graph import (
     ProvenanceNode,
 )
 from pneuma_seeker.utils.cleaner import clean_column_table_name
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.parser import parse_json, parse_sql
 
 
@@ -38,14 +39,16 @@ class Conductor:
         embed_model_path: str,
         logger: Logger,
         data_sources: list[str],
+        config: Config,
     ) -> None:
-        self.llm = get_llm(llm_path)(llm_path)
-        self.embed_model = get_embed_model()(embed_model_path)
-
         self.logger = logger
         self.data_sources = data_sources
-        self.prov_graph = ProvenanceGraph(self.logger)
+        self.config = config
 
+        self.llm = get_llm(llm_path, self.config)(llm_path)
+        self.embed_model = get_embed_model()(embed_model_path)
+
+        self.prov_graph = ProvenanceGraph(self.logger)
         self.prompt_factory = ConductorPromptFactory()
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.materializer = Materializer(
@@ -79,10 +82,7 @@ class Conductor:
                     data_ref=doc.path,
                     source_retriever=RetrieverType.USER,
                 )
-                self.prov_graph.add_node(
-                    new_node,
-                    True
-                )
+                self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
 
         num_actions_taken = 0
@@ -226,9 +226,7 @@ class Conductor:
 
             sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
             for original_name, df in sheets.items():
-                standardized_name = (
-                    f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
-                )
+                standardized_name = f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
                 standardized_df = df.rename(columns=clean_column_table_name)
 
                 external_data_content.append(
@@ -273,7 +271,9 @@ class Conductor:
             self.logger.info(f"Table Enumerater request with params: {args}")
             pattern: str = args.get("pattern", "")
             enumerated_tables = self.ir_system.retrieve_documents(
-                RetrieverType.ENUMERATOR, pattern, self.data_sources,
+                RetrieverType.ENUMERATOR,
+                pattern,
+                self.data_sources,
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
             return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
@@ -320,13 +320,11 @@ class Conductor:
             if isinstance(args, dict) and "note" in args:
                 note = args["note"]
             self.logger.info(f"Materializer called")
-            self.info_need_state.target_schemas = (
-                self.materializer.materialize_T(
-                    self.info_need_state.target_schemas,
-                    self.info_need_state.column_descriptions,
-                    self.info_need_state.sqls,
-                    note,
-                )
+            self.info_need_state.target_schemas = self.materializer.materialize_T(
+                self.info_need_state.target_schemas,
+                self.info_need_state.column_descriptions,
+                self.info_need_state.sqls,
+                note,
             )
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."

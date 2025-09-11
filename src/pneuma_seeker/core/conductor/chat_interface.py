@@ -4,6 +4,7 @@ from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
 from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import setup_logger
 
 
@@ -24,13 +25,15 @@ class ChatInterface:
             max_bytes=10_000_000,
             backup_count=5,
         )
+        self.config = Config()
         self.llm_conductor = Conductor(
-            llm_path, embed_model_path, logger, data_sources
+            llm_path, embed_model_path, logger, data_sources, self.config
         )
+
         self.user_id = user_id
         self.chat_id = chat_id
-        self.enable_persistence = enable_persistence
 
+        self.enable_persistence = enable_persistence
         if self.enable_persistence:
             persistence.init_db()
 
