@@ -59,12 +59,12 @@ class AzureOpenAILLM(AbstractModel):
                 stream=stream,
             )  # type: ignore
 
-            print(response_stream)
-            raise ValueError()
-
             for event in response_stream:
-                if event.choices[0].delta.content:
-                    chunk = event.choices[0].delta.content
+                if not event.choices:  # skip keep-alives or DONE packets
+                    continue
+                delta = event.choices[0].delta
+                if hasattr(delta, "content") and delta.content:
+                    chunk = delta.content
                     print(chunk, end="", flush=True)  # Optional live print
                     yield chunk
 
