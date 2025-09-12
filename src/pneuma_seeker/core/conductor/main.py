@@ -48,8 +48,8 @@ class Conductor:
         self.data_sources = data_sources
         self.config = config
 
-        self.llm = get_llm(llm_path, self.config)(llm_path)
-        self.embed_model = get_embed_model()(embed_model_path)
+        self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
+        self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
 
         self.prov_graph = ProvenanceGraph(self.logger)
         self.prompt_factory = ConductorPromptFactory()

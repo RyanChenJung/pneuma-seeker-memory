@@ -1,5 +1,5 @@
 from logging import INFO
-from os import path
+import os
 from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
@@ -19,13 +19,7 @@ class ChatInterface:
         enable_persistence=True,
         env_path=".env",
     ):
-        logger = setup_logger(
-            name="processor_logger",
-            log_path=path.join(".", "log"),
-            level=INFO,
-            max_bytes=10_000_000,
-            backup_count=5,
-        )
+        logger = setup_logger(log_path=os.path.join(".", "log"))
         self.config = Config(env_path=env_path)
         self.llm_conductor = Conductor(
             llm_path, embed_model_path, logger, data_sources, self.config

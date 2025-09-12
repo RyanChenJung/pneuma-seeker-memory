@@ -8,7 +8,9 @@ class Config:
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
         self.AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+        self.AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-12-01-preview")
         self.USE_AZURE = self.__get_use_azure()
+
         self.OPENWEBUI_BASE_URL = os.getenv(
             "OPENWEBUI_BASE_URL", "http://localhost:8080/"
         )

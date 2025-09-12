@@ -1,3 +1,4 @@
+from logging import Logger
 import os
 
 from collections.abc import Generator
@@ -9,17 +10,19 @@ from openai import NOT_GIVEN, OpenAI
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.model.llm_message import LLMMessage
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.utils.config import Config
 
 
-class O(AbstractModel):
+class OpenAILLM(AbstractModel):
     def __init__(
         self,
-        model_name: str = "o4-mini",
-        env_name="OPENAI_API_KEY",
-        base_url: Optional[str] = None,
+        model_name: str,
+        config: Config,
+        logger: Logger,
     ):
-        self.client = OpenAI(api_key=os.getenv(env_name), base_url=base_url)
+        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
         self.model_name = model_name
+        self.logger = logger
 
     def load_model(self):
         # OpenAI API does not require model loading
@@ -74,7 +77,7 @@ class O(AbstractModel):
             )
 
             response = gpt_output or ""
-            print(f"O model output: {response}")
+            self.logger.info(f"[OPENAI] Model output: {response}")
             yield response
 
     def batch_chat(

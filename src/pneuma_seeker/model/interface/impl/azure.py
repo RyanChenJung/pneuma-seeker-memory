@@ -1,3 +1,4 @@
+from logging import Logger
 import os
 
 from collections.abc import Generator
@@ -9,27 +10,23 @@ from openai import NOT_GIVEN, AzureOpenAI
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.model.llm_message import LLMMessage
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.utils.config import Config
 
 
 class AzureOpenAILLM(AbstractModel):
     def __init__(
         self,
-        model_name: str = "o4-mini",
+        model_name: str,
+        config: Config,
+        logger: Logger,
     ):
-        azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
-
-        if azure_openai_endpoint is None:
-            raise ValueError("Please set the `AZURE_OPENAI_ENDPOINT`environment variable.")
-        if api_key is None:
-            raise ValueError("Please set the `AZURE_OPENAI_API_KEY`environment variable.")
-
         self.client = AzureOpenAI(
-            azure_endpoint=azure_openai_endpoint,
-            api_key=api_key,
-            api_version="2024-12-01-preview",
+            api_version=config.AZURE_API_VERSION,
+            azure_endpoint=config.AZURE_OPENAI_ENDPOINT,
+            api_key=config.AZURE_OPENAI_API_KEY,
         )
         self.model_name = model_name
+        self.logger = logger
 
     def load_model(self):
         # OpenAI API does not require model loading
@@ -62,6 +59,9 @@ class AzureOpenAILLM(AbstractModel):
                 stream=stream,
             )  # type: ignore
 
+            print(response_stream)
+            raise ValueError()
+
             for event in response_stream:
                 if event.choices[0].delta.content:
                     chunk = event.choices[0].delta.content
@@ -84,7 +84,7 @@ class AzureOpenAILLM(AbstractModel):
             )
 
             response = gpt_output or ""
-            print(f"O model output: {response}")
+            print(f"Model output: {response}")
             yield response
 
     def batch_chat(

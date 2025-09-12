@@ -1,17 +1,19 @@
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 import json
+from logging import Logger
 from typing import Optional
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.model.llm_message import LLMMessage
 from numpy import ndarray
 
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.parser import parse_json
 
 
 class AbstractModel(ABC):
     @abstractmethod
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, config: Config, logger: Logger, **kwargs):
         """All implementors must accept a model_name in the constructor."""
         pass
 

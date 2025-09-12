@@ -1,9 +1,8 @@
-import os
 from typing import Type
 
 from pneuma_seeker.model.interface.impl.azure import AzureOpenAILLM
 from pneuma_seeker.model.interface.impl.embed import EmbeddingModel
-from pneuma_seeker.model.interface.impl.o import O
+from pneuma_seeker.model.interface.impl.openai import OpenAILLM
 from pneuma_seeker.model.interface.impl.qwen import Qwen
 from pneuma_seeker.model.interface.impl.gpt import GPT
 from pneuma_seeker.model.interface.impl.gemma import Gemma
@@ -26,7 +25,7 @@ def get_llm(model_path: str, config: Config) -> Type[AbstractModel]:
     elif "o3" in normalized_model_path or "o4" in normalized_model_path:
         if config.USE_AZURE:
             return AzureOpenAILLM
-        return O
+        return OpenAILLM
     else:
         raise ValueError(
             f"No interface implementation for this model path: {model_path}"
