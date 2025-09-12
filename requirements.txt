@@ -1,3 +1,4 @@
+azure-cli>=2.77.0
 fastapi[standard]>=0.115.11
 torch>=2.6.0
 huggingface_hub>=0.34.3
@@ -7,12 +8,7 @@ textdistance>=4.6.3
 sentence-transformers>=3.4.1
 openai>=1.63.2
 pyxDamerauLevenshtein>=1.8.0
-
-# Visualization-related
-# graphviz>=0.20.3
-# matplotlib>=3.10.1
-# plotly>=6.0.1
-# pyvis>=0.3.2
+pyvis>=0.3.2
 
 # Test-related
 # coverage>=7.8.0
