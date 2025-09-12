@@ -1,7 +1,6 @@
 from collections.abc import Generator
 from logging import Logger
 from numpy import ndarray
-from typing import Optional
 from sentence_transformers import SentenceTransformer
 
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
