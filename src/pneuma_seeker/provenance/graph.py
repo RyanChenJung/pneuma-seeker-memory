@@ -119,6 +119,46 @@ class ProvenanceGraph:
 
         return net.generate_html()
 
+    def to_text(self, node: ProvenanceNode | None = None, max_depth: int = 5) -> str:
+        """
+        Returns a textual representation of the graph with integer IDs instead of UUIDs.
+        """
+        # Mapping from original UUIDs to integer IDs for readability + token saving
+        id_map: dict[str, int] = {}
+        next_id = 1
+
+        def _get_int_id(node_id: str) -> int:
+            nonlocal next_id
+            if node_id not in id_map:
+                id_map[node_id] = next_id
+                next_id += 1
+            return id_map[node_id]
+
+        def _node_text(n: ProvenanceNode, depth: int, visited: set[str]) -> str:
+            if depth > max_depth or n.id in visited:
+                return ""
+            visited.add(n.id)
+            int_id = _get_int_id(n.id)
+            lines = [
+                f"{'  ' * depth}- Node {int_id}",
+                f"{'  ' * depth}  Output Data ID: {n.output_data_id}",
+                f"{'  ' * depth}  Source: {n.source_retriever.value}",
+                f"{'  ' * depth}  Description: {n.op_description}",
+                f"{'  ' * depth}  Children: {[ _get_int_id(c.id) for c in n.children ]}",
+                f"{'  ' * depth}  Parents: {[ _get_int_id(p.id) for p in n.parents ]}",
+            ]
+            for child in n.children:
+                lines.append(_node_text(child, depth + 1, visited))
+            return "\n".join([line for line in lines if line])
+
+        visited_nodes = set()
+        if node is not None:
+            return _node_text(node, 0, visited_nodes)
+        else:
+            roots = [n for n in self.nodes.values() if not n.parents]
+            all_texts = [_node_text(root, 0, visited_nodes) for root in roots]
+            return "\n\n".join(all_texts)
+
     def __trace(self, start: ProvenanceNode, relation: str) -> list[ProvenanceNode]:
         visited, stack, result = set(), [start], []
         while stack:
