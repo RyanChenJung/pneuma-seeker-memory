@@ -83,7 +83,7 @@ class Conductor:
             for doc in self.external_documents:
                 new_node = ProvenanceNode(
                     output_data_id=doc.doc_id,
-                    output_data_ref=doc.path,
+                    output_data_ref={"doc_path": doc.path},
                     source_retriever=RetrieverType.USER,
                     op_description=f"User-uploaded data",
                 )
