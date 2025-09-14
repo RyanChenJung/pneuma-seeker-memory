@@ -1,3 +1,4 @@
+from logging import Logger
 import os
 import json
 import duckdb
@@ -12,10 +13,13 @@ from pneuma_seeker.core.conductor.main import (
 # new import
 import pandas as pd
 
+from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.utils.cleaner import clean_column_table_name
 
 
-DB_PATH = os.path.join(".", "pneuma_seeker_state.duckdb")
+DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "pneuma_seeker_state.duckdb"
+)
 
 
 # -------------------- Helpers for DataFrame (target_schemas) --------------------
@@ -81,6 +85,7 @@ def init_db():
         chat_id TEXT,
         info_need_state_json TEXT,
         retrieval_results_json TEXT,
+        provenance_graph_json TEXT,
         ts TIMESTAMP
     )
     """
@@ -106,6 +111,7 @@ def save_state(
     info_need_state: InformationNeedState,
     retrieval_results: Dict[RetrieverType, List[AbstractDocument]],
     enumerated_table_ids: list[str],
+    provenance_graph: ProvenanceGraph,
 ):
     """
     Persist info_need_state and retrieval_results as JSON.
@@ -152,6 +158,8 @@ def save_state(
         }
     )
 
+    provenance_graph_json = json.dumps(_serialize_provenance_graph(provenance_graph))
+
     con = duckdb.connect(DB_PATH)
     con.execute(
         """DELETE FROM chat_state WHERE user_id = ? AND chat_id = ?""",
@@ -159,44 +167,54 @@ def save_state(
     )
     con.execute(
         """
-        INSERT INTO chat_state (user_id, chat_id, info_need_state_json, retrieval_results_json, ts)
-        VALUES (?, ?, ?, ?, ?)
-    """,
+        INSERT INTO chat_state (
+            user_id,
+            chat_id,
+            info_need_state_json,
+            retrieval_results_json,
+            provenance_graph_json,
+            ts
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
         (
             user_id,
             chat_id,
             info_need_state_json,
             retrieval_results_json,
+            provenance_graph_json,
             datetime.utcnow(),
         ),
     )
     con.close()
 
 
-def load_state(user_id: str, chat_id: str) -> Tuple[
+def load_state(user_id: str, chat_id: str, logger: Logger) -> Tuple[
     InformationNeedState,
     Dict[RetrieverType, List[AbstractDocument]],
     list[str],
+    ProvenanceGraph,
 ]:
     con = duckdb.connect(DB_PATH)
     row = con.execute(
         """
-        SELECT info_need_state_json, retrieval_results_json
+        SELECT info_need_state_json, retrieval_results_json, provenance_graph_json
         FROM chat_state
         WHERE user_id = ? AND chat_id = ?
         ORDER BY ts DESC
         LIMIT 1
-    """,
+        """,
         (user_id, chat_id),
     ).fetchone()
     con.close()
 
     if not row:
-        return InformationNeedState(), {}, []
+        return InformationNeedState(), {}, [], ProvenanceGraph(logger)
 
-    info_json, retr_json = row
+    info_json, retr_json, prov_json = row
     info_data = json.loads(info_json)
     retr_data = json.loads(retr_json)
+    prov_data = json.loads(prov_json)
 
     info_state = InformationNeedState()
 
@@ -246,4 +264,54 @@ def load_state(user_id: str, chat_id: str) -> Tuple[
                 )
             )
 
-    return info_state, retr_results, enumerated_table_ids
+    provenance_graph = _deserialize_provenance_graph(prov_data, logger)
+
+    return info_state, retr_results, enumerated_table_ids, provenance_graph
+
+
+def _serialize_provenance_graph(graph: ProvenanceGraph) -> dict[str, Any]:
+    return {
+        "nodes": [
+            {
+                "id": node.id,
+                "output_data_id": node.output_data_id,
+                "output_data_ref": node.output_data_ref,
+                "source_retriever": node.source_retriever.value,
+                "op_description": node.op_description,
+                "children": [child.id for child in node.children],
+                "parents": [parent.id for parent in node.parents],
+            }
+            for node in graph.nodes.values()
+        ]
+    }
+
+
+def _deserialize_provenance_graph(
+    obj: dict[str, Any], logger: Logger
+) -> ProvenanceGraph:
+    if not obj:
+        return ProvenanceGraph(logger)
+
+    graph = ProvenanceGraph(logger)
+    id_to_node: dict[str, ProvenanceNode] = {}
+
+    # 1. create all nodes first
+    for n in obj.get("nodes", []):
+        node = ProvenanceNode(
+            output_data_id=n["output_data_id"],
+            output_data_ref=n["output_data_ref"],
+            source_retriever=RetrieverType(n["source_retriever"]),
+            op_description=n["op_description"],
+        )
+        node.id = n["id"]
+        graph.add_node(node)
+        id_to_node[node.id] = node
+
+    # 2. reconnect edges
+    for n in obj.get("nodes", []):
+        node = id_to_node[n["id"]]
+        for child_id in n.get("children", []):
+            if child_id in id_to_node:
+                node.add_child(id_to_node[child_id])
+
+    return graph
