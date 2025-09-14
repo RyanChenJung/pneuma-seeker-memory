@@ -510,7 +510,7 @@ def stream_message_content_from_chunks(
 ) -> tuple[Generator[str, None, None], list[str]]:
     """
     Consume chunks from LLM generator and yield only the 'message' content
-    of communicate_with_user intents, ignoring JSON wrappers.
+    of communicate_with_user actions/intents, ignoring JSON wrappers.
     Returns:
         - A generator that streams the message chunks
         - A mutable list containing the full concatenated output
@@ -537,11 +537,10 @@ def stream_message_content_from_chunks(
                     break
 
                 buffer = buffer[match.end() :]
-                if (
-                    action.get("intent") == "communicate_with_user"
-                    and "message" in action
-                ):
-                    message_text = action["message"]
+                intent = action.get("intent") or action.get("action")
+                message_text = action.get("message")
+
+                if intent == "communicate_with_user" and isinstance(message_text, str):
                     for char in stream_message_by_whitespace(message_text):
                         yield char  # stream immediately
 
