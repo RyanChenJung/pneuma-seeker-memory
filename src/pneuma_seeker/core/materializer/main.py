@@ -187,7 +187,7 @@ class Materializer:
                         output_data_id=doc.doc_id,
                         output_data_ref={"doc_content": doc.content},
                         source_retriever=RetrieverType.DOCUMENT_DB,
-                        op_description="Data retrieved from Document DB"
+                        op_description="Data retrieved from Document DB",
                     )
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
@@ -208,7 +208,7 @@ class Materializer:
                             output_data_id=extra_table.doc_id,
                             output_data_ref={"extra_table_path": extra_table.path},
                             source_retriever=RetrieverType.ENUMERATOR,
-                            op_description=f"Enumerate tables using this pattern: {pattern}"
+                            op_description=f"Enumerate tables using this pattern: {pattern}",
                         )
                         self.prov_graph.add_node(new_node, True)
                         extra_table.last_node_id = new_node.id
@@ -265,8 +265,11 @@ class Materializer:
                             and table_to_select_doc.last_node_id is not None
                         ):
                             child_node = ProvenanceNode(
-                                output_data_id=table_to_select_doc.doc_id,
-                                output_data_ref={"selected_table": table_to_select},
+                                output_data_id=target_schema_id,
+                                output_data_ref={
+                                    "selected_table_path": table_to_select_doc.path,
+                                    "relevant_columns": relevant_columns,
+                                },
                                 source_retriever=RetrieverType.MATERIALIZER,
                                 op_description="Directly select a relevant retrieved table",
                             )
@@ -385,20 +388,16 @@ class Materializer:
 
                 left_table: DataFrame | None = None
                 left_table_doc: AbstractDocument | None = None
-                left_table_src_retriever = RetrieverType.PNEUMA
                 right_table: DataFrame | None = None
-                right_table_src_retriever = RetrieverType.PNEUMA
                 right_table_doc: AbstractDocument | None = None
 
                 for doc in all_tables:
                     if doc.doc_id == left_table_id:
                         left_table = doc.content
                         left_table_doc = doc
-                        left_table_src_retriever = doc.retriever_type
                     if doc.doc_id == right_table_id:
                         right_table = doc.content
                         right_table_doc = doc
-                        right_table_src_retriever = doc.retriever_type
 
                 if not isinstance(left_table, DataFrame):
                     self.actions.append(
@@ -593,7 +592,7 @@ class Materializer:
 
                     new_node = ProvenanceNode(
                         output_data_id=assign_to,
-                        output_data_ref=exec_res,
+                        output_data_ref={"exec_res": exec_res},
                         source_retriever=RetrieverType.MATERIALIZER,
                         op_description=f"Executes this SQL query: {sql_query}",
                     )
