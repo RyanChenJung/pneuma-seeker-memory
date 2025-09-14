@@ -13,7 +13,7 @@ class ProvenanceNode:
     def __init__(
         self,
         output_data_id: str,
-        output_data_ref: Any,  # Either path to data or data itself
+        output_data_ref: dict[str, str],  # Either path to data or data itself
         source_retriever: RetrieverType,  # Where the data comes from
         op_description: str,
     ):

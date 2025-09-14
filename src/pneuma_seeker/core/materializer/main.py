@@ -1,3 +1,5 @@
+import glob
+import os
 from typing import Any
 
 from logging import Logger
@@ -63,6 +65,7 @@ class Materializer:
         )  # Future-TODO: dynamically allocate batch_size
 
         self.is_sql_alignment_checked = False
+        self.MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     def materialize_T(
         self,
@@ -268,7 +271,7 @@ class Materializer:
                                 output_data_id=target_schema_id,
                                 output_data_ref={
                                     "selected_table_path": table_to_select_doc.path,
-                                    "relevant_columns": relevant_columns,
+                                    "relevant_columns": str(relevant_columns),
                                 },
                                 source_retriever=RetrieverType.MATERIALIZER,
                                 op_description="Directly select a relevant retrieved table",
@@ -291,6 +294,7 @@ class Materializer:
                                 last_node_id=new_node_id,
                             )
                         )
+                        self.__save_new_or_updated_intermediate_table(target_schema_id)
                         self.actions.append(
                             f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target schemas."
                         )
@@ -353,7 +357,12 @@ class Materializer:
 
                 new_node = ProvenanceNode(
                     output_data_id=conditioned_table_doc.doc_id,
-                    output_data_ref={"new_column_values": new_column_values},
+                    output_data_ref={
+                        "semantically_appended_table_path": os.path.join(
+                            self.__get_intermediate_table_dir_path(),
+                            f"{conditioned_table_doc.doc_id}.csv",
+                        )
+                    },
                     source_retriever=RetrieverType.MATERIALIZER,
                     op_description="Generates column semantically",
                 )
@@ -365,6 +374,9 @@ class Materializer:
                     self.prov_graph.connect(parent_node, new_node)
 
                 conditioned_table_doc.last_node_id = new_node.id
+                self.__save_new_or_updated_intermediate_table(
+                    conditioned_table_doc.doc_id
+                )
             elif op_name == "Semantic Join":
                 left_table_id: str | None = op_args.get("left_table_id")
                 right_table_id: str | None = op_args.get("right_table_id")
@@ -452,7 +464,12 @@ class Materializer:
 
                 new_node = ProvenanceNode(
                     output_data_id=joined_table_id,
-                    output_data_ref={"joined_table": joined_table},
+                    output_data_ref={
+                        "joined_table_path": os.path.join(
+                            self.__get_intermediate_table_dir_path(),
+                            f"{joined_table_id}.csv",
+                        )
+                    },
                     source_retriever=RetrieverType.MATERIALIZER,
                     op_description="Joins tables semantically",
                 )
@@ -478,6 +495,7 @@ class Materializer:
                         last_node_id=new_node.id,
                     )
                 )
+                self.__save_new_or_updated_intermediate_table(joined_table_id)
 
                 self.actions.append(
                     f"Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
@@ -513,7 +531,12 @@ class Materializer:
                 if isinstance(exec_res, DataFrame):
                     new_node = ProvenanceNode(
                         output_data_id=assign_to,
-                        output_data_ref={"exec_res": exec_res},
+                        output_data_ref={
+                            "exec_res_path": os.path.join(
+                                self.__get_intermediate_table_dir_path(),
+                                f"{assign_to}.csv",
+                            )
+                        },
                         source_retriever=RetrieverType.MATERIALIZER,
                         op_description=f"Executes this Python code: {python_code}",
                     )
@@ -530,6 +553,7 @@ class Materializer:
                             last_node_id=new_node.id,
                         )
                     )
+                    self.__save_new_or_updated_intermediate_table(assign_to)
 
                     self.actions.append(
                         f"Successfully executed the Python code, resulting in a table named {assign_to}"
@@ -592,7 +616,12 @@ class Materializer:
 
                     new_node = ProvenanceNode(
                         output_data_id=assign_to,
-                        output_data_ref={"exec_res": exec_res},
+                        output_data_ref={
+                            "exec_res_path": os.path.join(
+                                self.__get_intermediate_table_dir_path(),
+                                f"{assign_to}.csv",
+                            )
+                        },
                         source_retriever=RetrieverType.MATERIALIZER,
                         op_description=f"Executes this SQL query: {sql_query}",
                     )
@@ -609,6 +638,7 @@ class Materializer:
                             last_node_id=new_node.id,
                         )
                     )
+                    self.__save_new_or_updated_intermediate_table(assign_to)
 
                     self.actions.append(
                         f"Successfully executed the SQL query, resulting in a table named {assign_to}"
@@ -685,9 +715,36 @@ class Materializer:
         return is_complete
 
     def __cleanup_system(self):
+        self.__log("Cleaning up Materializer...")
         self.state.reset()
+        self.__clear_csv_files()
         self.is_sql_alignment_checked = False
         self.actions = []
 
+    def __clear_csv_files(self):
+        """Delete all .csv files in the module directory."""
+        pattern = os.path.join(self.__get_intermediate_table_dir_path(), "*.csv")
+        for csv_file in glob.glob(pattern):
+            try:
+                os.remove(csv_file)
+            except Exception as e:
+                continue
+
     def __log(self, text):
         self.logger.info(f"[MATERIALIZER] {text}")
+
+    def __save_new_or_updated_intermediate_table(self, table_id: str):
+        csv_path = os.path.join(
+            self.__get_intermediate_table_dir_path(), f"{table_id}.csv"
+        )
+        intermediate_table: DataFrame | None = None
+        for table_doc in self.state.intermediate_tables:
+            if table_doc.doc_id == table_id:
+                intermediate_table = table_doc.content
+                break
+
+        if isinstance(intermediate_table, DataFrame):
+            intermediate_table.to_csv(csv_path, index=False)
+
+    def __get_intermediate_table_dir_path(self):
+        return os.path.join(self.MODULE_DIR, "intermediate_data")
