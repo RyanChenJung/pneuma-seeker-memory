@@ -161,7 +161,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
                 await websocket.receive_text()
             )
             chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
-            url_paths: list[str] = [data_from_frontend["file_url_paths"]]
+            url_paths: list[str] = data_from_frontend.get("file_url_paths", [])
 
             # Normalize paths
             for idx, url_path in enumerate(url_paths):
