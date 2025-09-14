@@ -82,6 +82,17 @@ class ProvenanceGraph:
         """Return all descendants of a given node, traversing children recursively."""
         return self.__trace(node, "children")
 
+    def __trace(self, start: ProvenanceNode, relation: str) -> list[ProvenanceNode]:
+        visited, stack, result = set(), [start], []
+        while stack:
+            current = stack.pop()
+            for neighbor in getattr(current, relation):
+                if neighbor.id not in visited:
+                    visited.add(neighbor.id)
+                    result.append(neighbor)
+                    stack.append(neighbor)
+        return result
+
     def get_graph_visualization(self):
         net = Network(notebook=True, directed=True, cdn_resources="in_line")
 
@@ -159,13 +170,12 @@ class ProvenanceGraph:
             all_texts = [_node_text(root, 0, visited_nodes) for root in roots]
             return "\n\n".join(all_texts)
 
-    def __trace(self, start: ProvenanceNode, relation: str) -> list[ProvenanceNode]:
-        visited, stack, result = set(), [start], []
-        while stack:
-            current = stack.pop()
-            for neighbor in getattr(current, relation):
-                if neighbor.id not in visited:
-                    visited.add(neighbor.id)
-                    result.append(neighbor)
-                    stack.append(neighbor)
-        return result
+    def reset_for_materialization(self):
+        new_nodes: dict[str, ProvenanceNode] = {}
+        for node_id, node in self.nodes.items():
+            if node.source_retriever == RetrieverType.USER:
+                new_nodes[node_id] = node
+        self.nodes = new_nodes
+        self.logger.info(
+            f"[PROV GRAPH] The graph has been reset successfully."
+        )

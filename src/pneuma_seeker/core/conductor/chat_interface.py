@@ -33,12 +33,13 @@ class ChatInterface:
             persistence.init_db()
 
             # Restore previous state
-            info_state, retr_results, enumerated_table_ids = persistence.load_state(
-                user_id, chat_id
+            info_state, retr_results, enumerated_table_ids, prov_graph = (
+                persistence.load_state(user_id, chat_id, logger)
             )
             self.llm_conductor.info_need_state = info_state
             self.llm_conductor.current_retrieval_results = retr_results
             self.llm_conductor.enumerated_table_ids = enumerated_table_ids
+            self.llm_conductor.prov_graph = prov_graph
 
     def process_user_input(
         self,
@@ -82,4 +83,5 @@ class ChatInterface:
                 self.llm_conductor.info_need_state,
                 self.llm_conductor.current_retrieval_results,
                 self.llm_conductor.enumerated_table_ids,
+                self.llm_conductor.prov_graph,
             )

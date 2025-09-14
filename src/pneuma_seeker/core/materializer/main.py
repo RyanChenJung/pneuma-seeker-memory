@@ -717,6 +717,7 @@ class Materializer:
     def __cleanup_system(self):
         self.__log("Cleaning up Materializer...")
         self.state.reset()
+        self.prov_graph.reset_for_materialization()
         self.__clear_csv_files()
         self.is_sql_alignment_checked = False
         self.actions = []
