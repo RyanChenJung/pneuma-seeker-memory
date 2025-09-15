@@ -1,4 +1,3 @@
-from logging import INFO
 import os
 from pneuma_seeker.core.conductor import persistence
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
@@ -19,10 +18,10 @@ class ChatInterface:
         enable_persistence=True,
         env_path=".env",
     ):
-        logger = setup_logger(log_path=os.path.join(".", "log"))
+        self.logger = setup_logger(log_path=os.path.join(".", "log"))
         self.config = Config(env_path=env_path)
         self.llm_conductor = Conductor(
-            llm_path, embed_model_path, logger, data_sources, self.config
+            llm_path, embed_model_path, self.logger, data_sources, self.config
         )
 
         self.user_id = user_id
@@ -34,7 +33,7 @@ class ChatInterface:
 
             # Restore previous state
             info_state, retr_results, enumerated_table_ids, prov_graph = (
-                persistence.load_state(user_id, chat_id, logger)
+                persistence.load_state(user_id, chat_id, self.logger)
             )
             self.llm_conductor.info_need_state = info_state
             self.llm_conductor.current_retrieval_results = retr_results
@@ -47,8 +46,8 @@ class ChatInterface:
         external_data_paths: list[str] = [],
     ):
         """
-        Processes user input. If persistence is enabled, the `interactions` argument is ignored.
-        If not enabled, then interactions must be passed.
+        Processes user input. If persistence is enabled, the `interactions`
+        argument is ignored. If not enabled, then interactions must be passed.
         """
         conductor_final_response = ""
         human_input = chat_messages[-1]["content"]
