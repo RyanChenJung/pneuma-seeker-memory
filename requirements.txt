@@ -9,6 +9,7 @@ sentence-transformers>=3.4.1
 openai>=1.63.2
 pyxDamerauLevenshtein>=1.8.0
 pyvis>=0.3.2
+duckdb>=1.2.0
 
 # Test-related
 # coverage>=7.8.0
