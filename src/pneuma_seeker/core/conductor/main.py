@@ -209,6 +209,8 @@ class Conductor:
                     "/"
                 ) and data_path.startswith("/"):
                     data_path = data_path[1:]
+                if data_path.endswith("/content"):
+                    data_path = data_path[: -len("/content")]
                 data_url = self.config.OPENWEBUI_BASE_URL + data_path
 
                 resp = requests.get(
@@ -220,22 +222,33 @@ class Conductor:
                 resp.raise_for_status()
 
                 content_type = resp.headers.get("Content-Type", "").lower()
-                if "csv" in content_type or data_url.endswith(".csv"):
-                    ext = ".csv"
-                else:
-                    ext = ".xlsx"
 
-                local_path = os.path.join("temp", f"downloaded{ext}")
-                with open(local_path, "wb") as f:
-                    f.write(resp.content)
+                if "csv" in content_type or "excel" in content_type:
+                    # direct file (csv/xlsx)
+                    ext = ".csv" if "csv" in content_type else ".xlsx"
+                    local_path = os.path.join("temp", f"downloaded{ext}")
+                    with open(local_path, "wb") as f:
+                        f.write(resp.content)
+                elif "json" in content_type:
+                    # metadata wrapper
+                    meta = resp.json()
+                    file_path = meta.get("path")
+                    if not file_path or not os.path.exists(file_path):
+                        raise ValueError(
+                            f"Invalid API response, no usable file path: {meta}"
+                        )
+                    local_path = file_path
+                else:
+                    raise ValueError(f"Unsupported content type: {content_type}")
 
                 try:
                     external_docs.extend(self.__read_external_data_content(local_path))
                 finally:
-                    try:
-                        os.remove(local_path)
-                    except OSError:
-                        pass
+                    if local_path.startswith("temp") and os.path.exists(local_path):
+                        try:
+                            os.remove(local_path)
+                        except OSError:
+                            pass
             else:
                 external_docs.extend(self.__read_external_data_content(data_path))
         return external_docs
