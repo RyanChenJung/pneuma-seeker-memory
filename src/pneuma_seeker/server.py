@@ -34,9 +34,6 @@ app.add_middleware(
 )
 
 
-FRONTEND_PATH = "http://localhost:8080"
-
-
 class ConnectionManager:
     def __init__(self, llm_path: str, embed_model_path: str, data_sources: list[str]):
         self.llm_path = llm_path
@@ -161,14 +158,13 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
                 await websocket.receive_text()
             )
             chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
-            url_paths: list[str] = data_from_frontend.get("file_url_paths", [])
+            url_paths: list[str] = data_from_frontend.get("files", [])
 
             # Normalize paths
             for idx, url_path in enumerate(url_paths):
                 if not url_path.startswith("/"):
                     url_paths[idx] = f"/{url_path}"
 
-            file_urls = [f"{FRONTEND_PATH}{i}" for i in url_paths]
             conductor = manager.get_chat_interface(user_id, chat_id)
 
             loop = asyncio.get_running_loop()
@@ -176,7 +172,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
             # Run the blocking generator in a separate thread
             def run_generator():
                 for log_message in conductor.process_user_input(
-                    chat_messages, file_urls
+                    chat_messages, url_paths
                 ):
                     actual_message = log_message
                     role = "assistant"
