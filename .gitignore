@@ -5,3 +5,4 @@ __pycache__
 *log
 pneuma_seeker_state.duckdb
 temp
+server.out
