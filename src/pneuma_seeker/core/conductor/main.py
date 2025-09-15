@@ -85,7 +85,7 @@ class Conductor:
                     output_data_id=doc.doc_id,
                     output_data_ref={"doc_path": doc.path or ""},
                     source_retriever=RetrieverType.USER,
-                    op_description=f"User-uploaded data",
+                    op_description="User-uploaded data",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

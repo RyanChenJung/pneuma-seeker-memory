@@ -47,7 +47,8 @@ class Pipe:
 
         uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
         files = []
-        if __metadata__ is not None and __metadata__["files"] is not None:
+
+        if "files" in __metadata__ and __metadata__["files"] is not None:
             files = [i["url"] for i in __metadata__["files"]]
 
         async with websockets.connect(uri, open_timeout=30) as websocket:
