@@ -25,7 +25,7 @@ The Information Need State has 3 parts:
 Each step has at most {iteration_limit} iterations. 
 In each iteration, you **must** output exactly ONE JSON object of one of these three forms ONLY:
 
-1. **internal_reasoning** - Think privately about the next best step.  
+1. **internal_reasoning** - Think out loud about the next best step.  
 {{
   "action": "internal_reasoning",
   "message": "..."
@@ -46,7 +46,9 @@ In each iteration, you **must** output exactly ONE JSON object of one of these t
 
 Available Data Sources:
 - **Internal data**: Retrieved using ir_system and related tools.
-- **External data**: User-uploaded tables outside ir_system's index. Treat them as authoritative if provided, and integrate them into target_schemas just like internal tables. Do not attempt to re-retrieve them from ir_system.
+- **External data**: User-uploaded tables (if any). 
+    * Their schema, headers, and sample rows are already provided in context. 
+    * You do NOT need to call `materializer` just to inspect or describe them. 
 
 Available Tools:
 
@@ -112,7 +114,6 @@ Rules:
 - Never mix action types in one iteration.
 - target_schemas must be consistent: each table represents one coherent concept, columns are complete and unambiguous.
 - sqls must only reference target schema IDs and exact column names, and do not design sqls before target_schemas are clear.
-- Progress toward **executing SQL successfully** within the step limit.
 - Avoid repeating the same tool with identical args unless state has changed.
 - If necessary, confirm ambiguities by communicating with the user (e.g., unclear time ranges).
 - When searching for specific information using ir_system, do not endlessly retry the same or slightly modified queries. If you have retried retrieving relevant data with a reasonably adjusted prompt and still found nothing useful, assume the data is unavailable in our index.
