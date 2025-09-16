@@ -6,7 +6,7 @@ icon_url: data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRG
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional
 from fastapi.requests import Request
 from pathlib import Path
 import os
@@ -109,7 +109,7 @@ class Action:
         chat_id = body["chat_id"]
         user_id = __user__["id"]
         user_valves = (__user__ or {}).get("valves") or self.UserValves()
-        pattern = r"\{\{PROV_GRAPH_FILE_ID_[^}]+\}\}"
+        pattern = r"\{\{HTML_FILE_ID_[^}]+\}\}"  # <- unified placeholder pattern
 
         try:
             messages = body.get("messages") or []
@@ -141,7 +141,8 @@ class Action:
                 graph_html = await self._fetch_graph_html(user_id, chat_id)
                 file_id = self._write_graph_file(user_id, graph_html)
 
-                new_tag = f"{{{{PROV_GRAPH_FILE_ID_{file_id}}}}}"
+                # IMPORTANT: Use HTML_FILE_ID_ so OpenWebUI can render
+                new_tag = f"{{{{HTML_FILE_ID_{file_id}}}}}"
                 if last_msg["content"].strip():
                     last_msg["content"] += "\n\n" + new_tag
                 else:

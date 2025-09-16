@@ -117,7 +117,7 @@ class ConnectionManager:
 manager = ConnectionManager(
     llm_path="o4-mini",
     embed_model_path="model/weight/bge-base",
-    data_sources=["environment"],
+    data_sources=["buysite"],
 )
 
 
