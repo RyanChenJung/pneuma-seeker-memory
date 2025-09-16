@@ -118,6 +118,7 @@ class Pneuma(AbstractRetriever):
                 dictionary_id_bm25,
             )
             seen_tables: list[str] = []
+            metadata: pd.DataFrame | None = None
             for table, _, _ in all_nodes[:k]:
                 table = table.split("_SEP_")[0]
 
@@ -127,6 +128,14 @@ class Pneuma(AbstractRetriever):
                     continue
 
                 actual_table = pd.read_csv(table)
+                if metadata is None:
+                    metadata = pd.read_csv(f'../../data_src/{dataset}/metadata.csv')
+                table_name = table.split("/")[-1][:-4]
+                table_description = metadata.loc[metadata['table'] == table_name, 'value'].head(1).item()
+
+                table_metadata: dict[str, str] = dict()
+                if isinstance(table_description, str):
+                    table_metadata["description"] = table_description
 
                 actual_table.rename(columns=clean_column_table_name, inplace=True)
                 retrieval_results.append(
@@ -134,7 +143,7 @@ class Pneuma(AbstractRetriever):
                         doc_id=clean_column_table_name(table[:-4].split("/")[-1]),
                         retriever_type=RetrieverType.PNEUMA,
                         content=actual_table,
-                        metadata=dict(),
+                        metadata=table_metadata,
                         path=table,
                     )
                 )
