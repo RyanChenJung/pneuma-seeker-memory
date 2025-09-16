@@ -1,11 +1,12 @@
 from collections.abc import Generator
 from logging import Logger
+
 from numpy import ndarray
 from sentence_transformers import SentenceTransformer
 
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.model.llm_message import LLMMessage
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.utils.config import Config
 
 

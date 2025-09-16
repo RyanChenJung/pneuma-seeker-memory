@@ -1,15 +1,13 @@
-from logging import Logger
-import os
-
 from collections.abc import Generator
+from logging import Logger
 from typing import Optional
 
 from numpy import ndarray
 from openai import NOT_GIVEN, AzureOpenAI
 
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.model.llm_message import LLMMessage
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.utils.config import Config
 
 
