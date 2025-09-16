@@ -38,10 +38,13 @@ class OpenAILLM(AbstractModel):
         max_completion_tokens = None
         json_mode = False
         stream = False
+        temperature = 0
         if llm_option:
             max_completion_tokens = llm_option.max_new_tokens
             json_mode = llm_option.json_mode
             stream = llm_option.stream
+            if llm_option.temperature:
+                temperature = llm_option.temperature
 
         if stream:
             # Stream response as generator of chunks
@@ -49,7 +52,7 @@ class OpenAILLM(AbstractModel):
                 messages=messages,  # type: ignore
                 model=self.model_name,
                 seed=42,
-                temperature=1,
+                temperature=temperature,
                 max_completion_tokens=max_completion_tokens,
                 response_format={"type": "json_object"} if json_mode else NOT_GIVEN,
                 stream=stream,
@@ -68,7 +71,7 @@ class OpenAILLM(AbstractModel):
                     messages=messages,  # type: ignore
                     model=self.model_name,
                     seed=42,
-                    temperature=1,
+                    temperature=temperature,
                     max_completion_tokens=max_completion_tokens,
                     response_format={"type": "json_object"} if json_mode else NOT_GIVEN,
                 )
