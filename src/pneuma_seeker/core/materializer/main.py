@@ -132,7 +132,7 @@ class Materializer:
 
     def __gather_all_tables(self, external_data: list[AbstractDocument]):
         pneuma_retrieval_results: list[AbstractDocument] = (
-            self.state.current_retrieved_documents[RetrieverType.PNEUMA]
+            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
         )
         external_data_tables_only: list[AbstractDocument] = [
             i for i in external_data if isinstance(i, Table)
@@ -172,7 +172,7 @@ class Materializer:
                     f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
                 )
 
-                for doc in self.state.current_retrieved_documents[RetrieverType.PNEUMA]:
+                for doc in self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, []):
                     if doc.path is not None:
                         new_node = ProvenanceNode(
                             output_data_id=doc.doc_id,
@@ -224,7 +224,7 @@ class Materializer:
                 else:
                     self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
                         set(
-                            self.state.current_retrieved_documents[RetrieverType.PNEUMA]
+                            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
                         ).union(set(extra_tables))
                     )
                 if len(extra_tables) > 0:
