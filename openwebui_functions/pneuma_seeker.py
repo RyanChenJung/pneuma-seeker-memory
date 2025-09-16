@@ -51,7 +51,9 @@ class Pipe:
         if "files" in __metadata__ and __metadata__["files"] is not None:
             files = [i["url"] for i in __metadata__["files"]]
 
-        async with websockets.connect(uri, open_timeout=30) as websocket:
+        async with websockets.connect(
+            uri, open_timeout=50, ping_interval=20, ping_timeout=20
+        ) as websocket:
             await websocket.send(
                 json.dumps(
                     {
@@ -98,7 +100,7 @@ class Pipe:
                                 },
                             }
                         )
-                    else:
+                    elif message_data["sender"] == "done":
                         end = time.time()
                         await __event_emitter__(
                             {
@@ -110,7 +112,7 @@ class Pipe:
                                 },
                             }
                         )
-                        break
+                        continue
                 except websockets.ConnectionClosed:
                     await __event_emitter__(
                         {
