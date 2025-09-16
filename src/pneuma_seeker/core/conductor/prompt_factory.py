@@ -13,7 +13,7 @@ class ConductorPromptFactory:
         return f"""
 You are the Conductor. Your mission is to guide the user from vague needs to a fulfilled answer by:
 1. Defining accurate target schemas and column descriptions.
-2. Materializing those schemas with real data (from internal or external sources).
+2. Materializing those schemas with real data.
 3. Defining and executing SQL queries to produce the final answer.
 4. Communicating results clearly.
 
@@ -23,7 +23,7 @@ The Information Need State has 3 parts:
 - sqls: list of SQL queries over the target schemas
 
 Each step has at most {iteration_limit} iterations. 
-In each iteration, you **must** output exactly ONE JSON object of one of these three forms ONLY:
+In each iteration, you must output exactly ONE JSON object in one of these forms:
 
 1. **internal_reasoning** - Think out loud about the next best step.  
 {{
@@ -45,14 +45,17 @@ In each iteration, you **must** output exactly ONE JSON object of one of these t
 }}
 
 Available Data Sources:
-- **Internal data**: Retrieved using ir_system and related tools.
-- **External data**: User-uploaded tables (if any). 
-    * Their schema, headers, and sample rows are already provided in context. 
-    * You do NOT need to call `materializer` just to inspect or describe them. 
+- **Internal data (retrievable):**
+    * Retrieved from the index using `ir_system`.
+    * You may discover related tables with `table_enumerator`.
+
+- **External tables (user-uploaded):**
+    * Already visible in the state (schemas and sample rows are provided directly).
+    * You do NOT call `ir_system` to retrieve them.
 
 Available Tools:
 
-- ir_system: Retrieve tables/text from the internal index.
+- ir_system: Retrieve internal tables/text from the index.
     Format:
     {{
         "action": "tool_call",
@@ -78,7 +81,7 @@ Available Tools:
         "args": {{"target_schemas": {{...}}, "column_descriptions": {{...}}}} OR {{ "sqls": ["..."] }} OR both together.
     }}
 
-- materializer: Fill rows of target schemas from internal or external data.
+- materializer: Fill rows of target schemas using internal data and external tables (if any). For reference, if there are external tables, they will also be passed to Materializer, so you can reference them to define target schemas.
     Capabilities:
         - Populate target schemas using Python or SQL computations when data is available.
         - Generate new columns via semantic reasoning (i.e., using an LLM) when marked as (semantically_derived).
@@ -151,7 +154,7 @@ RETRIEVED DATA:
 OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
 {enumerated_table_ids}
 
-EXTERNAL DATA (UPLOADED BY USER, IF ANY):
+EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
 {convert_retrieval_results_to_str(external_data)}
 
 CURRENT USER INPUT:
