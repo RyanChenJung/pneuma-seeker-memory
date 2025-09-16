@@ -4,12 +4,13 @@
 
 A system that helps users identify and fulfill their latent information needs.
 
-## Installation
+## Running the system
 
 ```bash
-conda create --name processor python=3.12
+conda create --name pneuma_seeker python=3.12.9
 pip install -r requirements.txt
-fastapi dev src/processor/processor.py
+cd src/pneuma_seeker
+nohup fastapi dev server.py >> server.out &
 ```
 
 <!-- ## Test (NOTE: outdated tests; will be updated)
