@@ -15,6 +15,7 @@ class LLMOption:
     batch_size: Optional[int] = None
     stream: Optional[bool] = False
 
+
 @dataclass
 class EmbeddingModelOption:
     batch_size: int = 32
