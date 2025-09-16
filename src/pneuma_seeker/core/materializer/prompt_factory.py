@@ -21,10 +21,10 @@ class MaterializerPromptFactory:
         return f"""
 You are the Materializer. Your task is to fill all rows for the target schemas using:
 1. Retrieved internal data
-2. User-provided external data
+2. User-uploaded external tables (if any)
 3. Allowed operations described below
 
-Treat external data just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
+Treat external tables just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
 
 TARGET SCHEMAS:
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
@@ -40,8 +40,8 @@ AVAILABLE OPERATIONS:
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
-2. Use external data if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
-3. Internal data is reset each time Document Retriever is used; external data persists.
+2. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
+3. Internal data is reset each time Document Retriever is used; external tables persist.
 4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 5. Always assign results to the correct target schema IDs, matching column names **exactly (case-sensitive)**.
 6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
@@ -78,12 +78,12 @@ CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
 - Retrieved internal data: {convert_multi_retriever_results_to_str(retrieved_documents)}
-- User-provided external data: {convert_retrieval_results_to_str(user_provided_external_data)}
+- User-uploaded external tables: {convert_retrieval_results_to_str(user_provided_external_data)}
 - User note: {user_side_note}
 
 CORE RULES:
-1. Use external data if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
-2. Internal data is reset each time Document Retriever is used; external data persists.
+1. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
+2. Internal data is reset each time Document Retriever is used; external tables persist.
 3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 4. Always match target schema column names exactly (case-sensitive).
 5. Assign completed tables only to their correct target schema IDs.
@@ -94,7 +94,7 @@ COLUMN HANDLING:
 - Use Semantic Column Generator only when no reliable direct computation is available.
 
 TOOL USAGE:
-- If you retrieve tables and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use Table Enumerator to list all matching table IDs.
+- If you retrieve tables from Document Retriever and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use Table Enumerator to list all matching table IDs.
 - Use Semantic Column Generator only when no reliable direct computation is available.
 
 OUTPUT FORMAT:
