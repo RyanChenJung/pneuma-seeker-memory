@@ -1,15 +1,19 @@
 import glob
 import os
+from logging import Logger
 from typing import Any
 
-from logging import Logger
 from pandas import DataFrame
+
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
 from pneuma_seeker.core.ir_system.main import IRSystem
+from pneuma_seeker.core.materializer.operation.operation_description import (
+    get_operation_description,
+)
 from pneuma_seeker.core.materializer.operation.python_executor import PythonExecutor
 from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
     SemanticColumnGenerator,
@@ -21,16 +25,11 @@ from pneuma_seeker.core.materializer.operation.semantic_joiner import (
 from pneuma_seeker.core.materializer.operation.sql_executor import SQLExecutor
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
-from pneuma_seeker.core.materializer.operation.operation_description import (
-    get_operation_description,
-)
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
-from pneuma_seeker.provenance.graph import (
-    ProvenanceGraph,
-    ProvenanceNode,
-)
+from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_code, parse_json
 
 
@@ -87,10 +86,17 @@ class Materializer:
             ),
         )
 
-        num_iterations = 0
+        # Future-TODO: Use more fundamental safeguard; currently, we
+        # prevent repetitive iteration that can happen, usually if
+        # the model is confident it has produced all tables specified
+        # in T, even though it is not enough.
+        prev_response = ""
+        repetitive_response_count = 0
+
+        curr_iteration = 0
         llm_messages = [sys_prompt]
         while not self.__check_completion(T):
-            num_iterations += 1
+            curr_iteration += 1
             self.__log("Planning next materialization step")
             llm_messages.append(
                 LLMMessage(
@@ -99,7 +105,7 @@ class Materializer:
                         self.state.current_retrieved_documents,
                         list(self.state.intermediate_tables),
                         self.actions,
-                        num_iterations,
+                        curr_iteration,
                         user_side_note,
                         external_data,
                     ),
@@ -107,6 +113,13 @@ class Materializer:
             )
 
             response = "".join(self.llm.chat(llm_messages, LLMOption(json_mode=True)))
+            if response == prev_response:
+                repetitive_response_count += 1
+            else:
+                prev_response = response
+            if repetitive_response_count == 5:
+                break
+
             self.__log(f"LLM response: {response}")
             llm_messages.append(
                 LLMMessage(
@@ -172,7 +185,9 @@ class Materializer:
                     f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
                 )
 
-                for doc in self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, []):
+                for doc in self.state.current_retrieved_documents.get(
+                    RetrieverType.PNEUMA, []
+                ):
                     if doc.path is not None:
                         new_node = ProvenanceNode(
                             output_data_id=doc.doc_id,
@@ -224,7 +239,9 @@ class Materializer:
                 else:
                     self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
                         set(
-                            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
+                            self.state.current_retrieved_documents.get(
+                                RetrieverType.PNEUMA, []
+                            )
                         ).union(set(extra_tables))
                     )
                 if len(extra_tables) > 0:
@@ -732,7 +749,7 @@ class Materializer:
                 continue
 
     def __log(self, text):
-        self.logger.info(f"[MATERIALIZER] {text}")
+        formatted_log(self.logger, "MATERIALIZER", text)
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):
         csv_path = os.path.join(

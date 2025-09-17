@@ -42,3 +42,7 @@ def setup_logger(
             logger.addHandler(file_handler)
 
     return logger
+
+
+def formatted_log(logger: logging.Logger, component_name: str, text: str):
+    logger.info(f"[{component_name}] {text}")

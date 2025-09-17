@@ -1,15 +1,15 @@
 from logging import Logger
 from typing import Optional
+
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.prompt_factory import PromptFactory
-from pneuma_seeker.core.ir_system.data_model import (
-    AbstractDocument,
-)
 from pneuma_seeker.core.ir_system.retriever.retriever_factory import (
+    RetrieverFactory,
     RetrieverModel,
     RetrieverType,
-    RetrieverFactory,
 )
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.utils.logger import formatted_log
 
 
 class IRSystem:
@@ -81,4 +81,4 @@ class IRSystem:
         return documents
 
     def __log(self, text: str):
-        self.logger.info(f"[IRSystem] {text}")
+        formatted_log(self.logger, "IR System", text)
