@@ -73,6 +73,7 @@ class Materializer:
         sqls: list[str],
         user_side_note="",
         external_data: list[AbstractDocument] = [],
+        prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
     ) -> dict[str, DataFrame]:
         self.__log(f"Materializing {len(T)} tables")
         self.__cleanup_system()
@@ -85,6 +86,14 @@ class Materializer:
                 operation_description=get_operation_description(),
             ),
         )
+
+        if len(prefetched_ir_docs) > 0:
+            for retriever_type in prefetched_ir_docs:
+                prefetched_docs = prefetched_ir_docs[retriever_type]
+                if len(prefetched_docs) > 0:
+                    self.state.current_retrieved_documents[retriever_type] = (
+                        prefetched_docs
+                    )
 
         # Future-TODO: Use more fundamental safeguard; currently, we
         # prevent repetitive iteration that can happen, usually if

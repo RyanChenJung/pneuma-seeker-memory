@@ -370,6 +370,7 @@ class Conductor:
                 self.info_need_state.sqls,
                 note,
                 self.external_documents,
+                self.current_retrieval_results,
             )
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."

@@ -45,6 +45,7 @@ CORE RULES:
 4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 5. Always assign results to the correct target schema IDs, matching column names **exactly (case-sensitive)**.
 6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
+7. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - (semantically_derived) and user notes are hints, not guarantees.
@@ -87,6 +88,7 @@ CORE RULES:
 3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 4. Always match target schema column names exactly (case-sensitive).
 5. Assign completed tables only to their correct target schema IDs.
+6. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - Treat (semantically_derived) and user notes as hints only.
