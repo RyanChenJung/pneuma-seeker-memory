@@ -30,8 +30,6 @@ class ChatInterface:
         self.enable_persistence = enable_persistence
         if self.enable_persistence:
             persistence.init_db()
-
-            # Restore previous state
             info_state, retr_results, enumerated_table_ids, prov_graph = (
                 persistence.load_state(user_id, chat_id, self.logger)
             )
@@ -46,8 +44,7 @@ class ChatInterface:
         external_data_paths: list[str] = [],
     ):
         """
-        Processes user input. If persistence is enabled, the `interactions`
-        argument is ignored. If not enabled, then interactions must be passed.
+        Processes user input, as encapsulated in `chat_messages`.
         """
         conductor_final_response = ""
         human_input = chat_messages[-1]["content"]
@@ -75,7 +72,6 @@ class ChatInterface:
         yield "DONE"
 
         if self.enable_persistence:
-            # Save current state of Conductor
             persistence.save_state(
                 self.user_id,
                 self.chat_id,
