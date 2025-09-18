@@ -1,10 +1,11 @@
+import asyncio
 import json
 import time
-import websockets
+from typing import Callable
 
+import websockets
 from fastapi import Request
 from pydantic import BaseModel
-from typing import Callable
 
 
 class Pipe:
@@ -13,13 +14,32 @@ class Pipe:
 
     def __init__(self):
         self.valves = self.Valves()
+        # Persistent connections keyed by (user_id, chat_id)
+        self.connections: dict[
+            tuple[str, str],
+            websockets.WebSocketClientProtocol,
+        ] = {}
+        # Locks to ensure one recv at a time per connection
+        self.locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     def get_capabilities(self):
         return {
-            "allow_file_upload": False,
+            "allow_file_upload": True,
             "allow_image_input": False,
             "allow_code_interpreter": False,
         }
+
+    async def get_connection(
+        self, user_id: str, chat_id: str
+    ) -> websockets.WebSocketClientProtocol:
+        key = (user_id, chat_id)
+        if key not in self.connections or self.connections[key].closed:
+            uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
+            self.connections[key] = await websockets.connect(
+                uri, open_timeout=50, ping_interval=20, ping_timeout=20
+            )
+            self.locks[key] = asyncio.Lock()
+        return self.connections[key]
 
     async def pipe(
         self,
@@ -32,8 +52,9 @@ class Pipe:
         start = time.time()
         user_id = __metadata__["user_id"]
         chat_id = __metadata__["chat_id"]
-
         chat_messages = [i for i in body["messages"] if i["role"] != "system"]
+        files = [i["url"] for i in (__metadata__.get("files") or [])]
+
         await __event_emitter__(
             {
                 "type": "status",
@@ -45,36 +66,30 @@ class Pipe:
             }
         )
 
-        uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
-        files = []
+        websocket = await self.get_connection(user_id, chat_id)
+        lock = self.locks[(user_id, chat_id)]
 
-        if "files" in __metadata__ and __metadata__["files"] is not None:
-            files = [i["url"] for i in __metadata__["files"]]
-
-        async with websockets.connect(
-            uri, open_timeout=50, ping_interval=20, ping_timeout=20
-        ) as websocket:
-            await websocket.send(
-                json.dumps(
-                    {
-                        "chat_messages": chat_messages,
-                        "files": files,
-                    }
-                )
-            )
-
-            await __event_emitter__(
+        await websocket.send(
+            json.dumps(
                 {
-                    "type": "status",
-                    "data": {
-                        "description": "Processing input...",
-                        "done": False,
-                        "hidden": False,
-                    },
+                    "chat_messages": chat_messages,
+                    "files": files,
                 }
             )
+        )
 
-            user_buffer = ""
+        await __event_emitter__(
+            {
+                "type": "status",
+                "data": {
+                    "description": "Processing input...",
+                    "done": False,
+                    "hidden": False,
+                },
+            }
+        )
+
+        async with lock:
             while True:
                 try:
                     message = await websocket.recv()
@@ -112,16 +127,19 @@ class Pipe:
                                 },
                             }
                         )
-                        continue
+                        break
                 except websockets.ConnectionClosed:
                     await __event_emitter__(
                         {
                             "type": "status",
                             "data": {
-                                "description": f"Processing done.",
+                                "description": "Processing done (connection closed).",
                                 "done": True,
                                 "hidden": False,
                             },
                         }
                     )
+                    # Remove from dict to allow reconnect
+                    self.connections.pop((user_id, chat_id), None)
+                    self.locks.pop((user_id, chat_id), None)
                     break
