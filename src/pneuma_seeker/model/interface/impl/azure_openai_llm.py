@@ -40,7 +40,7 @@ class AzureOpenAILLM(AbstractModel):
         max_completion_tokens = None
         json_mode = False
         stream = False
-        temperature = 0
+        temperature = 1
         if llm_option:
             max_completion_tokens = llm_option.max_new_tokens
             json_mode = llm_option.json_mode
