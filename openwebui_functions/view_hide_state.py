@@ -8,26 +8,22 @@ icon_url: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAw
 from pydantic import BaseModel, Field
 from typing import Optional
 from fastapi.requests import Request
-from pathlib import Path
-import os
-import uuid
-import time
 import logging
 import re
 import httpx
-
-from open_webui.models.files import FilesTable, FileForm
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
 class Action:
+    START_COMMENT = "<!-- PNEUMA_STATE_START -->"
+    END_COMMENT = "<!-- PNEUMA_STATE_END -->"
+
     class Valves(BaseModel):
         show_status: bool = Field(
             default=True, description="Show status of the action."
         )
-        html_filename_suffix: str = Field(default="hello_launcher.html")
 
     class UserValves(BaseModel):
         show_status: bool = Field(
@@ -37,50 +33,8 @@ class Action:
     def __init__(self):
         self.valves = self.Valves()
 
-    def _write_launcher_file(self, user_id: str, html_content: str) -> str:
-        directory = "action_embed"
-        base_path = os.path.join("uploads", directory)
-        os.makedirs(base_path, exist_ok=True)
-
-        # --- Clean up old files ---
-        for f in Path(base_path).glob("*"):
-            try:
-                f.unlink()
-            except Exception as e:
-                print(f"Warning: could not delete old file {f}: {e}")
-
-        # --- Create new file ---
-        filename = f"{int(time.time()*1000)}_{self.valves.html_filename_suffix}"
-        file_path = os.path.join(base_path, filename)
-
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-
-        meta = {
-            "source": file_path,
-            "title": "Hello World Launcher",
-            "content_type": "text/html",
-            "size": os.path.getsize(file_path),
-            "path": file_path,
-        }
-
-        # Create FileForm and insert via FilesTable
-        form_data = FileForm(
-            id=str(uuid.uuid4()),
-            filename=f"{directory}/{user_id}/{filename}",
-            path=file_path,
-            meta=meta,
-            data={},
-        )
-
-        new_file = FilesTable().insert_new_file(user_id, form_data)
-        if not new_file:
-            raise Exception("Failed to insert new file")
-
-        return new_file.id
-
     def _strip_all_placeholders(self, messages: list, pattern: str) -> None:
-        """Remove all HTML_FILE_ID placeholders from every message, tidy whitespace."""
+        """Remove matching placeholders from every message, tidy whitespace."""
         for msg in messages:
             content = msg.get("content", "") or ""
             content = re.sub(pattern, "", content)
@@ -90,14 +44,14 @@ class Action:
     async def _fetch_launcher_html(self, user_id: str, chat_id: str) -> str:
         url = f"http://127.0.0.1:8000/state/html/{user_id}/{chat_id}"
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(30.0)
-            ) as client:  # 30s timeout
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
-                return resp.text
+                html = resp.text
+                # Inject a taller height wrapper to reduce scrolling
+                html = html.replace("<body", '<body style="min-height:800px;"')
+                return html
         except httpx.ReadTimeout:
-            # fallback HTML if the backend is too slow
             return "<h1>Backend timed out</h1><p>Please try again later.</p>"
         except Exception as e:
             return f"<h1>Error fetching HTML</h1><p>{e}</p>"
@@ -111,50 +65,62 @@ class Action:
         __metadata__=None,
         __event_call__=None,
     ) -> Optional[dict]:
-        chat_id = body["chat_id"]
-        user_id = __user__["id"]
         user_valves = (__user__ or {}).get("valves") or self.UserValves()
-        pattern = r"\{\{HTML_FILE_ID_[^}]+\}\}"
+
+        # pattern to detect the fenced html block that contains the start/end comments
+        block_pattern = rf"```html\s*{re.escape(self.START_COMMENT)}.*?{re.escape(self.END_COMMENT)}\s*```"
 
         try:
-            # Determine ON vs OFF based on whether the last message *currently* has a placeholder
             messages = body.get("messages") or []
             if not messages:
                 return body
 
             last_msg = messages[-1]
-            last_content_before = last_msg.get("content", "") or ""
-            last_had_before = bool(re.search(pattern, last_content_before))
+            last_content = last_msg.get("content", "") or ""
 
-            # Status: on/off intent
+            block_shown = bool(re.search(block_pattern, last_content, flags=re.DOTALL))
+
             if __event_emitter__ and user_valves.show_status:
                 await __event_emitter__(
                     {
                         "type": "status",
                         "data": {
                             "description": (
-                                "Hiding State…" if last_had_before else "Opening State…"
+                                "Hiding State…" if block_shown else "Opening State…"
                             ),
                             "done": False,
                         },
                     }
                 )
 
-            # 1) Remove ALL placeholders across ALL messages
-            self._strip_all_placeholders(messages, pattern)
-
-            # 2) If last had one → toggle OFF (do nothing further)
-            #    If last did not → toggle ON (create new file + insert only in last message)
-            if not last_had_before:
+            if block_shown:
+                # Toggle OFF → remove the fenced html block (including comments)
+                last_msg["content"] = re.sub(
+                    block_pattern, "", last_content, flags=re.DOTALL
+                ).strip()
+            else:
+                # Toggle ON → fetch HTML and insert WITH the markers inside the code fence
                 user_id = (__user__ or {}).get("id", "anonymous")
-                launcher_html = await self._fetch_launcher_html(user_id, chat_id)
-                file_id = self._write_launcher_file(user_id, launcher_html)
+                launcher_html = await self._fetch_launcher_html(
+                    user_id, body["chat_id"]
+                )
 
-                new_tag = f"{{{{HTML_FILE_ID_{file_id}}}}}"
-                if last_msg["content"].strip():
-                    last_msg["content"] += "\n\n" + new_tag
+                # Escape triple backticks in the fetched HTML so the fence doesn't break
+                launcher_html = launcher_html.replace("```", "`\u200b``")
+
+                # Put the HTML comments inside the fenced code block
+                html_block = (
+                    "```html\n"
+                    f"{self.START_COMMENT}\n"
+                    f"{launcher_html}\n"
+                    f"{self.END_COMMENT}\n"
+                    "```"
+                )
+
+                if last_content.strip():
+                    last_msg["content"] += "\n\n" + html_block
                 else:
-                    last_msg["content"] = new_tag
+                    last_msg["content"] = html_block
 
             if __event_emitter__ and user_valves.show_status:
                 await __event_emitter__(
@@ -162,7 +128,7 @@ class Action:
                         "type": "status",
                         "data": {
                             "description": (
-                                "State Hidden." if last_had_before else "State Opened."
+                                "State Hidden." if block_shown else "State Opened."
                             ),
                             "done": True,
                         },
@@ -171,9 +137,10 @@ class Action:
 
         except Exception as e:
             logger.exception("Error in State View Action")
-            if body.get("messages"):
-                body["messages"][-1]["content"] = (
-                    body["messages"][-1].get("content", "") or ""
+            if messages:
+                last_msg = messages[-1]
+                last_msg["content"] = (
+                    last_msg.get("content", "") or ""
                 ) + f"\n\nError: {e}"
             if __event_emitter__ and user_valves.show_status:
                 await __event_emitter__(
