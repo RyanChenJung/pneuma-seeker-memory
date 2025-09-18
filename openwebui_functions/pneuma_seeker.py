@@ -31,15 +31,33 @@ class Pipe:
 
     async def get_connection(
         self, user_id: str, chat_id: str
-    ) -> websockets.WebSocketClientProtocol:
+    ):
         key = (user_id, chat_id)
-        if key not in self.connections or self.connections[key].closed:
+        conn = self.connections.get(key)
+
+        # Determine if connection is missing or closed
+        should_connect = False
+        if conn is None:
+            should_connect = True
+        else:
+            # websockets < 12 (WebSocketClientProtocol)
+            if hasattr(conn, "open"):
+                should_connect = not conn.open
+            elif hasattr(conn, "closed"):
+                # websockets >= 12 (ClientConnection.closed is a Future)
+                closed = getattr(conn, "closed", None)
+                if closed is not None and hasattr(closed, "done"):
+                    should_connect = closed.done()
+
+        if should_connect:
             uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
-            self.connections[key] = await websockets.connect(
+            conn = await websockets.connect(
                 uri, open_timeout=50, ping_interval=20, ping_timeout=20
             )
+            self.connections[key] = conn
             self.locks[key] = asyncio.Lock()
-        return self.connections[key]
+
+        return conn
 
     async def pipe(
         self,
@@ -139,7 +157,6 @@ class Pipe:
                             },
                         }
                     )
-                    # Remove from dict to allow reconnect
                     self.connections.pop((user_id, chat_id), None)
                     self.locks.pop((user_id, chat_id), None)
                     break
