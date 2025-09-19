@@ -10,10 +10,26 @@
   <style>
     body {
       background-color: #f6f6f6;
+      font-family: system-ui, sans-serif;
     }
 
+    /* Header styling for all cards */
     .card-header {
-      font-weight: bold;
+      font-weight: 600;
+      background-color: #f8f9fa; /* soft light gray */
+      color: #1d1d1d;
+      cursor: pointer; /* indicates clickable if collapsible */
+    }
+
+    /* Badges */
+    .badge-materialized {
+      background-color: #FFD580; /* soft orange */
+      color: #1d1d1d;
+    }
+
+    .badge-executed {
+      background-color: #A9C1FF; /* soft blue */
+      color: #1d1d1d;
     }
 
     table {
@@ -35,9 +51,13 @@
     }
 
     .table-title {
-      font-weight: bold;
+      font-weight: 500;
       font-size: 0.9rem;
       margin-bottom: 0.25rem;
+    }
+
+    ol#sql-list {
+      margin-bottom: 1rem;
     }
 
     .prov-iframe {
@@ -51,28 +71,49 @@
 
 <body class="p-4">
   <div class="container">
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-dark text-white d-flex align-items-center">
-        <i class="bi bi-database-fill me-2"></i> Pneuma-Seeker's State
-      </div>
-      <div class="card-body">
-        <h5 class="mb-3 d-flex align-items-center">
-          <i class="bi bi-table"></i>
-          <span class="ms-2">T (Target Tables with Sample Rows)</span>
-          <span class="badge bg-primary ms-2">Materialized: <span id="materialized-status">No</span></span>
-        </h5>
-        <div id="T" class="tables-flex mb-4"></div>
 
-        <h5 class="mb-3 d-flex align-items-center">
-          <i class="bi bi-code-slash"></i>
-          <span class="ms-2">Q (SQL Queries)</span>
-          <span class="badge bg-success ms-2">Executed: <span id="sql-status">No</span></span>
-        </h5>
-        <ol id="sql-list" class="list-group list-group-numbered"></ol>
+    <!-- Collapsible Pneuma's State Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center"
+           data-bs-toggle="collapse"
+           data-bs-target="#pneumaCardBody"
+           aria-expanded="true"
+           aria-controls="pneumaCardBody">
+        <i class="bi bi-database-fill me-2"></i> Pneuma's State
+      </div>
+
+      <div id="pneumaCardBody" class="collapse show">
+        <div class="card-body">
+          <!-- Target Tables Section -->
+          <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-table"></i>
+            <span class="ms-2">T (Target Tables) <sup data-bs-toggle="tooltip"
+                title="Tables are shown with sample rows.">*</sup></span>
+            <span class="badge ms-2 badge-materialized">Materialized: <span id="materialized-status">No</span></span>
+          </h5>
+          <div id="T" class="tables-flex mb-4"></div>
+
+          <!-- SQL Queries Section -->
+          <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-code-slash"></i>
+            <span class="ms-2">Q (SQL Queries)</span>
+            <span class="badge ms-2 badge-executed">Executed: <span id="sql-status">No</span></span>
+          </h5>
+          <ol id="sql-list" class="list-group list-group-numbered"></ol>
+        </div>
       </div>
     </div>
-    <button class="btn btn-outline-primary mb-2" id="toggle-graph">Show Provenance Graph</button>
-    <div id="graph-container" style="display:none;"></div>
+
+    <!-- Pyvis Provenance Graph Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center">
+        <i class="bi bi-diagram-3-fill me-2"></i> Provenance Graph
+      </div>
+      <div class="card-body p-0">
+        <iframe id="prov-iframe" class="prov-iframe"></iframe>
+      </div>
+    </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -140,25 +181,10 @@
       sqlList.appendChild(li);
     });
 
-    const prov_graph_html = {{ prov_graph_html | tojson }};
-    const toggleBtn = document.getElementById('toggle-graph');
-    const graphContainer = document.getElementById('graph-container');
-
-    toggleBtn.addEventListener('click', function () {
-      if (graphContainer.style.display === 'none') {
-        graphContainer.style.display = 'block';
-        toggleBtn.textContent = 'Hide Provenance Graph';
-        if (!graphContainer.querySelector('iframe')) {
-          const iframe = document.createElement('iframe');
-          iframe.className = 'prov-iframe';
-          iframe.srcdoc = prov_graph_html;
-          graphContainer.appendChild(iframe);
-        }
-      } else {
-        graphContainer.style.display = 'none';
-        toggleBtn.textContent = 'Show Provenance Graph';
-      }
-    });
+    // Insert Pyvis graph HTML
+    const provIframe = document.getElementById("prov-iframe");
+    const provGraphHtml = {{ prov_graph_html | tojson | safe }};
+    provIframe.srcdoc = provGraphHtml;
   </script>
 </body>
 
