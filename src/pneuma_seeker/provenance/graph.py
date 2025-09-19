@@ -1,11 +1,10 @@
 import html
 import uuid
-
+import threading
 from logging import Logger
 from typing import Any
 
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
-
 from pyvis.network import Network
 
 
@@ -13,8 +12,8 @@ class ProvenanceNode:
     def __init__(
         self,
         output_data_id: str,
-        output_data_ref: dict[str, str],  # Either path to the output data or ways to derive it
-        source_retriever: RetrieverType,  # Where the (input) data comes from
+        output_data_ref: dict[str, str],
+        source_retriever: RetrieverType,
         op_description: str,
     ):
         self.id = str(uuid.uuid4())
@@ -36,6 +35,22 @@ class ProvenanceGraph:
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
 
+        self._graph_version: int = 0
+        self._cached_html: str | None = None
+        self._cached_version: int = -1
+        self._lock = threading.RLock()
+
+    def _increment_version(self) -> None:
+        with self._lock:
+            self._graph_version += 1
+            self._cached_version = -1
+            self._cached_html = None
+
+    def _invalidate_cache(self) -> None:
+        with self._lock:
+            self._cached_version = -1
+            self._cached_html = None
+
     def add_node(self, node: ProvenanceNode, overwrite=False):
         if not isinstance(node, ProvenanceNode):
             raise ValueError(f"node must be a ProvenanceNode, got {type(node)}")
@@ -44,25 +59,8 @@ class ProvenanceGraph:
                 f"node {node.id} already exists; set overwrite = True to update"
             )
         self.nodes[node.id] = node
+        self._increment_version()
         return node
-
-    def get_node_by_id(self, node_id: str):
-        return self.nodes.get(node_id)
-
-    def get_node(self, filters: dict[str, Any]) -> ProvenanceNode | None:
-        """Returns the first node where all filters match (attr=value)."""
-        for node in self.nodes.values():
-            if all(getattr(node, k, None) == v for k, v in filters.items()):
-                return node
-        return None
-
-    def get_nodes(self, filters: dict[str, Any]) -> list[ProvenanceNode]:
-        """Returns all nodes where all filters match (attr=value)."""
-        return [
-            node
-            for node in self.nodes.values()
-            if all(getattr(node, k, None) == v for k, v in filters.items())
-        ]
 
     def connect(self, parent: ProvenanceNode, child: ProvenanceNode):
         if not isinstance(parent, ProvenanceNode):
@@ -70,16 +68,41 @@ class ProvenanceGraph:
         if not isinstance(child, ProvenanceNode):
             raise ValueError(f"child must be a ProvenanceNode, got {type(child)}")
         parent.add_child(child)
+        self._increment_version()
         self.logger.info(
             f"[PROV GRAPH] Parent node {parent.id} and child node {child.id} connected successfully."
         )
 
+    def reset_for_materialization(self):
+        new_nodes: dict[str, ProvenanceNode] = {
+            node_id: node
+            for node_id, node in self.nodes.items()
+            if node.source_retriever == RetrieverType.USER
+        }
+        self.nodes = new_nodes
+        self._increment_version()
+        self.logger.info(f"[PROV GRAPH] The graph has been reset successfully.")
+
+    def get_node_by_id(self, node_id: str):
+        return self.nodes.get(node_id)
+
+    def get_node(self, filters: dict[str, Any]) -> ProvenanceNode | None:
+        for node in self.nodes.values():
+            if all(getattr(node, k, None) == v for k, v in filters.items()):
+                return node
+        return None
+
+    def get_nodes(self, filters: dict[str, Any]) -> list[ProvenanceNode]:
+        return [
+            node
+            for node in self.nodes.values()
+            if all(getattr(node, k, None) == v for k, v in filters.items())
+        ]
+
     def trace_upstream(self, node: ProvenanceNode) -> list[ProvenanceNode]:
-        """Return all ancestors of a given node, traversing parents recursively."""
         return self.__trace(node, "parents")
 
     def trace_downstream(self, node: ProvenanceNode) -> list[ProvenanceNode]:
-        """Return all descendants of a given node, traversing children recursively."""
         return self.__trace(node, "children")
 
     def __trace(self, start: ProvenanceNode, relation: str) -> list[ProvenanceNode]:
@@ -93,7 +116,19 @@ class ProvenanceGraph:
                     stack.append(neighbor)
         return result
 
-    def get_graph_visualization(self):
+    def get_graph_visualization(self, force_refresh: bool = False) -> str:
+        """
+        Return cached html if available and up-to-date, otherwise regenerate and cache.
+        """
+        with self._lock:
+            if (
+                not force_refresh
+                and self._cached_html is not None
+                and self._cached_version == self._graph_version
+            ):
+                self.logger.debug("[PROV GRAPH] Returning cached graph visualization.")
+                return self._cached_html
+
         net = Network(notebook=True, directed=True, cdn_resources="in_line")
 
         for node in self.nodes.values():
@@ -105,7 +140,6 @@ class ProvenanceGraph:
                 # Children: {len(node.children)}
                 # Parents: {len(node.parents)}
                 """
-
                 net.add_node(
                     node.id,
                     label=node.output_data_id,
@@ -128,13 +162,16 @@ class ProvenanceGraph:
                     )
                 net.add_edge(node.id, child.id)
 
-        return net.generate_html()
+        html_out = net.generate_html()
+
+        with self._lock:
+            self._cached_html = html_out
+            self._cached_version = self._graph_version
+            self.logger.debug("[PROV GRAPH] Graph visualization cached.")
+
+        return html_out
 
     def to_text(self, node: ProvenanceNode | None = None, max_depth: int = 5) -> str:
-        """
-        Returns a textual representation of the graph with integer IDs instead of UUIDs.
-        """
-        # Mapping from original UUIDs to integer IDs for readability + token saving
         id_map: dict[str, int] = {}
         next_id = 1
 
@@ -169,13 +206,3 @@ class ProvenanceGraph:
             roots = [n for n in self.nodes.values() if not n.parents]
             all_texts = [_node_text(root, 0, visited_nodes) for root in roots]
             return "\n\n".join(all_texts)
-
-    def reset_for_materialization(self):
-        new_nodes: dict[str, ProvenanceNode] = {}
-        for node_id, node in self.nodes.items():
-            if node.source_retriever == RetrieverType.USER:
-                new_nodes[node_id] = node
-        self.nodes = new_nodes
-        self.logger.info(
-            f"[PROV GRAPH] The graph has been reset successfully."
-        )

@@ -3,6 +3,7 @@ import json
 import os
 
 import asyncio
+import re
 from typing import Any
 
 from datetime import datetime
@@ -139,6 +140,26 @@ async def read_graph_html(request: Request, user_id: str, chat_id: str):
     conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
     prov_graph = conductor.prov_graph
     return prov_graph.get_graph_visualization()
+
+
+@app.get("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
+async def read_combined_html(request: Request, user_id: str, chat_id: str):
+    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    state = conductor.info_need_state.get_current_state_instance()
+    prov_graph_html = conductor.prov_graph.get_graph_visualization()
+
+    match = re.search(
+        r"<body.*?>(.*?)</body>", prov_graph_html, re.IGNORECASE | re.DOTALL
+    )
+    if match:
+        prov_graph_html = match.group(1)
+    else:
+        prov_graph_html = prov_graph_html
+
+    return templates.TemplateResponse(
+        "index2.html",
+        {"request": request, "state": state, "prov_graph_html": prov_graph_html},
+    )
 
 
 @app.get("/helper")
