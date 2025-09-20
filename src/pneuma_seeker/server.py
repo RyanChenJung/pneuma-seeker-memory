@@ -11,9 +11,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from torch.backends import cudnn
 
-from pneuma_seeker.core.conductor import persistence
-from pneuma_seeker.core.conductor.chat_interface import ChatInterface
+from pneuma_seeker.core.chat_interface import ChatInterface
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.core.persistence import get_unique_user_chat_ids
 from pneuma_seeker.model.llm_message import LLMMessage
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -151,7 +151,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
 
 @app.get("/helper")
 async def helper():
-    res = persistence.get_unique_user_chat_ids()
+    res = get_unique_user_chat_ids()
     return {"data": res}
 
 

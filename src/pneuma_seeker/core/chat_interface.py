@@ -1,5 +1,5 @@
 import os
-from pneuma_seeker.core.conductor import persistence
+from pneuma_seeker.core.persistence import init_db, load_state, save_state
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
 from pneuma_seeker.model.llm_message import LLMMessage
@@ -29,9 +29,9 @@ class ChatInterface:
 
         self.enable_persistence = enable_persistence
         if self.enable_persistence:
-            persistence.init_db()
+            init_db()
             info_state, retr_results, enumerated_table_ids, prov_graph = (
-                persistence.load_state(user_id, chat_id, self.logger)
+                load_state(user_id, chat_id, self.logger)
             )
             self.conductor.info_need_state = info_state
             self.conductor.current_retrieval_results = retr_results
@@ -73,7 +73,7 @@ class ChatInterface:
         yield "DONE"
 
         if self.enable_persistence:
-            persistence.save_state(
+            save_state(
                 self.user_id,
                 self.chat_id,
                 self.conductor.info_need_state,

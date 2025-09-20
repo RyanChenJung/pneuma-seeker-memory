@@ -18,10 +18,15 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.utils.cleaner import clean_column_table_name
 
 DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "pneuma_seeker_state.duckdb"
+    os.path.dirname(os.path.abspath(__file__)), "pneuma_seeker.duckdb"
 )
 TARGET_SCHEMAS_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "target_tables"
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "..",
+    "..",
+    "data_src",
+    "target_tables",
 )
 
 
