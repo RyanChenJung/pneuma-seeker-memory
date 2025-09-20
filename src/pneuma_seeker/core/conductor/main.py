@@ -36,7 +36,7 @@ class Conductor:
         logger: Logger,
         data_sources: list[str],
         config: Config,
-        iteration_limit = 5,
+        iteration_limit=5,
     ) -> None:
         self.logger = logger
         self.data_sources = data_sources
@@ -120,30 +120,22 @@ class Conductor:
                 )
             )
 
-            # Get streaming generator from LLM
             llm_output_gen = self.llm.chat(
                 llm_messages, LLMOption(json_mode=True, stream=True)
             )
-
-            # IMPORTANT: stream_message_content_from_chunks returns (stream_gen, raw_buffer)
-            # where raw_buffer is a mutable list the stream helper appends raw chunks into.
-            stream_gen, raw_buffer = stream_message_content_from_chunks(llm_output_gen)
-
-            # Stream user-facing characters immediately (if any).
-            # Do NOT try to build the full_response from these chars — they are ONLY the
-            # user-facing 'message' parts, not the full assistant output (JSON wrappers, etc.).
+            stream_gen, raw_buffer = self.__stream_message_content_from_chunks(
+                llm_output_gen
+            )
             for char in stream_gen:
                 yield char
                 is_user_facing_response = True  # we saw at least one streamed char
 
             full_response = "".join(raw_buffer) if raw_buffer else ""
-            # Append full response to message history (so the next LLM call gets a history)
             if full_response:
                 llm_messages.append(
                     LLMMessage(role=Role.ASSISTANT.value, content=full_response)
                 )
 
-            # Parse action from accumulated response
             try:
                 action = parse_json(full_response)
             except Exception:
@@ -478,7 +470,6 @@ class Conductor:
         Executes the SQLs (sequentially) over the target schemas.
         The result (for now) is a scalar (converted to string).
         """
-        # Create an in-memory DuckDB connection
         con = duckdb.connect(database=":memory:")
         tables: dict[str, pd.DataFrame] = {}
         for (
@@ -494,7 +485,6 @@ class Conductor:
             f"Executing {sqls} SQL statements on the (materialized) target schemas"
         )
 
-        # Register each table into DuckDB
         for table_name, df in tables.items():
             con.register(table_name, df)
 
@@ -538,7 +528,6 @@ class Conductor:
                 print(e)
                 break
 
-        # If the result has only one cell, return it as a scalar string
         self.info_need_state.is_sql_executed = True
         final_output: list[str] = []
         for result in results:
@@ -548,15 +537,14 @@ class Conductor:
                 final_output.append(str(result))
         return final_output
 
-    def __format_available_tables(self, tables: dict[str, pd.DataFrame]):
+    def __format_available_tables(self, tables: dict[str, pd.DataFrame], num_sample=5):
         tables_repr = ""
         for table_id, table in tables.items():
             tables_repr += (
                 f"\n- Table {table_id}:\ncol: {" | ".join(list(table.columns))}"
             )
             if len(table) > 0:
-                # Sample 5 rows to represent the table
-                sample_rows = table.sample(min(5, len(table)), random_state=42)
+                sample_rows = table.sample(min(num_sample, len(table)), random_state=42)
                 sample_row_idx = 1
                 for _, data in sample_rows.iterrows():
                     str_data = [str(i) for i in data]
@@ -569,59 +557,62 @@ class Conductor:
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)
 
+    def __stream_message_content_from_chunks(
+        self,
+        chunks: Generator[str, None, None],
+    ) -> tuple[Generator[str, None, None], list[str]]:
+        """
+        Consumes chunks from LLM generator and yield only the 'message' content
+        of communicate_with_user actions/intents, ignoring JSON wrappers.
+        Returns:
+            - A generator that streams the message chunks
+            - A mutable list containing the full concatenated output
+        """
+        raw_buffer: list[str] = []
 
-def stream_message_content_from_chunks(
-    chunks: Generator[str, None, None],
-) -> tuple[Generator[str, None, None], list[str]]:
-    """
-    Consume chunks from LLM generator and yield only the 'message' content
-    of communicate_with_user actions/intents, ignoring JSON wrappers.
-    Returns:
-        - A generator that streams the message chunks
-        - A mutable list containing the full concatenated output
-    """
-    raw_buffer: list[str] = []
-
-    def _stream():
-        buffer = ""
-        json_regex = re.compile(r"\{.*?\}")
-
-        for chunk in chunks:
-            buffer += chunk
-            raw_buffer.append(chunk)
-
-            while True:
-                match = json_regex.search(buffer)
-                if not match:
-                    break
-
-                json_str = match.group()
-                try:
-                    action = json.loads(json_str)
-                except json.JSONDecodeError:
-                    break
-
-                buffer = buffer[match.end() :]
-                intent = action.get("intent") or action.get("action")
-                message_text = action.get("message")
-
-                if intent == "communicate_with_user" and isinstance(message_text, str):
-                    for char in stream_message_by_whitespace(message_text):
-                        yield char  # stream immediately
-
-    return _stream(), raw_buffer
-
-
-def stream_message_by_whitespace(message: str) -> Generator[str, None, None]:
-    """
-    Yield parts of the message whenever whitespace is encountered,
-    so the frontend receives word-level streaming.
-    """
-    buffer = ""
-    for c in message:
-        buffer += c
-        if c.isspace():
-            yield buffer
+        def _stream():
             buffer = ""
-    if buffer:
-        yield buffer
+            json_regex = re.compile(r"\{.*?\}")
+
+            for chunk in chunks:
+                buffer += chunk
+                raw_buffer.append(chunk)
+
+                while True:
+                    match = json_regex.search(buffer)
+                    if not match:
+                        break
+
+                    json_str = match.group()
+                    try:
+                        action = json.loads(json_str)
+                    except json.JSONDecodeError:
+                        break
+
+                    buffer = buffer[match.end() :]
+                    intent = action.get("intent") or action.get("action")
+                    message_text = action.get("message")
+
+                    if intent == "communicate_with_user" and isinstance(
+                        message_text, str
+                    ):
+                        for char in self.__stream_message_by_whitespace(message_text):
+                            yield char
+
+        return _stream(), raw_buffer
+
+    def __stream_message_by_whitespace(
+        self, message: str
+    ) -> Generator[str, None, None]:
+        """
+        Yields parts of the message whenever whitespace is encountered,
+        so the frontend receives word-level streaming.
+        """
+        buffer = ""
+        for c in message:
+            buffer += c
+            if c.isspace():
+                yield buffer
+                buffer = ""
+        if buffer:
+            yield buffer
