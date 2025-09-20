@@ -22,23 +22,23 @@ The Information Need State has 3 parts:
 - column_descriptions: dict[schema_id -> dict[column -> description]]
 - sqls: list of SQL queries over the target schemas
 
-Each step has at most {iteration_limit} iterations. 
+Each step has at most {iteration_limit} iterations.
 In each iteration, you must output exactly ONE JSON object in one of these forms:
 
-1. **internal_reasoning** - Think out loud about the next best step.  
+1. **internal_reasoning** - Think out loud about the next best step.
 {{
   "action": "internal_reasoning",
   "message": "..."
 }}
 
-2. **tool_call** - Call one tool to make progress.  
+2. **tool_call** - Call one tool to make progress.
 {{
   "action": "tool_call",
   "tool": "<one_of: ir_system, table_enumerator, state_manipulation, materializer, sql_engine, categorical_column_information>",
   "args": {{ ... }}
 }}
 
-3. **communicate_with_user** - Summarize progress, ask clarifying questions, or present results. 
+3. **communicate_with_user** - Summarize progress, ask clarifying questions, or present results.
 {{
   "action": "communicate_with_user",
   "message": "..."
@@ -167,12 +167,12 @@ Decide your next action and output one JSON object in one of these forms:
 """.strip()
 
     def sql_sanity_checking_prompt(self):
-        return """You are a SQL query fixer for DuckDB. 
+        return """You are a SQL query fixer for DuckDB.
 Given an input SQL query, check for syntactic or semantic errors (case sensitivity, unescaped identifiers, invalid field names, type mismatches, or unsupported functions).
 Ensure the query ONLY accesses available tables in the target schemas. If not, convert it to an equivalent SQL query.
-Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible. 
-If no standard equivalent exists, use the closest DuckDB-supported function. 
-Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed. 
+Fix the query so it runs correctly in DuckDB, replacing non-standard or unsupported functions with SQL-standard equivalents when possible.
+If no standard equivalent exists, use the closest DuckDB-supported function.
+Use double quotes for identifiers with spaces or special characters, and handle string comparisons case-sensitively where needed.
 Always output only the corrected SQL query, without explanations."""
 
     def get_knowledge_extraction_prompt(self, human_input: str) -> str:
