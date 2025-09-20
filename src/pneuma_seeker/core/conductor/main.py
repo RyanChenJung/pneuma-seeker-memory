@@ -11,6 +11,7 @@ import requests
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
+from pneuma_seeker.core.conductor.toolkit import Toolkit
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
@@ -38,32 +39,38 @@ class Conductor:
         config: Config,
         iteration_limit=5,
     ) -> None:
+        self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
+        self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
         self.logger = logger
         self.data_sources = data_sources
         self.config = config
-
-        self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
-        self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
+        self.iteration_limit = iteration_limit
 
         self.prov_graph = ProvenanceGraph(self.logger)
         self.prompt_factory = ConductorPromptFactory()
-        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
-        self.materializer = Materializer(
-            self.llm, self.logger, self.embed_model, self.data_sources, self.prov_graph
+        self.toolkit = Toolkit(
+            self.llm,
+            self.embed_model,
+            self.logger,
+            self.data_sources,
+            self.prov_graph,
+            self.prompt_factory,
         )
 
         self.info_need_state = InformationNeedState()
-        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = (
-            dict()
-        )
+        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
         self.external_documents: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
 
         self.target_tables_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "target_tables"
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "data_src",
+            "target_tables",
         )
-
-        self.iteration_limit = iteration_limit
 
     def process_input(
         self,
@@ -74,33 +81,22 @@ class Conductor:
         external_data_paths: list[str],
     ):
         self.__log(f"Processing human input: {user_input}")
-
         if len(interaction_history) > 0:
             user_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
 
-        if len(external_data_paths) > 0:
-            self.__log("Utilizing external data...")
-            self.external_documents = self.__unpack_external_data(external_data_paths)
-            for doc in self.external_documents:
-                new_node = ProvenanceNode(
-                    output_data_id=doc.doc_id,
-                    output_data_ref={"doc_path": doc.path or ""},
-                    source_retriever=RetrieverType.USER,
-                    op_description="User-uploaded data",
-                )
-                self.prov_graph.add_node(new_node, True)
-                doc.last_node_id = new_node.id
+        self.__process_external_data(external_data_paths)
 
         num_actions_taken = 0
         user_facing_response = ""
         is_user_facing_response = False
+        actions_taken: list[str] = []
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_sys_prompt(self.iteration_limit),
             )
         ]
-        actions_taken: list[str] = []
+
         while not is_user_facing_response and num_actions_taken < self.iteration_limit:
             num_actions_taken += 1
             llm_messages.append(
@@ -185,11 +181,24 @@ class Conductor:
                     content=self.prompt_factory.get_direct_response_anyway_prompt(),
                 )
             )
-            # Consume generator fully
             user_facing_response = "".join(
                 self.llm.chat(llm_messages, LLMOption(stream=True))
             )
             yield user_facing_response
+
+    def __process_external_data(self, external_data_paths):
+        if len(external_data_paths) > 0:
+            self.__log("Utilizing external data...")
+            self.external_documents = self.__unpack_external_data(external_data_paths)
+            for doc in self.external_documents:
+                new_node = ProvenanceNode(
+                    output_data_id=doc.doc_id,
+                    output_data_ref={"doc_path": doc.path or ""},
+                    source_retriever=RetrieverType.USER,
+                    op_description="User-uploaded data",
+                )
+                self.prov_graph.add_node(new_node, True)
+                doc.last_node_id = new_node.id
 
     def __unpack_external_data(
         self, external_data_paths: list[str]
@@ -304,25 +313,20 @@ class Conductor:
         if tool == "ir_system" and isinstance(args, dict):
             self.__log(f"IR System request with params: {args}")
             self.current_retrieval_results = (
-                self.ir_system.retrieve_multisource_documents(
-                    args["prompt"],
-                    self.data_sources,
-                    10,  # Future-TODO: allow Conductor-defined k values
-                )
+                self.toolkit.retrieve_multi_retriever_documents(args.get("prompt", ""))
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
         elif tool == "table_enumerator" and isinstance(args, dict):
             self.__log(f"Table Enumerater request with params: {args}")
             pattern: str = args.get("pattern", "")
-            enumerated_tables = self.ir_system.retrieve_documents(
-                RetrieverType.ENUMERATOR,
-                pattern,
-                self.data_sources,
+            enumerated_tables = self.toolkit.retrieve_documents(
+                pattern, RetrieverType.ENUMERATOR
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
             return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
         elif tool == "state_manipulation" and isinstance(args, dict):
             self.__log(f"State Manipulation request with params: {args}")
+
             target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
                 "column_descriptions"
@@ -386,30 +390,19 @@ class Conductor:
             if isinstance(args, dict) and "note" in args:
                 note = args["note"]
 
-            target_schema_dfs: dict[str, pd.DataFrame] = {}
-            for (
-                target_schema_id,
-                target_schema_doc,
-            ) in self.info_need_state.target_schemas.items():
-                target_schema_dfs[target_schema_id] = target_schema_doc.content
-
-            materialized_target_schema_dfs = self.materializer.materialize_T(
-                target_schema_dfs,
+            self.info_need_state.target_schemas = self.toolkit.materialize_T(
+                self.info_need_state.target_schemas,
                 self.info_need_state.column_descriptions,
                 self.info_need_state.sqls,
                 note,
                 self.external_documents,
                 self.current_retrieval_results,
             )
-            for (
-                target_schema_id,
-                target_schema_df,
-            ) in materialized_target_schema_dfs.items():
-                self.info_need_state.target_schemas[target_schema_id].content = (
-                    target_schema_df
-                )
-
             self.info_need_state.is_target_schemas_materialized = True
+            for _, T_doc in self.info_need_state.target_schemas.items():
+                updated_content: pd.DataFrame = T_doc.content
+                updated_content.to_csv(T_doc.path, index=False)
+
             return "Successfully materialized the target schemas."
         elif tool == "sql_engine":
             self.__log("SQL Engine called")
@@ -418,9 +411,12 @@ class Conductor:
                 return "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
             if len(self.info_need_state.sqls) == 0:
                 return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer. Finally, you can call SQL Engine again to execute them."
-            execution_result = self.__execute_sqls()
-
+            execution_result = self.toolkit.execute_sql(
+                self.info_need_state.target_schemas,
+                self.info_need_state.sqls,
+            )
             self.__log(f"SQL execution result output: {execution_result}")
+            self.info_need_state.is_sql_executed = True
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
@@ -464,95 +460,6 @@ class Conductor:
                 return "Argument must be a specified key-value pairs with keys `id` and `columns`."
 
         return "Tool calling failed."
-
-    def __execute_sqls(self):
-        """
-        Executes the SQLs (sequentially) over the target schemas.
-        The result (for now) is a scalar (converted to string).
-        """
-        con = duckdb.connect(database=":memory:")
-        tables: dict[str, pd.DataFrame] = {}
-        for (
-            target_schema_id,
-            target_schema_doc,
-        ) in self.info_need_state.target_schemas.items():
-            tables[target_schema_id] = target_schema_doc.content
-
-        self.info_need_state.target_schemas
-        sqls: list[str] = self.info_need_state.sqls
-
-        self.__log(
-            f"Executing {sqls} SQL statements on the (materialized) target schemas"
-        )
-
-        for table_name, df in tables.items():
-            con.register(table_name, df)
-
-        results: list[pd.DataFrame] = []
-        for sql_idx, sql in enumerate(sqls):
-            self.__log(f"Sanity checking the SQL query {sql}")
-            relevant_tables: dict[str, pd.DataFrame] = dict()
-            for table_id, table in tables.items():
-                if table_id in sql:
-                    relevant_tables[table_id] = table
-            response = self.llm.chat(
-                [
-                    LLMMessage(
-                        role=Role.SYSTEM.value,
-                        content=self.prompt_factory.sql_sanity_checking_prompt(),
-                    ),
-                    LLMMessage(
-                        role=Role.USER.value,
-                        content=f"SQL Query: {sql}\n\nRelevant Tables: {self.__format_available_tables(relevant_tables)}",
-                    ),
-                ]
-            )
-            response = "".join(response)
-            fixed_sql = parse_sql(response)
-            self.info_need_state.sqls[sql_idx] = fixed_sql
-            try:
-                self.__log(f"Executing Fixed SQL: {fixed_sql}")
-                result = con.execute(fixed_sql).fetchdf()
-                results.append(result)
-            except Exception as e:
-                results = [
-                    pd.DataFrame(
-                        columns=["error"],
-                        data=[
-                            [
-                                f"Error encountered when executing this SQL: ```{fixed_sql}``` on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue (e.g., referencing non-existent tables, non-standard SQL, etc.) and how to fix it."
-                            ]
-                        ],
-                    )
-                ]
-                print(e)
-                break
-
-        self.info_need_state.is_sql_executed = True
-        final_output: list[str] = []
-        for result in results:
-            if result.shape == (1, 1):
-                final_output.append(str(result.iat[0, 0]))
-            else:
-                final_output.append(str(result))
-        return final_output
-
-    def __format_available_tables(self, tables: dict[str, pd.DataFrame], num_sample=5):
-        tables_repr = ""
-        for table_id, table in tables.items():
-            tables_repr += (
-                f"\n- Table {table_id}:\ncol: {" | ".join(list(table.columns))}"
-            )
-            if len(table) > 0:
-                sample_rows = table.sample(min(num_sample, len(table)), random_state=42)
-                sample_row_idx = 1
-                for _, data in sample_rows.iterrows():
-                    str_data = [str(i) for i in data]
-                    tables_repr += (
-                        f"\nsample row {sample_row_idx}: {" | ".join(str_data)}"
-                    )
-                    sample_row_idx += 1
-        return tables_repr.strip()
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)
