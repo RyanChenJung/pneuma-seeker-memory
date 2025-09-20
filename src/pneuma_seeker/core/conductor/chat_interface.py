@@ -20,7 +20,7 @@ class ChatInterface:
     ):
         self.logger = setup_logger(log_path=os.path.join(".", "log"))
         self.config = Config(env_path=env_path)
-        self.llm_conductor = Conductor(
+        self.conductor = Conductor(
             llm_path, embed_model_path, self.logger, data_sources, self.config
         )
 
@@ -33,10 +33,10 @@ class ChatInterface:
             info_state, retr_results, enumerated_table_ids, prov_graph = (
                 persistence.load_state(user_id, chat_id, self.logger)
             )
-            self.llm_conductor.info_need_state = info_state
-            self.llm_conductor.current_retrieval_results = retr_results
-            self.llm_conductor.enumerated_table_ids = enumerated_table_ids
-            self.llm_conductor.prov_graph = prov_graph
+            self.conductor.info_need_state = info_state
+            self.conductor.current_retrieval_results = retr_results
+            self.conductor.enumerated_table_ids = enumerated_table_ids
+            self.conductor.prov_graph = prov_graph
 
     def process_user_input(
         self,
@@ -59,9 +59,10 @@ class ChatInterface:
                 )
             )
 
-        for system_response in self.llm_conductor.process_input(
+        for system_response in self.conductor.process_input(
             human_input,
             self.user_id,
+            self.chat_id,
             interaction_history,
             external_data_paths,
         ):
@@ -75,8 +76,8 @@ class ChatInterface:
             persistence.save_state(
                 self.user_id,
                 self.chat_id,
-                self.llm_conductor.info_need_state,
-                self.llm_conductor.current_retrieval_results,
-                self.llm_conductor.enumerated_table_ids,
-                self.llm_conductor.prov_graph,
+                self.conductor.info_need_state,
+                self.conductor.current_retrieval_results,
+                self.conductor.enumerated_table_ids,
+                self.conductor.prov_graph,
             )

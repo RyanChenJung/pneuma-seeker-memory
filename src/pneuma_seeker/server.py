@@ -1,25 +1,21 @@
 # backend: src/pneuma_seeker/server.py
+import asyncio
 import json
 import os
-
-import asyncio
-import re
+from datetime import datetime
 from typing import Any
 
-from datetime import datetime
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from torch.backends import cudnn
 
-from pneuma_seeker.core.conductor.chat_interface import ChatInterface
 from pneuma_seeker.core.conductor import persistence
+from pneuma_seeker.core.conductor.chat_interface import ChatInterface
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.model.llm_message import LLMMessage
 
-
-# enforce more deterministic behavior
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 cudnn.deterministic = True
@@ -127,7 +123,7 @@ templates = Jinja2Templates(directory="template")
 
 @app.get("/state/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_state_html(request: Request, user_id: str, chat_id: str):
-    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    conductor = manager.get_chat_interface(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
 
     return templates.TemplateResponse(
@@ -137,14 +133,14 @@ async def read_state_html(request: Request, user_id: str, chat_id: str):
 
 @app.get("/graph/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_graph_html(request: Request, user_id: str, chat_id: str):
-    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    conductor = manager.get_chat_interface(user_id, chat_id).conductor
     prov_graph = conductor.prov_graph
     return prov_graph.get_graph_visualization()
 
 
 @app.get("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_combined_html(request: Request, user_id: str, chat_id: str):
-    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    conductor = manager.get_chat_interface(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
     prov_graph_html = conductor.prov_graph.get_graph_visualization()
     return templates.TemplateResponse(
@@ -165,25 +161,21 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
     await websocket.accept()
     try:
         while True:
-            # Receive the prompt from frontend
             data_from_frontend: dict[str, Any] = json.loads(
                 await websocket.receive_text()
             )
             chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
             url_paths: list[str] = data_from_frontend.get("files", [])
 
-            # Normalize paths
             for idx, url_path in enumerate(url_paths):
                 if not url_path.startswith("/"):
                     url_paths[idx] = f"/{url_path}"
 
-            conductor = manager.get_chat_interface(user_id, chat_id)
-
+            chat_interface = manager.get_chat_interface(user_id, chat_id)
             loop = asyncio.get_running_loop()
 
-            # Run the blocking generator in a separate thread
             def run_generator():
-                for log_message in conductor.process_user_input(
+                for log_message in chat_interface.process_user_input(
                     chat_messages, url_paths
                 ):
                     actual_message = log_message
@@ -193,7 +185,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
                     elif log_message.startswith("DONE"):
                         role = "done"
                         actual_message = ""
-                    # Schedule sending messages back to the websocket asynchronously
                     asyncio.run_coroutine_threadsafe(
                         manager.send_personal_message(
                             user_id,
@@ -216,7 +207,7 @@ def get_state(user_id: str, chat_id: str):
     """
     Returns the current (T,Q) pairs, along with the current retrieval results.
     """
-    conductor = manager.get_chat_interface(user_id, chat_id).llm_conductor
+    conductor = manager.get_chat_interface(user_id, chat_id).conductor
 
     state = conductor.info_need_state.get_current_state_instance()
     curr_retrieval_results = conductor.current_retrieval_results
