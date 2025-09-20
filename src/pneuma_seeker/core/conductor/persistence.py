@@ -1,81 +1,30 @@
-from logging import Logger
-import os
+import datetime
 import json
-import duckdb
-from datetime import datetime
-from typing import List, Dict, Any, Tuple
-from pneuma_seeker.core.conductor.main import (
-    AbstractDocument,
-    RetrieverType,
-    InformationNeedState,
-)
+import os
 
-# new import
+from logging import Logger
+from typing import Any
+
+import duckdb
 import pandas as pd
 
+from pneuma_seeker.core.conductor.main import (
+    AbstractDocument,
+    InformationNeedState,
+    RetrieverType,
+)
+from pneuma_seeker.core.ir_system.data_model import Table
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.utils.cleaner import clean_column_table_name
-
 
 DB_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "pneuma_seeker_state.duckdb"
 )
+TARGET_SCHEMAS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "target_tables"
+)
 
 
-# -------------------- Helpers for DataFrame (target_schemas) --------------------
-def _serialize_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Serialize a pandas DataFrame into a JSON-serializable dict:
-      - columns: list of column names (preserve order)
-      - data: list of row dicts (records)
-      - dtypes: mapping column -> dtype string for best-effort reconstruction
-    """
-    return {
-        "columns": df.columns.tolist(),
-        "data": df.to_dict(orient="records"),
-        "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-    }
-
-
-def _deserialize_dataframe(obj: Dict[str, Any]) -> pd.DataFrame:
-    """
-    Reconstruct a DataFrame from the serialized dict.
-    Attempts to coerce back to original-ish dtypes (int/float/bool/datetime).
-    """
-    if obj is None:
-        return pd.DataFrame()
-
-    columns = obj.get("columns", None)
-    data = obj.get("data", [])
-    dtypes = obj.get("dtypes", {})
-
-    # Build dataframe from records; pandas will infer types
-    df = pd.DataFrame(data, columns=columns)
-
-    # Attempt dtype restoration (best-effort)
-    for col, dtype_str in (dtypes or {}).items():
-        if col not in df.columns:
-            continue
-        try:
-            if "datetime" in dtype_str or "Timestamp" in dtype_str:
-                df[col] = pd.to_datetime(df[col], errors="coerce")
-            elif "int" in dtype_str and df[col].notna().all():
-                # use pandas nullable integer if possible
-                df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
-            elif "float" in dtype_str:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-            elif "bool" in dtype_str:
-                # pandas nullable boolean
-                df[col] = df[col].astype("boolean")
-            # else: leave as-is (string/object)
-        except Exception:
-            # best-effort only; ignore and leave column as-is
-            pass
-
-    return df
-
-
-# -------------------- DB INIT --------------------
 def init_db():
     con = duckdb.connect(DB_PATH)
     con.execute(
@@ -104,12 +53,11 @@ def get_unique_user_chat_ids():
     return rows
 
 
-# -------------------- CHAT STATE --------------------
 def save_state(
     user_id: str,
     chat_id: str,
     info_need_state: InformationNeedState,
-    retrieval_results: Dict[RetrieverType, List[AbstractDocument]],
+    retrieval_results: dict[RetrieverType, list[AbstractDocument]],
     enumerated_table_ids: list[str],
     provenance_graph: ProvenanceGraph,
 ):
@@ -117,18 +65,19 @@ def save_state(
     Persist info_need_state and retrieval_results as JSON.
     target_schemas (DataFrames) are serialized with _serialize_dataframe.
     """
-    # Serialize target_schemas (DataFrame -> JSON-able dict)
-    serialized_target_schemas: Dict[str, Any] = {}
-    for k, v in info_need_state.target_schemas.items():
-        if isinstance(v, pd.DataFrame):
-            serialized_target_schemas[k] = _serialize_dataframe(v)
-        else:
-            # fallback: try to JSON-ize; if not possible, store str()
-            try:
-                json.dumps(v)
-                serialized_target_schemas[k] = v
-            except Exception:
-                serialized_target_schemas[k] = str(v)
+    serialized_target_schemas = json.dumps(
+        {
+            doc_id: {
+                "doc_id": doc.doc_id,
+                "retriever_type": doc.retriever_type.value,
+                "content": None if doc.path else doc.content,
+                "metadata": doc.metadata,
+                "path": doc.path,
+                "last_node_id": doc.last_node_id,
+            }
+            for doc_id, doc in info_need_state.target_schemas.items()
+        }
+    )
 
     info_need_state_json = json.dumps(
         {
@@ -141,16 +90,16 @@ def save_state(
         }
     )
 
-    # Serialize retrieval results, store path if present, otherwise serialize content
     retrieval_results_json = json.dumps(
         {
             rt.value: [
                 {
                     "doc_id": doc.doc_id,
                     "retriever_type": doc.retriever_type.value,
-                    "path": doc.path,  # Could be None
                     "content": None if doc.path else doc.content,
                     "metadata": doc.metadata,
+                    "path": doc.path,
+                    "last_node_id": doc.last_node_id,
                 }
                 for doc in docs
             ]
@@ -183,15 +132,15 @@ def save_state(
             info_need_state_json,
             retrieval_results_json,
             provenance_graph_json,
-            datetime.utcnow(),
+            datetime.datetime.now(datetime.timezone.utc),
         ),
     )
     con.close()
 
 
-def load_state(user_id: str, chat_id: str, logger: Logger) -> Tuple[
+def load_state(user_id: str, chat_id: str, logger: Logger) -> tuple[
     InformationNeedState,
-    Dict[RetrieverType, List[AbstractDocument]],
+    dict[RetrieverType, list[AbstractDocument]],
     list[str],
     ProvenanceGraph,
 ]:
@@ -211,62 +160,74 @@ def load_state(user_id: str, chat_id: str, logger: Logger) -> Tuple[
     if not row:
         return InformationNeedState(), {}, [], ProvenanceGraph(logger)
 
-    info_json, retr_json, prov_json = row
-    info_data = json.loads(info_json)
-    retr_data = json.loads(retr_json)
+    state_json, retr_json, prov_json = row
+    state_data: dict[str, Any] = json.loads(state_json)
+    retr_data: dict[str, list[dict[str, Any]]] = json.loads(retr_json)
     prov_data = json.loads(prov_json)
 
     info_state = InformationNeedState()
 
-    enumerated_table_ids = info_data.get("enumerated_table_ids", [])
+    enumerated_table_ids: list[str] = state_data.get("enumerated_table_ids", [])
 
-    # Reconstruct target_schemas, deserializing DataFrames where appropriate
-    raw_target_schemas = info_data.get("target_schemas", {})
-    reconstructed: Dict[str, Any] = {}
-    for k, v in raw_target_schemas.items():
-        if isinstance(v, dict) and "data" in v and "columns" in v:
-            # looks like our serialized DataFrame
-            reconstructed[k] = _deserialize_dataframe(v)
-        else:
-            # fallback: keep as-is
-            reconstructed[k] = v
+    raw_target_schemas: dict[str, dict[str, Any]] = state_data.get("target_schemas", {})
+    target_schemas: dict[str, AbstractDocument] = {}
+    for target_schema_id, target_schema_dict in raw_target_schemas.items():
+        doc_id: str = target_schema_dict.get("doc_id", "")
+        retriever_type = RetrieverType(
+            target_schema_dict.get("retriever_type", RetrieverType.PNEUMA.value)
+        )
+        path: str = target_schema_dict.get("path", "")
+        if len(path) == 0 or not os.path.isfile(path):
+            continue
+        content = pd.read_csv(path)
+        metadata: dict[str, str] = target_schema_dict.get("metadata", {})
+        last_node_id: str | None = target_schema_dict.get("last_node_id", None)
 
-    info_state.target_schemas = reconstructed
-    info_state.is_target_schemas_materialized = info_data.get(
+        target_schemas[target_schema_id] = Table(
+            doc_id=doc_id,
+            retriever_type=retriever_type,
+            content=content,
+            metadata=metadata,
+            path=path,
+            last_node_id=last_node_id,
+        )
+
+    info_state.target_schemas = target_schemas
+    info_state.is_target_schemas_materialized = state_data.get(
         "is_target_schemas_materialized", False
     )
-    info_state.column_descriptions = info_data.get("column_descriptions", {})
-    info_state.sqls = info_data.get("sqls", [])
-    info_state.is_sql_executed = info_data.get("is_sql_executed", False)
+    info_state.column_descriptions = state_data.get("column_descriptions", {})
+    info_state.sqls = state_data.get("sqls", [])
+    info_state.is_sql_executed = state_data.get("is_sql_executed", False)
 
-    retr_results: Dict[RetrieverType, List[AbstractDocument]] = {}
-    for rt_str, docs in retr_data.items():
-        rt = RetrieverType(rt_str)
-        retr_results[rt] = []
-        for d in docs:
+    retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
+    for retriever_type, docs in retr_data.items():
+        retriever_type = RetrieverType(retriever_type)
+        retrieval_results[retriever_type] = []
+        for doc in docs:
             content = None
-            if d.get("path"):
+            if doc.get("path"):
                 try:
-                    content = pd.read_csv(d["path"])
+                    content = pd.read_csv(doc["path"])
                     content.rename(columns=clean_column_table_name, inplace=True)
-                except Exception as e:
-                    # Optional: log or handle missing/corrupt file gracefully
-                    content = None
+                except Exception:
+                    continue
             else:
-                content = d.get("content")
-            retr_results[rt].append(
+                content = doc.get("content", "")
+            retrieval_results[retriever_type].append(
                 AbstractDocument(
-                    doc_id=d["doc_id"],
-                    retriever_type=rt,
+                    doc_id=doc["doc_id"],
+                    retriever_type=retriever_type,
                     content=content,
-                    metadata=d["metadata"],
-                    path=d.get("path"),
+                    metadata=doc["metadata"],
+                    path=doc.get("path"),
+                    last_node_id=doc.get("last_node_id"),
                 )
             )
 
     provenance_graph = _deserialize_provenance_graph(prov_data, logger)
 
-    return info_state, retr_results, enumerated_table_ids, provenance_graph
+    return info_state, retrieval_results, enumerated_table_ids, provenance_graph
 
 
 def _serialize_provenance_graph(graph: ProvenanceGraph) -> dict[str, Any]:
