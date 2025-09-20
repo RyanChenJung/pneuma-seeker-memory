@@ -27,8 +27,6 @@ from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_json, parse_sql
 
-ITERATION_LIMIT = 5
-
 
 class Conductor:
     def __init__(
@@ -38,6 +36,7 @@ class Conductor:
         logger: Logger,
         data_sources: list[str],
         config: Config,
+        iteration_limit = 5,
     ) -> None:
         self.logger = logger
         self.data_sources = data_sources
@@ -63,6 +62,8 @@ class Conductor:
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "target_tables"
         )
+
+        self.iteration_limit = iteration_limit
 
     def process_input(
         self,
@@ -96,18 +97,18 @@ class Conductor:
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_sys_prompt(ITERATION_LIMIT),
+                content=self.prompt_factory.get_sys_prompt(self.iteration_limit),
             )
         ]
         actions_taken: list[str] = []
-        while not is_user_facing_response and num_actions_taken < ITERATION_LIMIT:
+        while not is_user_facing_response and num_actions_taken < self.iteration_limit:
             num_actions_taken += 1
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
                         num_actions_taken,
-                        ITERATION_LIMIT,
+                        self.iteration_limit,
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
