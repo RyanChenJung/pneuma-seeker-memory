@@ -64,7 +64,7 @@ class Materializer:
         )  # Future-TODO: dynamically allocate batch_size
 
         self.is_sql_alignment_checked = False
-        self.MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.module_dir = os.path.dirname(os.path.abspath(__file__))
 
     def materialize_T(
         self,
@@ -774,4 +774,4 @@ class Materializer:
             intermediate_table.to_csv(csv_path, index=False)
 
     def __get_intermediate_table_dir_path(self):
-        return os.path.join(self.MODULE_DIR, "intermediate_data")
+        return os.path.join(self.module_dir, "intermediate_data")
