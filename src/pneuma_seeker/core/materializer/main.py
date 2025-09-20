@@ -37,8 +37,8 @@ class Materializer:
     def __init__(
         self,
         llm: AbstractModel,
-        logger: Logger,
         embed_model: AbstractModel,
+        logger: Logger,
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
     ):
