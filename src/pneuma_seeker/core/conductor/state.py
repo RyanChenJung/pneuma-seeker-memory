@@ -1,4 +1,4 @@
-from pandas import DataFrame
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 
 
 class InformationNeedState:
@@ -12,45 +12,19 @@ class InformationNeedState:
     """
 
     def __init__(self) -> None:
-        self.target_schemas: dict[str, DataFrame] = dict()
+        self.target_schemas: dict[str, AbstractDocument] = dict()
         self.is_target_schemas_materialized = False
         self.column_descriptions: dict[str, dict[str, str]] = dict()
 
         self.sqls: list[str] = []
         self.is_sql_executed = False
 
-    def get_table_repr(self, table: DataFrame, table_id: str):
-        table_repr = f"\nTable {table_id}:\ncol: {' | '.join(list(table.columns))}"
-        if len(table) > 0:
-            # Sample 5 rows to represent the table
-            sample_rows = table.sample(min(5, len(table)), random_state=42)
-            sample_row_idx = 1
-            for _, data in sample_rows.iterrows():
-                str_data = [str(i) for i in data]
-                table_repr += f"\n- sample row {sample_row_idx}: {' | '.join(str_data)}"
-                sample_row_idx += 1
-        return table_repr
-
     def __str__(self) -> str:
-        target_schemas_repr = ""
-        for schema_id in self.target_schemas:
-            table = self.target_schemas[schema_id]
-            target_schemas_repr += (
-                f"\n- Table {schema_id}:\ncol: {' | '.join(list(table.columns))}"
-            )
-            if len(table) > 0:
-                # Sample 5 rows to represent the table
-                sample_rows = table.sample(min(5, len(table)), random_state=42)
-                sample_row_idx = 1
-                for _, data in sample_rows.iterrows():
-                    str_data = [str(i) for i in data]
-                    target_schemas_repr += (
-                        f"\n- sample row {sample_row_idx}: {' | '.join(str_data)}"
-                    )
-                    sample_row_idx += 1
-            target_schemas_repr += "\n"
+        T_repr = ""
+        for _, T_doc in self.target_schemas.items():
+            T_repr += f"\n- {T_doc}"
         return f"""Target schemas (Is materialized yet? {self.is_target_schemas_materialized}):
-{target_schemas_repr.strip()}
+{T_repr.strip()}
 
 Column descriptions of target schemas:
 {self.column_descriptions}
@@ -62,8 +36,8 @@ SQLs to be run sequentially over the target schemas (Is executed yet? {self.is_s
         MAX_ROWS = 10
         return {
             "T": {
-                table_id: df.head(MAX_ROWS).to_dict(orient="records")  # only first MAX_ROWS
-                for table_id, df in self.target_schemas.items()
+                table_id: table_doc.content.head(MAX_ROWS).to_dict(orient="records")
+                for table_id, table_doc in self.target_schemas.items()
             },
             "is_T_materialized": self.is_target_schemas_materialized,
             "column_descriptions": self.column_descriptions,
