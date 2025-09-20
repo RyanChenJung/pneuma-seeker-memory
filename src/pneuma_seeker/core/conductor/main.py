@@ -60,10 +60,15 @@ class Conductor:
         self.external_documents: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
 
+        self.target_tables_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "target_tables"
+        )
+
     def process_input(
         self,
         user_input: str,
         user_id: str,
+        chat_id: str,
         interaction_history: list[HumanConductorInteraction],
         external_data_paths: list[str],
     ):
@@ -160,7 +165,7 @@ class Conductor:
                     llm_messages.append(
                         LLMMessage(
                             role=Role.USER.value,
-                            content=f"You cannot select `internal_reasoning` consecutively. Please select a different action!",
+                            content="You cannot select `internal_reasoning` consecutively. Please select a different action!",
                         )
                     )
                 else:
@@ -174,7 +179,7 @@ class Conductor:
                 if tool is None:
                     tool = intent
                 yield f"LOG: Calling tool: {tool}..."
-                tool_outcome = self.__execute_tool(tool, args)
+                tool_outcome = self.__execute_tool(tool, args, user_id, chat_id)
                 llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=tool_outcome)
                 )
@@ -300,14 +305,16 @@ class Conductor:
 
         return external_data_content
 
-    def __execute_tool(self, tool: str, args: str | dict) -> str:
+    def __execute_tool(
+        self, tool: str, args: str | dict, user_id: str, chat_id: str
+    ) -> str:
         if tool == "ir_system" and isinstance(args, dict):
             self.__log(f"IR System request with params: {args}")
             self.current_retrieval_results = (
                 self.ir_system.retrieve_multisource_documents(
                     args["prompt"],
                     self.data_sources,
-                    10,  # Future-TODO: Change hard-coded sources and k
+                    10,  # Future-TODO: allow Conductor-defined k values
                 )
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
@@ -332,12 +339,30 @@ class Conductor:
             is_target_schemas_modified = False
             if target_schemas is not None and column_descriptions is not None:
                 if column_descriptions is not None:
-                    target_schemas_df: dict[str, pd.DataFrame] = dict()
+                    target_schemas_docs: dict[str, AbstractDocument] = dict()
                     for schema_id in target_schemas:
-                        target_schemas_df[schema_id] = pd.DataFrame(
+                        target_schema_df = pd.DataFrame(
                             columns=target_schemas[schema_id]
                         )
-                    self.info_need_state.target_schemas = target_schemas_df
+
+                        target_schema_path = os.path.join(
+                            self.target_tables_path,
+                            user_id,
+                            chat_id,
+                            f"{schema_id}.csv",
+                        )
+                        os.makedirs(os.path.dirname(target_schema_path), exist_ok=True)
+
+                        target_schema_df.to_csv(target_schema_path, index=False)
+                        target_schemas_docs[schema_id] = Table(
+                            doc_id=schema_id,
+                            retriever_type=RetrieverType.CONDUCTOR,
+                            content=target_schema_df,
+                            metadata={},
+                            path=target_schema_path,
+                        )
+
+                    self.info_need_state.target_schemas = target_schemas_docs
                     self.info_need_state.column_descriptions = column_descriptions
                     self.info_need_state.is_target_schemas_materialized = False
                     is_target_schemas_modified = True
@@ -354,24 +379,43 @@ class Conductor:
                 return (
                     "Successfully modified both the target schemas and the SQL queries."
                 )
-            elif is_target_schemas_modified:
+            if is_target_schemas_modified:
                 return "Successfully modified the target schemas."
-            elif is_sqls_modified:
+            if is_sqls_modified:
                 return "Successfully modified the SQL queries."
             return "No modification is done."
         elif tool == "materializer":
+            self.__log("Materializer called")
+            if len(self.info_need_state.target_schemas.keys()) == 0:
+                return "Target schemas have to be defined before calling Materializer."
+
             note = ""
             if isinstance(args, dict) and "note" in args:
                 note = args["note"]
-            self.__log(f"Materializer called")
-            self.info_need_state.target_schemas = self.materializer.materialize_T(
-                self.info_need_state.target_schemas,
+
+            target_schema_dfs: dict[str, pd.DataFrame] = {}
+            for (
+                target_schema_id,
+                target_schema_doc,
+            ) in self.info_need_state.target_schemas.items():
+                target_schema_dfs[target_schema_id] = target_schema_doc.content
+
+            materialized_target_schema_dfs = self.materializer.materialize_T(
+                target_schema_dfs,
                 self.info_need_state.column_descriptions,
                 self.info_need_state.sqls,
                 note,
                 self.external_documents,
                 self.current_retrieval_results,
             )
+            for (
+                target_schema_id,
+                target_schema_df,
+            ) in materialized_target_schema_dfs.items():
+                self.info_need_state.target_schemas[target_schema_id].content = (
+                    target_schema_df
+                )
+
             self.info_need_state.is_target_schemas_materialized = True
             return "Successfully materialized the target schemas."
         elif tool == "sql_engine":
@@ -435,7 +479,14 @@ class Conductor:
         """
         # Create an in-memory DuckDB connection
         con = duckdb.connect(database=":memory:")
-        tables: dict[str, pd.DataFrame] = self.info_need_state.target_schemas
+        tables: dict[str, pd.DataFrame] = {}
+        for (
+            target_schema_id,
+            target_schema_doc,
+        ) in self.info_need_state.target_schemas.items():
+            tables[target_schema_id] = target_schema_doc.content
+
+        self.info_need_state.target_schemas
         sqls: list[str] = self.info_need_state.sqls
 
         self.__log(
