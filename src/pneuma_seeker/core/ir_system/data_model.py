@@ -15,6 +15,7 @@ class RetrieverType(Enum):
     """
 
     PNEUMA = "Pneuma"
+    CONDUCTOR = "Conductor"
     ENUMERATOR = "Enumerator"
     MATERIALIZER = "Materializer"
     DOCUMENT_DB = "Document DB"
