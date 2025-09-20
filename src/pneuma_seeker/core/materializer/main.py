@@ -219,7 +219,7 @@ class Materializer:
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
             elif op_name == "Table Enumerator":
-                self.__log(f"Executing Table Enumerator")
+                self.__log("Executing Table Enumerator")
                 pattern: str = op_args["pattern"]
                 extra_tables: list[AbstractDocument] = (
                     self.ir_system.retrieve_documents(
@@ -258,7 +258,7 @@ class Materializer:
                         f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize target schemas, even if you have not called Document Retriever before, as these tables have been included to "Previously retrieved documents".'
                     )
                 else:
-                    self.actions.append(f"There are no tables that match the pattern.")
+                    self.actions.append("There are no tables that match the pattern.")
             elif op_name == "Table Select":
                 self.__log("Executing Table Select:")
                 for target_schema_id, retrieved_table_info in op_args.items():
@@ -322,7 +322,7 @@ class Materializer:
                         )
                         self.__save_new_or_updated_intermediate_table(target_schema_id)
                         self.actions.append(
-                            f"Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target schemas."
+                            "Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target schemas."
                         )
 
                     elif target_schema_id not in T:
@@ -415,12 +415,12 @@ class Materializer:
                 all_table_ids = [i.doc_id for i in all_tables]
                 if left_table_id is None or left_table_id not in all_table_ids:
                     self.actions.append(
-                        f"left_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        "left_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     )
                     return
                 if right_table_id is None or right_table_id not in all_table_ids:
                     self.actions.append(
-                        f"right_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        "right_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     )
                     return
 
@@ -460,23 +460,23 @@ class Materializer:
                     return
 
                 if relevant_left_cols is None:
-                    self.actions.append(f"relevant_left_cols is not provided.")
+                    self.actions.append("relevant_left_cols is not provided.")
                     return
                 if relevant_right_cols is None:
-                    self.actions.append(f"relevant_right_cols is not provided.")
+                    self.actions.append("relevant_right_cols is not provided.")
                     return
                 if not set(relevant_left_cols) <= set(list(left_table.columns)):
                     self.actions.append(
-                        f"relevant_left_cols is not a subseet of left_table's columns."
+                        "relevant_left_cols is not a subseet of left_table's columns."
                     )
                     return
                 if not set(relevant_right_cols) <= set(list(right_table.columns)):
                     self.actions.append(
-                        f"relevant_right_cols is not a subseet of right_table's columns."
+                        "relevant_right_cols is not a subseet of right_table's columns."
                     )
                     return
                 if not joined_table_id:
-                    self.actions.append(f"joined_table_id is not provided.")
+                    self.actions.append("joined_table_id is not provided.")
                     return
 
                 joined_table = self.semantic_joiner.semantic_join(
@@ -524,7 +524,7 @@ class Materializer:
                 self.__save_new_or_updated_intermediate_table(joined_table_id)
 
                 self.actions.append(
-                    f"Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
+                    "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 )
 
             elif op_name == "Python Executor":
@@ -602,7 +602,7 @@ class Materializer:
                 else:
                     if exec_res is None:
                         self.actions.append(
-                            f"The `result` variable is empty, which means the Python code did not assign the outcome (e.g., table) to the variable `result`."
+                            "The `result` variable is empty, which means the Python code did not assign the outcome (e.g., table) to the variable `result`."
                         )
                     else:
                         self.actions.append(
@@ -682,7 +682,7 @@ class Materializer:
             self.actions.append(f"The step {step_type} is not a valid action.")
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
-        self.__log(f"Check completion")
+        self.__log("Check completion")
         all_schema_ids = set(T.keys())
         id_dfs: dict[str, DataFrame] = {}
         materialized_schema_ids: set[str] = set()
