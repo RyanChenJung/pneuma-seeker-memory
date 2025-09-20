@@ -3,7 +3,7 @@ __pycache__
 *coverage*
 *pkl
 *log
-pneuma_seeker_state.duckdb
+pneuma_seeker.duckdb
 temp
 server.out
 .vscode
