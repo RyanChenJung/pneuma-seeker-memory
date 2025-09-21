@@ -114,21 +114,12 @@ class Conductor:
                 )
             )
 
-            llm_output_gen = self.llm.chat(
+            full_response = "".join(self.llm.chat(
                 llm_messages, LLMOption(json_mode=True, stream=True)
+            ))
+            llm_messages.append(
+                LLMMessage(role=Role.ASSISTANT.value, content=full_response)
             )
-            stream_gen, raw_buffer = self.__stream_message_content_from_chunks(
-                llm_output_gen
-            )
-            for char in stream_gen:
-                yield char
-                is_user_facing_response = True  # We saw at least one streamed char
-
-            full_response = "".join(raw_buffer) if raw_buffer else ""
-            if full_response:
-                llm_messages.append(
-                    LLMMessage(role=Role.ASSISTANT.value, content=full_response)
-                )
 
             try:
                 action_plan = parse_json(full_response)
@@ -182,7 +173,8 @@ class Conductor:
             user_facing_response = "".join(
                 self.llm.chat(llm_messages, LLMOption(stream=True))
             )
-            yield user_facing_response
+
+        yield user_facing_response
 
     def __process_external_data(self, external_data_paths):
         if len(external_data_paths) > 0:
@@ -504,63 +496,3 @@ class Conductor:
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)
-
-    def __stream_message_content_from_chunks(
-        self,
-        chunks: Generator[str, None, None],
-    ) -> tuple[Generator[str, None, None], list[str]]:
-        """
-        Consumes chunks from LLM generator and yield only the 'message' content
-        of communicate_with_user actions, ignoring JSON wrappers.
-        Returns:
-            - A generator that streams the message chunks
-            - A mutable list containing the full concatenated output
-        """
-        raw_buffer: list[str] = []
-
-        def _stream():
-            buffer = ""
-            json_regex = re.compile(r"\{.*?\}")
-
-            for chunk in chunks:
-                buffer += chunk
-                raw_buffer.append(chunk)
-
-                while True:
-                    match = json_regex.search(buffer)
-                    if not match:
-                        break
-
-                    json_str = match.group()
-                    try:
-                        action_plan = json.loads(json_str)
-                    except json.JSONDecodeError:
-                        break
-
-                    buffer = buffer[match.end() :]
-                    action = action_plan.get("action")
-                    message_text = action_plan.get("message")
-
-                    if action == "communicate_with_user" and isinstance(
-                        message_text, str
-                    ):
-                        for char in self.__stream_message_by_whitespace(message_text):
-                            yield char
-
-        return _stream(), raw_buffer
-
-    def __stream_message_by_whitespace(
-        self, message: str
-    ) -> Generator[str, None, None]:
-        """
-        Yields parts of the message whenever whitespace is encountered,
-        so the frontend receives word-level streaming.
-        """
-        buffer = ""
-        for c in message:
-            buffer += c
-            if c.isspace():
-                yield buffer
-                buffer = ""
-        if buffer:
-            yield buffer
