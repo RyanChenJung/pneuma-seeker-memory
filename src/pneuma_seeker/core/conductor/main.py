@@ -81,8 +81,7 @@ class Conductor:
     ):
         self.__log(f"Processing human input: {user_input}")
         if len(interaction_history) > 0:
-            user_input += " (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
-
+            user_input = f"{user_input} (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
         self.__process_external_data(external_data_paths)
 
         num_actions_taken = 0
@@ -123,7 +122,7 @@ class Conductor:
             )
             for char in stream_gen:
                 yield char
-                is_user_facing_response = True  # we saw at least one streamed char
+                is_user_facing_response = True  # We saw at least one streamed char
 
             full_response = "".join(raw_buffer) if raw_buffer else ""
             if full_response:
@@ -132,20 +131,20 @@ class Conductor:
                 )
 
             try:
-                action = parse_json(full_response)
+                action_plan = parse_json(full_response)
             except Exception:
-                action = {}
+                action_plan = {}
 
-            intent: str = action.get("action", "")
-            actions_taken.append(intent)
-            action_message: None | str = action.get("message")
-            tool: None | str = action.get("tool")
-            args: None | dict = action.get("args")
+            action: str = action_plan.get("action", "")
+            actions_taken.append(action)
+            action_message: None | str = action_plan.get("message")
+            tool: None | str = action_plan.get("tool")
+            args: None | dict = action_plan.get("args")
 
-            if intent == "communicate_with_user" and isinstance(action_message, str):
+            if action == "communicate_with_user" and isinstance(action_message, str):
                 user_facing_response = action_message
                 is_user_facing_response = True
-            elif intent == "internal_reasoning" and isinstance(action_message, str):
+            elif action == "internal_reasoning" and isinstance(action_message, str):
                 self.logger.debug(f"num_actions_taken: {num_actions_taken}")
                 self.logger.debug(f"actions_taken[-1]: {actions_taken[-1]}")
                 yield "LOG: Reasoning internally..."
@@ -165,7 +164,7 @@ class Conductor:
                     )
             elif args is not None:
                 if tool is None:
-                    tool = intent
+                    tool = action
                 yield f"LOG: Calling tool: {tool}..."
                 tool_outcome = self.__execute_tool(tool, args, user_id, chat_id)
                 llm_messages.append(
@@ -382,17 +381,17 @@ class Conductor:
                             path=target_schema_path,
                         )
 
-                    self.info_need_state.target_schemas = target_schemas_docs
+                    self.info_need_state.T = target_schemas_docs
                     self.info_need_state.column_descriptions = column_descriptions
-                    self.info_need_state.is_target_schemas_materialized = False
+                    self.info_need_state.is_T_materialized = False
                     is_target_schemas_modified = True
                 else:
                     return "If you want to change target_schemas, make sure to also define column_descriptions."
 
             is_sqls_modified = False
             if sqls is not None:
-                self.info_need_state.sqls = sqls
-                self.info_need_state.is_sql_executed = False
+                self.info_need_state.Q = sqls
+                self.info_need_state.is_Q_executed = False
                 is_sqls_modified = True
 
             if is_target_schemas_modified and is_sqls_modified:
@@ -405,7 +404,7 @@ class Conductor:
                 return "Successfully modified the SQL queries."
             return "No modification is done."
         elif tool == "materializer":
-            if len(self.info_need_state.target_schemas.keys()) == 0:
+            if len(self.info_need_state.T.keys()) == 0:
                 error_message = "Target schemas have to already be defined before calling Materializer"
                 self.__log(f"=> {error_message}")
                 return error_message
@@ -416,17 +415,17 @@ class Conductor:
 
             self.__log(f"Materializer called (note: {note})")
 
-            self.info_need_state.target_schemas = self.toolkit.materialize_T(
-                self.info_need_state.target_schemas,
+            self.info_need_state.T = self.toolkit.materialize_T(
+                self.info_need_state.T,
                 self.info_need_state.column_descriptions,
-                self.info_need_state.sqls,
+                self.info_need_state.Q,
                 note,
                 self.external_documents,
                 self.current_retrieval_results,
             )
-            self.info_need_state.is_target_schemas_materialized = True
+            self.info_need_state.is_T_materialized = True
 
-            for _, T_doc in self.info_need_state.target_schemas.items():
+            for _, T_doc in self.info_need_state.T.items():
                 updated_content: pd.DataFrame = T_doc.content
                 updated_content.to_csv(T_doc.path, index=False)
 
@@ -434,22 +433,22 @@ class Conductor:
         elif tool == "sql_engine":
             self.__log("SQL Engine called")
             execution_result: list[str] = []
-            if not self.info_need_state.is_target_schemas_materialized:
+            if not self.info_need_state.is_T_materialized:
                 error_message = "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
                 self.__log(f"=> {error_message}")
                 return error_message
-            if len(self.info_need_state.sqls) == 0:
+            if len(self.info_need_state.Q) == 0:
                 error_message = "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer, and finally, you can call SQL Engine again."
                 self.__log(f"=> {error_message}")
                 return error_message
 
             execution_result = self.toolkit.execute_sql(
-                self.info_need_state.target_schemas,
-                self.info_need_state.sqls,
+                self.info_need_state.T,
+                self.info_need_state.Q,
             )
             self.__log(f"SQL execution result output: {execution_result}")
 
-            self.info_need_state.is_sql_executed = True
+            self.info_need_state.is_Q_executed = True
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
@@ -512,7 +511,7 @@ class Conductor:
     ) -> tuple[Generator[str, None, None], list[str]]:
         """
         Consumes chunks from LLM generator and yield only the 'message' content
-        of communicate_with_user actions/intents, ignoring JSON wrappers.
+        of communicate_with_user actions, ignoring JSON wrappers.
         Returns:
             - A generator that streams the message chunks
             - A mutable list containing the full concatenated output
@@ -534,15 +533,15 @@ class Conductor:
 
                     json_str = match.group()
                     try:
-                        action = json.loads(json_str)
+                        action_plan = json.loads(json_str)
                     except json.JSONDecodeError:
                         break
 
                     buffer = buffer[match.end() :]
-                    intent = action.get("intent") or action.get("action")
-                    message_text = action.get("message")
+                    action = action_plan.get("action")
+                    message_text = action_plan.get("message")
 
-                    if intent == "communicate_with_user" and isinstance(
+                    if action == "communicate_with_user" and isinstance(
                         message_text, str
                     ):
                         for char in self.__stream_message_by_whitespace(message_text):
