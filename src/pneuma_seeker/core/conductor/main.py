@@ -36,11 +36,13 @@ class Conductor:
         config: Config,
         iteration_limit=5,
     ) -> None:
+        self.config = config
+        self.logger = logger
+
         self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
         self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
-        self.logger = logger
+
         self.data_sources = data_sources
-        self.config = config
         self.iteration_limit = iteration_limit
 
         self.prov_graph = ProvenanceGraph(self.logger)
