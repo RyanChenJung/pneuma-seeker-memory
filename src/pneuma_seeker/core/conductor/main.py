@@ -4,7 +4,6 @@ import re
 from collections.abc import Generator
 from logging import Logger
 
-import duckdb
 import pandas as pd
 import requests
 
@@ -17,8 +16,6 @@ from pneuma_seeker.core.ir_system.data_model import (
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.ir_system.main import IRSystem
-from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
@@ -26,7 +23,7 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.utils.cleaner import clean_column_table_name
 from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
-from pneuma_seeker.utils.parser import parse_json, parse_sql
+from pneuma_seeker.utils.parser import parse_json
 
 
 class Conductor:
@@ -310,22 +307,46 @@ class Conductor:
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
     ) -> str:
-        if tool == "ir_system" and isinstance(args, dict):
+        if tool == "ir_system":
             self.__log(f"IR System request with params: {args}")
+
+            if not isinstance(args, dict):
+                error_message = "=> `args` must be an object with a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+            if "prompt" not in args:
+                error_message = "=> `args` must have a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+
             self.current_retrieval_results = (
-                self.toolkit.retrieve_multi_retriever_documents(args.get("prompt", ""))
+                self.toolkit.retrieve_multi_retriever_documents(args["prompt"])
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
-        elif tool == "table_enumerator" and isinstance(args, dict):
+        elif tool == "table_enumerator":
             self.__log(f"Table Enumerater request with params: {args}")
-            pattern: str = args.get("pattern", "")
+
+            if not isinstance(args, dict):
+                error_message = "`args` must be an object with a `pattern` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+            if "pattern" not in args:
+                error_message = "`args` must have a `pattern` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+
             enumerated_tables = self.toolkit.retrieve_documents(
-                pattern, RetrieverType.ENUMERATOR
+                args["pattern"], RetrieverType.ENUMERATOR
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
-            return f"Enumerated table IDs based on this pattern: {pattern}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
-        elif tool == "state_manipulation" and isinstance(args, dict):
+            return f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+        elif tool == "state_manipulation":
             self.__log(f"State Manipulation request with params: {args}")
+
+            if not isinstance(args, dict):
+                error_message = "`args` must be an object"
+                self.__log(f"=> {error_message}")
+                return error_message
 
             target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
@@ -382,13 +403,16 @@ class Conductor:
                 return "Successfully modified the SQL queries."
             return "No modification is done."
         elif tool == "materializer":
-            self.__log("Materializer called")
             if len(self.info_need_state.target_schemas.keys()) == 0:
-                return "Target schemas have to be defined before calling Materializer."
+                error_message = "Target schemas have to already be defined before calling Materializer"
+                self.__log(f"=> {error_message}")
+                return error_message
 
             note = ""
             if isinstance(args, dict) and "note" in args:
                 note = args["note"]
+
+            self.__log(f"Materializer called (note: {note})")
 
             self.info_need_state.target_schemas = self.toolkit.materialize_T(
                 self.info_need_state.target_schemas,
@@ -399,6 +423,7 @@ class Conductor:
                 self.current_retrieval_results,
             )
             self.info_need_state.is_target_schemas_materialized = True
+
             for _, T_doc in self.info_need_state.target_schemas.items():
                 updated_content: pd.DataFrame = T_doc.content
                 updated_content.to_csv(T_doc.path, index=False)
@@ -408,28 +433,43 @@ class Conductor:
             self.__log("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_target_schemas_materialized:
-                return "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
+                error_message = "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
+                self.__log(f"=> {error_message}")
+                return error_message
             if len(self.info_need_state.sqls) == 0:
-                return "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer. Finally, you can call SQL Engine again to execute them."
+                error_message = "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer, and finally, you can call SQL Engine again."
+                self.__log(f"=> {error_message}")
+                return error_message
+
             execution_result = self.toolkit.execute_sql(
                 self.info_need_state.target_schemas,
                 self.info_need_state.sqls,
             )
             self.__log(f"SQL execution result output: {execution_result}")
+
             self.info_need_state.is_sql_executed = True
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
         elif tool == "categorical_column_information":
             if isinstance(args, dict):
+                self.__log(
+                    f"categorical_column_information request with params: {args}"
+                )
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
                 if table_id is None:
-                    return "The `id` field most not be empty."
+                    error_message = "The `id` field most not be empty."
+                    self.__log(f"=> {error_message}")
+                    return error_message
                 if table_columns is None:
-                    return "The `columns` field most not be empty."
+                    error_message = "The `columns` field most not be empty."
+                    self.__log(f"=> {error_message}")
+                    return error_message
                 if not isinstance(table_columns, list) or len(table_columns) == 0:
-                    return "The `columns` field must be a non-empty list of strings (column names in the table)"
+                    error_message = "The `columns` field must be a non-empty list of strings (column names in the table)"
+                    self.__log(f"=> {error_message}")
+                    return error_message
 
                 for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
                     if document.doc_id == table_id:
@@ -459,7 +499,7 @@ class Conductor:
             else:
                 return "Argument must be a specified key-value pairs with keys `id` and `columns`."
 
-        return "Tool calling failed."
+        return f"Tool calling failed; {tool} is unknown"
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)
