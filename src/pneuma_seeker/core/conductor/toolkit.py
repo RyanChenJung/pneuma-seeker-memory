@@ -2,6 +2,7 @@ from logging import Logger
 
 import duckdb
 from pandas import DataFrame
+
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.main import IRSystem
@@ -85,9 +86,7 @@ class Toolkit:
                 T_id: T_doc.content for T_id, T_doc in T.items()
             }
 
-            self.__log(
-                f"Executing these SQL statements on the (materialized) T: {Q}"
-            )
+            self.__log(f"Executing these SQL statements on the (materialized) T: {Q}")
 
             for table_name, df in tables.items():
                 con.register(table_name, df)

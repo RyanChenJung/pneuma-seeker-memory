@@ -146,7 +146,7 @@ class Conductor:
             elif intent == "internal_reasoning" and isinstance(action_message, str):
                 self.logger.debug(f"num_actions_taken: {num_actions_taken}")
                 self.logger.debug(f"actions_taken[-1]: {actions_taken[-1]}")
-                yield "LOG: Performing internal reasoning..."
+                yield "LOG: Reasoning internally..."
                 if num_actions_taken > 1 and actions_taken[-1] == "internal_reasoning":
                     llm_messages.append(
                         LLMMessage(
