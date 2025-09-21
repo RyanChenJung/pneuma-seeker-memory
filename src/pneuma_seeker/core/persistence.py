@@ -20,14 +20,6 @@ from pneuma_seeker.utils.cleaner import clean_column_table_name
 DB_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "pneuma_seeker.duckdb"
 )
-TARGET_SCHEMAS_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "..",
-    "..",
-    "..",
-    "data_src",
-    "target_tables",
-)
 
 
 def init_db():
@@ -67,10 +59,9 @@ def save_state(
     provenance_graph: ProvenanceGraph,
 ):
     """
-    Persist info_need_state and retrieval_results as JSON.
-    target_schemas (DataFrames) are serialized with _serialize_dataframe.
+    Persists info_need_state and retrieval_results as JSON.
     """
-    serialized_target_schemas = json.dumps(
+    serialized_T = json.dumps(
         {
             doc_id: {
                 "doc_id": doc.doc_id,
@@ -80,17 +71,17 @@ def save_state(
                 "path": doc.path,
                 "last_node_id": doc.last_node_id,
             }
-            for doc_id, doc in info_need_state.target_schemas.items()
+            for doc_id, doc in info_need_state.T.items()
         }
     )
 
     info_need_state_json = json.dumps(
         {
-            "target_schemas": serialized_target_schemas,
-            "is_target_schemas_materialized": info_need_state.is_target_schemas_materialized,
+            "T": serialized_T,
+            "is_T_materialized": info_need_state.is_T_materialized,
             "column_descriptions": info_need_state.column_descriptions,
-            "sqls": info_need_state.sqls,
-            "is_sql_executed": info_need_state.is_sql_executed,
+            "Q": info_need_state.Q,
+            "is_Q_executed": info_need_state.is_Q_executed,
             "enumerated_table_ids": enumerated_table_ids,
         }
     )
@@ -174,21 +165,21 @@ def load_state(user_id: str, chat_id: str, logger: Logger) -> tuple[
 
     enumerated_table_ids: list[str] = state_data.get("enumerated_table_ids", [])
 
-    raw_target_schemas: dict[str, dict[str, Any]] = state_data.get("target_schemas", {})
-    target_schemas: dict[str, AbstractDocument] = {}
-    for target_schema_id, target_schema_dict in raw_target_schemas.items():
-        doc_id: str = target_schema_dict.get("doc_id", "")
+    raw_T: dict[str, dict[str, Any]] = state_data.get("T", {})
+    T: dict[str, AbstractDocument] = {}
+    for T_id, T_dict in raw_T.items():
+        doc_id: str = T_dict.get("doc_id", "")
         retriever_type = RetrieverType(
-            target_schema_dict.get("retriever_type", RetrieverType.PNEUMA.value)
+            T_dict.get("retriever_type", RetrieverType.PNEUMA.value)
         )
-        path: str = target_schema_dict.get("path", "")
+        path: str = T_dict.get("path", "")
         if len(path) == 0 or not os.path.isfile(path):
             continue
         content = pd.read_csv(path)
-        metadata: dict[str, str] = target_schema_dict.get("metadata", {})
-        last_node_id: str | None = target_schema_dict.get("last_node_id", None)
+        metadata: dict[str, str] = T_dict.get("metadata", {})
+        last_node_id: str | None = T_dict.get("last_node_id", None)
 
-        target_schemas[target_schema_id] = Table(
+        T[T_id] = Table(
             doc_id=doc_id,
             retriever_type=retriever_type,
             content=content,
@@ -197,13 +188,11 @@ def load_state(user_id: str, chat_id: str, logger: Logger) -> tuple[
             last_node_id=last_node_id,
         )
 
-    info_state.target_schemas = target_schemas
-    info_state.is_target_schemas_materialized = state_data.get(
-        "is_target_schemas_materialized", False
-    )
+    info_state.T = T
+    info_state.is_T_materialized = state_data.get("is_T_materialized", False)
     info_state.column_descriptions = state_data.get("column_descriptions", {})
-    info_state.sqls = state_data.get("sqls", [])
-    info_state.is_sql_executed = state_data.get("is_sql_executed", False)
+    info_state.Q = state_data.get("Q", [])
+    info_state.is_Q_executed = state_data.get("is_Q_executed", False)
 
     retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
     for retriever_type, docs in retr_data.items():
