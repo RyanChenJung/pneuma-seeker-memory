@@ -2,7 +2,7 @@ import os
 from pneuma_seeker.core.persistence import init_db, load_state, save_state
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
-from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import setup_logger
 
@@ -40,20 +40,25 @@ class ChatInterface:
     def process_user_input(
         self,
         chat_messages: list[LLMMessage],
-        external_data_paths: list[str] = [],
+        external_data_paths: list[str] | None = None,
     ):
         """
         Processes user input, as encapsulated in `chat_messages`,
         optionally leveraging external data (if specified).
         """
+        external_data_paths = external_data_paths or []
         interaction_history: list[HumanConductorInteraction] = []
         for i in range(0, len(chat_messages) - 1, 2):
-            interaction_history.append(
-                HumanConductorInteraction(
-                    chat_messages[i]["content"],
-                    chat_messages[i + 1]["content"],
+            if (
+                chat_messages[i]["role"] == Role.USER.value
+                and chat_messages[i + 1]["role"] == Role.ASSISTANT.value
+            ):
+                interaction_history.append(
+                    HumanConductorInteraction(
+                        chat_messages[i]["content"],
+                        chat_messages[i + 1]["content"],
+                    )
                 )
-            )
 
         for conductor_response in self.conductor.process_input(
             chat_messages[-1]["content"],
@@ -64,8 +69,6 @@ class ChatInterface:
         ):
             yield conductor_response
 
-        yield "DONE"
-
         if self.enable_persistence:
             save_state(
                 self.user_id,
@@ -75,3 +78,5 @@ class ChatInterface:
                 self.conductor.enumerated_table_ids,
                 self.conductor.prov_graph,
             )
+
+        yield "DONE"
