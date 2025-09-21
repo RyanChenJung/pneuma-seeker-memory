@@ -15,25 +15,25 @@ class MaterializerPromptFactory:
     self,
     T: dict[str, DataFrame],
     column_descriptions: dict[str, dict[str, str]],
-    sqls: list[str],
+    Q: list[str],
     operation_description: str,
 ) -> str:
         return f"""
-You are the Materializer. Your task is to fill all rows for the target schemas using:
+You are the Materializer. Your task is to fill all rows for the target tables using:
 1. Retrieved internal data
 2. User-uploaded external tables (if any)
 3. Allowed operations described below
 
 Treat external tables just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
 
-TARGET SCHEMAS:
+TARGET TABLES:
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
 
 COLUMN DESCRIPTIONS:
 {column_descriptions}
 
-REFERENCE SQLs (for value format guidance only — not to execute directly):
-{sqls}
+REFERENCE SQL QUERIES (for value format guidance only — not to execute directly):
+{Q}
 
 AVAILABLE OPERATIONS:
 {operation_description}
@@ -43,7 +43,7 @@ CORE RULES:
 2. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
 3. Internal data is reset each time Document Retriever is used; external tables persist.
 4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
-5. Always assign results to the correct target schema IDs, matching column names **exactly (case-sensitive)**.
+5. Always assign results to the correct target table IDs, matching column names **exactly (case-sensitive)**.
 6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
 7. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
@@ -59,7 +59,7 @@ Produce exactly ONE JSON object:
   "message": "...",        # if step_type == internal_reasoning
   "name": "<operation>",   # if step_type == operation
   "args": {{...}},         # arguments for the operation
-  "assign_to": "<target_schema_id or intermediate_table_id>"
+  "assign_to": "<target_table_id or intermediate_table_id>"
 }}
 """.strip()
     
@@ -73,7 +73,7 @@ Produce exactly ONE JSON object:
     user_provided_external_data: list[AbstractDocument],
 ) -> str:
         return f"""
-This is iteration {num_iterations} of materializing the Target Schemas.
+This is iteration {num_iterations} of materializing the target tables.
 
 CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
@@ -86,8 +86,8 @@ CORE RULES:
 1. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
 2. Internal data is reset each time Document Retriever is used; external tables persist.
 3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
-4. Always match target schema column names exactly (case-sensitive).
-5. Assign completed tables only to their correct target schema IDs.
+4. Always match target table column names exactly (case-sensitive).
+5. Assign completed tables only to their correct target table IDs.
 6. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
@@ -120,7 +120,7 @@ OR
   "step_type": "operation",
   "name": "Python Executor" | "SQL Executor",
   "args": {{...}},
-  "assign_to": "<target_schema_id_or_intermediate_id>"
+  "assign_to": "<target_table_id_or_intermediate_id>"
 }}
 """.strip()
 

@@ -70,7 +70,7 @@ class Materializer:
         self,
         T: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
-        sqls: list[str],
+        Q: list[str],
         user_side_note="",
         external_data: list[AbstractDocument] = [],
         prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
@@ -82,7 +82,7 @@ class Materializer:
             content=self.prompt_factory.get_planning_prompt(
                 T=T,
                 column_descriptions=column_descriptions,
-                sqls=sqls,
+                Q=Q,
                 operation_description=get_operation_description(),
             ),
         )
