@@ -8,26 +8,22 @@ from unittest.mock import MagicMock
 
 from pandas import DataFrame
 
+from pneuma_seeker.core.conductor.main import Conductor
+
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
-
-from pneuma_seeker.conductor_state import ConductorState
-from pneuma_seeker.base_table_reducer.base_table_reducer import BaseTableReducer
-from pneuma_seeker.table.representation.abstract_table import AbstractTable
-from pneuma_seeker.table.representation.impl.df_table import DFTable
-from pneuma_seeker.computation_graph import ComputationGraph
-from pneuma_seeker.model.interface.impl.gpt import GPT
-from pneuma_seeker.utils.logger import setup_logger
-from pneuma_seeker.table.store.impl.py_table_store import PyTableStore
 
 
 class TestBaseTableReducer(unittest.TestCase):
     def setUp(self):
         self.temp_dir_1 = TemporaryDirectory()
         self.temp_dir_2 = TemporaryDirectory()
-        self.base_table_reducer = BaseTableReducer()
+
+        self.conductor = Conductor(
+            "azure_openai"
+        )
 
         self.target_schema = ["target_col_1"]
         self.question = "This is a sample question."
@@ -83,12 +79,16 @@ class TestBaseTableReducer(unittest.TestCase):
 
         self.temp_dir_2.cleanup()
 
+    def test_communicate_with_user(self):
+        mock_return_value = """
+            { 
+                "action": "communicate_with_user",
+                "message": "I keep an internal “state” with three parts:\n\n1. T: a dictionary of target tables, each with its list of columns.\n2. column_descriptions: for each table, a description of what each column means.\n3. Q: an ordered list of SQL queries that will run against those tables.\n\nRight now, all three are empty (no tables defined, no columns described, no SQL written). \n\nNext, please tell me what data or business question you’d like to explore. From there, I’ll propose a target table schema (T), describe its columns, and build the SQL (Q) step by step—ensuring every query only references columns actually in our defined tables."
+            }
+        """
+
+
     def test_compute_target_table(self):
-        mock_return_value = """{
-            "operation": "select_column",
-            "columns_involved": ["school_name"],
-            "description": "Select SRC.school_name."
-        }"""
         self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
         output_node = self.base_table_reducer.compute_target_table(
             ctx=self.conductor_state,
