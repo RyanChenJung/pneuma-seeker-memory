@@ -5,5 +5,5 @@ __pycache__
 *log
 pneuma_seeker.duckdb
 temp
-server.out
+*.out
 .vscode
