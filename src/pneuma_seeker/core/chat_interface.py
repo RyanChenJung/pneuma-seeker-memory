@@ -18,10 +18,9 @@ class ChatInterface:
         enable_persistence=True,
         env_path=".env",
     ):
-        self.logger = setup_logger(log_path=os.path.join(".", "log"))
-        self.config = Config(env_path=env_path)
+        logger = setup_logger(log_path=os.path.join(".", "log"))
         self.conductor = Conductor(
-            llm_path, embed_model_path, self.logger, data_sources, self.config
+            llm_path, embed_model_path, logger, data_sources, Config(env_path=env_path)
         )
 
         self.user_id = user_id
@@ -30,10 +29,10 @@ class ChatInterface:
         self.enable_persistence = enable_persistence
         if self.enable_persistence:
             init_db()
-            info_state, retr_results, enumerated_table_ids, prov_graph = (
-                load_state(user_id, chat_id, self.logger)
+            info_need_state, retr_results, enumerated_table_ids, prov_graph = (
+                load_state(user_id, chat_id, logger)
             )
-            self.conductor.info_need_state = info_state
+            self.conductor.info_need_state = info_need_state
             self.conductor.current_retrieval_results = retr_results
             self.conductor.enumerated_table_ids = enumerated_table_ids
             self.conductor.prov_graph = prov_graph
@@ -44,31 +43,26 @@ class ChatInterface:
         external_data_paths: list[str] = [],
     ):
         """
-        Processes user input, as encapsulated in `chat_messages`.
+        Processes user input, as encapsulated in `chat_messages`,
+        optionally leveraging external data (if specified).
         """
-        conductor_final_response = ""
-        human_input = chat_messages[-1]["content"]
         interaction_history: list[HumanConductorInteraction] = []
         for i in range(0, len(chat_messages) - 1, 2):
-            chat_human_input = chat_messages[i]["content"]
-            chat_conductor_response = chat_messages[i + 1]["content"]
             interaction_history.append(
                 HumanConductorInteraction(
-                    chat_human_input,
-                    chat_conductor_response,
+                    chat_messages[i]["content"],
+                    chat_messages[i + 1]["content"],
                 )
             )
 
-        for system_response in self.conductor.process_input(
-            human_input,
+        for conductor_response in self.conductor.process_input(
+            chat_messages[-1]["content"],
             self.user_id,
             self.chat_id,
             interaction_history,
             external_data_paths,
         ):
-            if not system_response.startswith("LOG"):
-                conductor_final_response += system_response
-            yield system_response
+            yield conductor_response
 
         yield "DONE"
 
