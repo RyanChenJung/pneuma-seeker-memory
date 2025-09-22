@@ -286,7 +286,7 @@ class Conductor:
                         doc_id=standardized_name,
                         retriever_type=retriever_type,
                         content=standardized_df,
-                        metadata={"sheet_name": original_name},  # provenance kept
+                        metadata={"sheet_name": original_name},
                         path=path,
                     )
                 )
@@ -311,6 +311,7 @@ class Conductor:
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
     ) -> str:
+        """Executes a specified tool with given arguments."""
         if tool == "ir_system":
             self.__log(f"IR System request with params: {args}")
 
@@ -327,7 +328,7 @@ class Conductor:
                 self.toolkit.retrieve_multi_retriever_documents(args["prompt"])
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
-        elif tool == "table_enumerator":
+        if tool == "table_enumerator":
             self.__log(f"Table Enumerater request with params: {args}")
 
             if not isinstance(args, dict):
@@ -344,7 +345,7 @@ class Conductor:
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
             return f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
-        elif tool == "state_manipulation":
+        if tool == "state_manipulation":
             self.__log(f"State Manipulation request with params: {args}")
 
             if not isinstance(args, dict):
@@ -406,7 +407,7 @@ class Conductor:
             if is_sqls_modified:
                 return "Successfully modified the SQL queries."
             return "No modification is done."
-        elif tool == "materializer":
+        if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
                 error_message = "Target schemas have to already be defined before calling Materializer"
                 self.__log(f"=> {error_message}")
@@ -433,7 +434,7 @@ class Conductor:
                 updated_content.to_csv(T_doc.path, index=False)
 
             return "Successfully materialized the target schemas."
-        elif tool == "sql_engine":
+        if tool == "sql_engine":
             self.__log("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_T_materialized:
@@ -455,7 +456,7 @@ class Conductor:
             return (
                 f"Executed the SQLs, which resulted in this output: {execution_result}"
             )
-        elif tool == "categorical_column_information":
+        if tool == "categorical_column_information":
             if isinstance(args, dict):
                 self.__log(
                     f"categorical_column_information request with params: {args}"
