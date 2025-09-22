@@ -182,6 +182,7 @@ class Conductor:
         yield user_facing_response
 
     def __process_external_data(self, external_data_paths):
+        """Processes external data files and integrates them into the provenance graph."""
         if len(external_data_paths) > 0:
             self.__log("Utilizing external data...")
             self.external_documents = self.__unpack_external_data(external_data_paths)
@@ -198,6 +199,7 @@ class Conductor:
     def __unpack_external_data(
         self, external_data_paths: list[str]
     ) -> list[AbstractDocument]:
+        """Unpacks external data files (CSV or Excel) and returns a list of Table documents."""
         external_docs: list[AbstractDocument] = []
         os.makedirs("temp", exist_ok=True)
         for data_path in external_data_paths:
@@ -215,6 +217,7 @@ class Conductor:
                     headers={
                         "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
                     },
+                    timeout=(10, 40),
                 )
                 resp.raise_for_status()
 
