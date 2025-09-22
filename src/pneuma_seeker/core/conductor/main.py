@@ -31,7 +31,6 @@ class Conductor:
         logger: Logger,
         data_sources: list[str],
         config: Config,
-        iteration_limit=5,
     ) -> None:
         self.config = config
         self.logger = logger
@@ -40,7 +39,7 @@ class Conductor:
         self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
 
         self.data_sources = data_sources
-        self.iteration_limit = iteration_limit
+        self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
 
         self.prov_graph = ProvenanceGraph(self.logger)
         self.prompt_factory = ConductorPromptFactory()
@@ -76,6 +75,7 @@ class Conductor:
         interaction_history: list[HumanConductorInteraction],
         external_data_paths: list[str],
     ):
+        """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
         if len(interaction_history) > 0:
             user_input = f"{user_input} (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
