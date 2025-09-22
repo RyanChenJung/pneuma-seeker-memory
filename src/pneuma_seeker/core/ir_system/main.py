@@ -13,6 +13,10 @@ from pneuma_seeker.utils.logger import formatted_log
 
 
 class IRSystem:
+    """
+    Information Retrieval System that manages multiple retrievers
+    and handles document indexing and retrieval.
+    """
     def __init__(self, llm: AbstractModel, embed_model: AbstractModel, logger: Logger):
         self.prompt_factory = PromptFactory()
         self.llm = llm
