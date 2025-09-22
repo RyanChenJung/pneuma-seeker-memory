@@ -1,7 +1,4 @@
-import json
 import os
-import re
-from collections.abc import Generator
 from logging import Logger
 
 import pandas as pd
@@ -123,8 +120,16 @@ class Conductor:
 
             try:
                 action_plan = parse_json(full_response)
-            except Exception:
-                action_plan = {}
+            except ValueError as exc:
+                self.__log(f"Failed to parse LLM response as JSON: {exc}")
+                num_actions_taken -= 1
+                llm_messages.append(
+                    LLMMessage(
+                        role=Role.USER.value,
+                        content="The response is not valid JSON. Please follow the specified format and try again.",
+                    )
+                )
+                continue
 
             action: str = action_plan.get("action", "")
             actions_taken.append(action)
