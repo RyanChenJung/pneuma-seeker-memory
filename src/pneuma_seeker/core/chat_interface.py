@@ -30,7 +30,7 @@ class ChatInterface:
         if self.enable_persistence:
             init_db()
             info_need_state, retr_results, enumerated_table_ids, prov_graph = (
-                load_state(user_id, chat_id, logger)
+                load_state(self.user_id, self.chat_id, logger)
             )
             self.conductor.info_need_state = info_need_state
             self.conductor.current_retrieval_results = retr_results
