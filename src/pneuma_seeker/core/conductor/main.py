@@ -203,54 +203,57 @@ class Conductor:
         external_docs: list[AbstractDocument] = []
         os.makedirs("temp", exist_ok=True)
         for data_path in external_data_paths:
-            if data_path.startswith("/api") or data_path.startswith("api"):
-                if self.config.OPENWEBUI_BASE_URL.endswith(
-                    "/"
-                ) and data_path.startswith("/"):
-                    data_path = data_path[1:]
-                if data_path.endswith("/content"):
-                    data_path = data_path[: -len("/content")]
-                data_url = self.config.OPENWEBUI_BASE_URL + data_path
+            try:
+                if data_path.startswith("/api") or data_path.startswith("api"):
+                    if self.config.OPENWEBUI_BASE_URL.endswith(
+                        "/"
+                    ) and data_path.startswith("/"):
+                        data_path = data_path[1:]
+                    if data_path.endswith("/content"):
+                        data_path = data_path[: -len("/content")]
+                    data_url = self.config.OPENWEBUI_BASE_URL + data_path
 
-                resp = requests.get(
-                    data_url,
-                    headers={
-                        "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
-                    },
-                    timeout=(10, 40),
-                )
-                resp.raise_for_status()
+                    resp = requests.get(
+                        data_url,
+                        headers={
+                            "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
+                        },
+                        timeout=(10, 40),
+                    )
+                    resp.raise_for_status()
 
-                content_type = resp.headers.get("Content-Type", "").lower()
+                    content_type = resp.headers.get("Content-Type", "").lower()
 
-                if "csv" in content_type or "excel" in content_type:
-                    # direct file (csv/xlsx)
-                    ext = ".csv" if "csv" in content_type else ".xlsx"
-                    local_path = os.path.join("temp", f"downloaded{ext}")
-                    with open(local_path, "wb") as f:
-                        f.write(resp.content)
-                elif "json" in content_type:
-                    # metadata wrapper
-                    meta = resp.json()
-                    file_path = meta.get("path")
-                    if not file_path or not os.path.exists(file_path):
-                        raise ValueError(
-                            f"Invalid API response, no usable file path: {meta}"
-                        )
-                    local_path = file_path
+                    if "csv" in content_type or "excel" in content_type:
+                        # direct file (csv/xlsx)
+                        ext = ".csv" if "csv" in content_type else ".xlsx"
+                        local_path = os.path.join("temp", f"downloaded{ext}")
+                        with open(local_path, "wb") as f:
+                            f.write(resp.content)
+                    elif "json" in content_type:
+                        # metadata wrapper
+                        meta = resp.json()
+                        file_path = meta.get("path")
+                        if not file_path or not os.path.exists(file_path):
+                            raise ValueError(
+                                f"Invalid API response, no usable file path: {meta}"
+                            )
+                        local_path = file_path
+                    else:
+                        raise ValueError(f"Unsupported content type: {content_type}")
+
+                    try:
+                        external_docs.extend(self.__read_external_data_content(local_path))
+                    finally:
+                        if local_path.startswith("temp") and os.path.exists(local_path):
+                            try:
+                                os.remove(local_path)
+                            except OSError:
+                                pass
                 else:
-                    raise ValueError(f"Unsupported content type: {content_type}")
-
-                try:
-                    external_docs.extend(self.__read_external_data_content(local_path))
-                finally:
-                    if local_path.startswith("temp") and os.path.exists(local_path):
-                        try:
-                            os.remove(local_path)
-                        except OSError:
-                            pass
-            else:
-                external_docs.extend(self.__read_external_data_content(data_path))
+                    external_docs.extend(self.__read_external_data_content(data_path))
+            except Exception:
+                continue
         return external_docs
 
     def __read_external_data_content(self, path: str) -> list[AbstractDocument]:
