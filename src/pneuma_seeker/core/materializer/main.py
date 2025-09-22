@@ -34,6 +34,11 @@ from pneuma_seeker.utils.parser import parse_code, parse_json
 
 
 class Materializer:
+    """
+    Materializer class that orchestrates the materialization
+    process using LLMs and various operations.
+    """
+
     def __init__(
         self,
         llm: AbstractModel,
@@ -42,26 +47,24 @@ class Materializer:
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
     ):
-        self.logger = logger
         self.__log("Initializing Materializer")
 
         self.llm = llm
         self.embed_model = embed_model
+        self.logger = logger
 
         self.prompt_factory = MaterializerPromptFactory()
-        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.state = MaterializerState()
 
         self.actions: list[str] = []
         self.data_sources = data_sources
         self.prov_graph = prov_graph
 
+        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.python_executor = PythonExecutor(self.logger, self.prov_graph)
         self.sql_executor = SQLExecutor(self.llm, self.logger)
         self.semantic_joiner = SemanticJoiner(self.llm, self.embed_model)
-        self.semantic_col_generator = SemanticColumnGenerator(
-            self.llm, 20
-        )  # Future-TODO: dynamically allocate batch_size
+        self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20)
 
         self.is_sql_alignment_checked = False
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -75,17 +78,9 @@ class Materializer:
         external_data: list[AbstractDocument] = [],
         prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
     ) -> dict[str, DataFrame]:
-        self.__log(f"Materializing {len(T)} tables")
+        """Materialize target schemas T based on the provided queries Q and external data."""
+        self.__log(f"Materializing {len(T)} target tables")
         self.__cleanup_system()
-        sys_prompt = LLMMessage(
-            role=Role.SYSTEM.value,
-            content=self.prompt_factory.get_planning_prompt(
-                T=T,
-                column_descriptions=column_descriptions,
-                Q=Q,
-                operation_description=get_operation_description(),
-            ),
-        )
 
         if len(prefetched_ir_docs) > 0:
             for retriever_type in prefetched_ir_docs:
@@ -98,15 +93,25 @@ class Materializer:
         # Future-TODO: Use more fundamental safeguard; currently, we
         # prevent repetitive iteration that can happen, usually if
         # the model is confident it has produced all tables specified
-        # in T, even though it is not enough.
+        # in T, even though it is not (fundamentally) enough.
         prev_response = ""
         repetitive_response_count = 0
 
         curr_iteration = 0
-        llm_messages = [sys_prompt]
+        llm_messages = [
+            LLMMessage(
+                role=Role.SYSTEM.value,
+                content=self.prompt_factory.get_planning_prompt(
+                    T=T,
+                    column_descriptions=column_descriptions,
+                    Q=Q,
+                    operation_description=get_operation_description(),
+                ),
+            )
+        ]
         while not self.__check_completion(T):
-            curr_iteration += 1
             self.__log("Planning next materialization step")
+            curr_iteration += 1
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
@@ -126,6 +131,7 @@ class Materializer:
                 repetitive_response_count += 1
             else:
                 prev_response = response
+                repetitive_response_count = 0
             if repetitive_response_count == 5:
                 break
 
@@ -137,14 +143,22 @@ class Materializer:
                 )
             )
 
-            plan: dict[str, Any] = parse_json(response)
-            step_type: str = plan["step_type"]
+            try:
+                plan: dict[str, Any] = parse_json(response)
+            except ValueError as exc:
+                self.__log(f"Error parsing JSON: {exc}")
+                self.actions.append(
+                    "Error parsing the response from the model. Please ensure the response is in valid JSON format."
+                )
+                continue
+
+            step_type: str = plan.get("step_type", "")
             self.__handle_step(
                 step_type, plan, self.__gather_all_tables(external_data), T
             )
 
         self.__log("Materialization completed successfully")
-        final_result: dict[str, DataFrame] = dict()
+        final_result: dict[str, DataFrame] = {}
         for intermediate_table_doc in self.state.intermediate_tables:
             if intermediate_table_doc.doc_id in T.keys():
                 final_result[intermediate_table_doc.doc_id] = (
@@ -153,6 +167,7 @@ class Materializer:
         return final_result
 
     def __gather_all_tables(self, external_data: list[AbstractDocument]):
+        """Gather all tables from retrieved documents, external data, and intermediate tables."""
         pneuma_retrieval_results: list[AbstractDocument] = (
             self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
         )
@@ -172,17 +187,18 @@ class Materializer:
         all_tables: list[AbstractDocument],
         T: dict[str, DataFrame],
     ):
+        """Handles a single step in the materialization process."""
         if step_type == "internal_reasoning":
             message: str = plan["message"]
             self.actions.append(f"Reasoned internally: {message}")
         elif step_type == "operation":
-            op_name: str = plan["name"]
-            op_args: dict[str, Any] = plan["args"]
+            op_name: str = plan.get("name", "")
+            op_args: dict[str, Any] = plan.get("args", {})
             assign_to: str = plan.get("assign_to", "")
 
             if op_name == "Document Retriever":
                 self.__log("Executing Document Retriever")
-                prompt: str = op_args["prompt"]
+                prompt: str = op_args.get("prompt", "")
                 self.state.current_retrieved_documents = (
                     self.ir_system.retrieve_multisource_documents(
                         prompt,
@@ -220,7 +236,7 @@ class Materializer:
                     doc.last_node_id = new_node.id
             elif op_name == "Table Enumerator":
                 self.__log("Executing Table Enumerator")
-                pattern: str = op_args["pattern"]
+                pattern: str = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = (
                     self.ir_system.retrieve_documents(
                         RetrieverType.ENUMERATOR,
@@ -264,8 +280,10 @@ class Materializer:
                 for target_schema_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
                         retrieved_table_info = retrieved_table_info[0]
-                    table_id_to_select: str = retrieved_table_info["id"]
-                    relevant_columns: list[str] = retrieved_table_info["columns"]
+                    table_id_to_select: str = retrieved_table_info.get("id", "")
+                    relevant_columns: list[str] = retrieved_table_info.get(
+                        "columns", []
+                    )
 
                     if table_id_to_select.startswith("Table "):
                         table_id_to_select = table_id_to_select[6:]
@@ -343,7 +361,7 @@ class Materializer:
 
                 if table_id is None or table_id not in [i.doc_id for i in all_tables]:
                     self.actions.append(
-                        f"table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                        "table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     )
                     return
                 if new_column_name is None:
@@ -526,7 +544,6 @@ class Materializer:
                 self.actions.append(
                     "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 )
-
             elif op_name == "Python Executor":
                 id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
@@ -534,7 +551,7 @@ class Materializer:
                     id_dfs[table_doc.doc_id] = table_doc.content
                     id_docs[table_doc.doc_id] = table_doc
 
-                python_code: str = parse_code(op_args["code"])
+                python_code: str = parse_code(op_args.get("code", ""))
                 python_executor_output = self.python_executor.execute_code(
                     id_dfs, python_code
                 )
@@ -682,6 +699,7 @@ class Materializer:
             self.actions.append(f"The step {step_type} is not a valid action.")
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
+        """Check if all target schemas in T have been materialized correctly."""
         self.__log("Check completion")
         all_schema_ids = set(T.keys())
         id_dfs: dict[str, DataFrame] = {}
@@ -741,6 +759,7 @@ class Materializer:
         return is_complete
 
     def __cleanup_system(self):
+        """Reset the state and clear intermediate files."""
         self.__log("Cleaning up Materializer...")
         self.state.reset()
         self.prov_graph.reset_for_materialization()
@@ -754,13 +773,14 @@ class Materializer:
         for csv_file in glob.glob(pattern):
             try:
                 os.remove(csv_file)
-            except Exception as e:
+            except Exception:
                 continue
 
     def __log(self, text):
         formatted_log(self.logger, "MATERIALIZER", text)
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):
+        """Save a new or updated intermediate table to a CSV file."""
         csv_path = os.path.join(
             self.__get_intermediate_table_dir_path(), f"{table_id}.csv"
         )
@@ -774,4 +794,5 @@ class Materializer:
             intermediate_table.to_csv(csv_path, index=False)
 
     def __get_intermediate_table_dir_path(self):
+        """Get the directory path for storing intermediate table CSV files."""
         return os.path.join(self.module_dir, "intermediate_data")
