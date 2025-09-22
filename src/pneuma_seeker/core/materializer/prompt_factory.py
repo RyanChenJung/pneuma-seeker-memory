@@ -11,13 +11,15 @@ from pneuma_seeker.core.ir_system.data_model import (
 
 
 class MaterializerPromptFactory:
+    """Generates prompts for the Materializer LLM agent."""
     def get_planning_prompt(
-    self,
-    T: dict[str, DataFrame],
-    column_descriptions: dict[str, dict[str, str]],
-    Q: list[str],
-    operation_description: str,
-) -> str:
+        self,
+        T: dict[str, DataFrame],
+        column_descriptions: dict[str, dict[str, str]],
+        Q: list[str],
+        operation_description: str,
+    ) -> str:
+        """Generates the initial planning prompt for the Materializer."""
         return f"""
 You are the Materializer. Your task is to fill all rows for the target tables using:
 1. Retrieved internal data
@@ -64,14 +66,15 @@ Produce exactly ONE JSON object:
 """.strip()
     
     def get_context_prompt(
-    self,
-    retrieved_documents: dict[RetrieverType, list[AbstractDocument]],
-    intermediate_tables: list[AbstractDocument],
-    recent_actions: list[str],
-    num_iterations: int,
-    user_side_note: str,
-    user_provided_external_data: list[AbstractDocument],
-) -> str:
+        self,
+        retrieved_documents: dict[RetrieverType, list[AbstractDocument]],
+        intermediate_tables: list[AbstractDocument],
+        recent_actions: list[str],
+        num_iterations: int,
+        user_side_note: str,
+        user_provided_external_data: list[AbstractDocument],
+    ) -> str:
+        """Generates the context prompt for each iteration of the Materializer."""
         return f"""
 This is iteration {num_iterations} of materializing the target tables.
 
@@ -125,6 +128,7 @@ OR
 """.strip()
 
     def get_fix_python_prompt(self, code: str, available_tables: dict[str, DataFrame], error: Exception):
+        """Generates a prompt to fix Python code that resulted in an error."""
         return f"""You are an expert in Python programming.
 
 This code:
@@ -139,6 +143,7 @@ Please provide direct feedback about what is wrong with the code, so the impleme
 """
     
     def __format_available_tables(self, tables: dict[str, DataFrame]):
+        """Formats available tables for inclusion in prompts."""
         tables_repr = ""
         for table_id, table in tables.items():
             tables_repr += (
