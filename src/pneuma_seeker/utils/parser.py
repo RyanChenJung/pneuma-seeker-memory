@@ -1,7 +1,7 @@
 import json
+import re
 
 from ast import literal_eval
-from typing import Any
 
 
 def read_jsonl(file_path: str):
@@ -19,14 +19,23 @@ def write_jsonl(data: list[dict[str, str]], file_path: str):
             file.write("\n")
 
 
-def parse_json(json_string: str) -> Any:
-    if json_string.startswith("```"):
-        json_string = json_string[3:]
-    if json_string.endswith("```"):
-        json_string = json_string[:-3]
-    if json_string.startswith("json"):
-        json_string = json_string[4:]
-    return json.loads(json_string)
+def parse_json(json_string: str) -> dict:
+    """
+    Parses a JSON string, removing any surrounding code block markers
+    if present. Raises ValueError if the input is not a string or if the
+    JSON is invalid.
+    """
+    if not isinstance(json_string, str):
+        raise ValueError("Input must be a string")
+    json_string = json_string.strip()
+    json_string = json_string.strip()
+    json_string = re.sub(r'^```(?:json)?\s*', '', json_string)
+    json_string = re.sub(r'\s*```$', '', json_string)
+    json_string = json_string.strip()
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid JSON string") from exc
 
 
 def parse_sql(sql_string: str) -> str:
