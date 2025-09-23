@@ -42,7 +42,7 @@ class Action:
             msg["content"] = content
 
     async def _fetch_launcher_html(self, user_id: str, chat_id: str) -> str:
-        url = f"http://127.0.0.1:8000/state/html/{user_id}/{chat_id}"
+        url = f"http://127.0.0.1:8000/combined/html/{user_id}/{chat_id}"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
                 resp = await client.get(url)
