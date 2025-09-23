@@ -85,7 +85,7 @@ Available Tools:
     Capabilities:
         - Populate T using Python or SQL computations when data is available.
         - Generate new columns via semantic reasoning (i.e., using an LLM) when marked as (semantically_derived).
-        - Perform semantic joins between related tables without strict key matches.
+        - Perform semantic joins between related tables without strict key matches. Do not specify a similarity threshold in `note`. If specified by the user, define it in Q instead.
     Implication:
         - Define columns normally if they can be computed from retrieved data (no tag needed).
         - If a column requires semantic reasoning or external knowledge (e.g. classification, labeling, geographic lookup), mark it as (semantically_derived).
