@@ -101,8 +101,6 @@ class ConnectionManager:
         if key in self.active_connections:
             for ws in self.active_connections[key]:
                 # Ideally close websocket connections gracefully
-                import asyncio
-
                 asyncio.create_task(ws.close())
             del self.active_connections[key]
 

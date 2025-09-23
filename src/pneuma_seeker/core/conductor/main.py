@@ -78,7 +78,7 @@ class Conductor:
         """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
         if len(interaction_history) > 0:
-            user_input = f"{user_input} (Note: please check the current state (target schemas & sqls), if already defined, are they still relevant, or do they need any adjustments? For sqls, ensure all queries use ONLY available columns in the target schemas, so we do not run into errors.)"
+            user_input = f"{user_input} (Note: please check the current state (T & Q), if already defined, are they still relevant, or do they need any adjustments? For Q, ensure all queries use ONLY available columns in T, so we do not run into errors.)"
         self.__process_external_data(external_data_paths)
 
         num_actions_taken = 0
@@ -353,19 +353,19 @@ class Conductor:
                 self.__log(f"=> {error_message}")
                 return error_message
 
-            target_schemas: dict[str, list[str]] | None = args.get("target_schemas")
+            T: dict[str, list[str]] | None = args.get("T")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
                 "column_descriptions"
             )
-            sqls: list[str] | None = args.get("sqls")
+            Q: list[str] | None = args.get("Q")
 
-            is_target_schemas_modified = False
-            if target_schemas is not None and column_descriptions is not None:
+            is_T_modified = False
+            if T is not None and column_descriptions is not None:
                 if column_descriptions is not None:
-                    target_schemas_docs: dict[str, AbstractDocument] = dict()
-                    for schema_id in target_schemas:
+                    T_docs: dict[str, AbstractDocument] = dict()
+                    for schema_id in T:
                         target_schema_df = pd.DataFrame(
-                            columns=target_schemas[schema_id]
+                            columns=T[schema_id]
                         )
 
                         target_schema_path = os.path.join(
@@ -377,7 +377,7 @@ class Conductor:
                         os.makedirs(os.path.dirname(target_schema_path), exist_ok=True)
 
                         target_schema_df.to_csv(target_schema_path, index=False)
-                        target_schemas_docs[schema_id] = Table(
+                        T_docs[schema_id] = Table(
                             doc_id=schema_id,
                             retriever_type=RetrieverType.CONDUCTOR,
                             content=target_schema_df,
@@ -385,31 +385,31 @@ class Conductor:
                             path=target_schema_path,
                         )
 
-                    self.info_need_state.T = target_schemas_docs
+                    self.info_need_state.T = T_docs
                     self.info_need_state.column_descriptions = column_descriptions
                     self.info_need_state.is_T_materialized = False
-                    is_target_schemas_modified = True
+                    is_T_modified = True
                 else:
-                    return "If you want to change target_schemas, make sure to also define column_descriptions."
+                    return "If you want to change T, make sure to also define column_descriptions."
 
-            is_sqls_modified = False
-            if sqls is not None:
-                self.info_need_state.Q = sqls
+            is_Q_modified = False
+            if Q is not None:
+                self.info_need_state.Q = Q
                 self.info_need_state.is_Q_executed = False
-                is_sqls_modified = True
+                is_Q_modified = True
 
-            if is_target_schemas_modified and is_sqls_modified:
+            if is_T_modified and is_Q_modified:
                 return (
-                    "Successfully modified both the target schemas and the SQL queries."
+                    "Successfully modified both T and Q."
                 )
-            if is_target_schemas_modified:
-                return "Successfully modified the target schemas."
-            if is_sqls_modified:
-                return "Successfully modified the SQL queries."
+            if is_T_modified:
+                return "Successfully modified T."
+            if is_Q_modified:
+                return "Successfully modified Q."
             return "No modification is done."
         if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
-                error_message = "Target schemas have to already be defined before calling Materializer"
+                error_message = "T has to already be defined before calling Materializer"
                 self.__log(f"=> {error_message}")
                 return error_message
 
@@ -433,16 +433,16 @@ class Conductor:
                 updated_content: pd.DataFrame = T_doc.content
                 updated_content.to_csv(T_doc.path, index=False)
 
-            return "Successfully materialized the target schemas."
+            return "Successfully materialized T."
         if tool == "sql_engine":
             self.__log("SQL Engine called")
             execution_result: list[str] = []
             if not self.info_need_state.is_T_materialized:
-                error_message = "Target schemas have not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
+                error_message = "T has not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
                 self.__log(f"=> {error_message}")
                 return error_message
             if len(self.info_need_state.Q) == 0:
-                error_message = "sqls is still empty, which means there is nothing to execute. Please define the sql queries first in the state's sqls, then ensure target schemas have been materialized using Materializer, and finally, you can call SQL Engine again."
+                error_message = "Q is still empty, which means there is nothing to execute. Please define Q first, then ensure T has been materialized using Materializer, and finally, you can call SQL Engine again."
                 self.__log(f"=> {error_message}")
                 return error_message
 
@@ -454,7 +454,7 @@ class Conductor:
 
             self.info_need_state.is_Q_executed = True
             return (
-                f"Executed the SQLs, which resulted in this output: {execution_result}"
+                f"Executed Q, which resulted in this output: {execution_result}"
             )
         if tool == "categorical_column_information":
             if isinstance(args, dict):
