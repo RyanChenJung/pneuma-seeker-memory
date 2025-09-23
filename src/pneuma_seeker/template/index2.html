@@ -16,19 +16,23 @@
     /* Header styling for all cards */
     .card-header {
       font-weight: 600;
-      background-color: #f8f9fa; /* soft light gray */
+      background-color: #f8f9fa;
+      /* soft light gray */
       color: #1d1d1d;
-      cursor: pointer; /* indicates clickable if collapsible */
+      cursor: pointer;
+      /* indicates clickable if collapsible */
     }
 
     /* Badges */
     .badge-materialized {
-      background-color: #FFD580; /* soft orange */
+      background-color: #FFD580;
+      /* soft orange */
       color: #1d1d1d;
     }
 
     .badge-executed {
-      background-color: #A9C1FF; /* soft blue */
+      background-color: #A9C1FF;
+      /* soft blue */
       color: #1d1d1d;
     }
 
@@ -74,11 +78,8 @@
 
     <!-- Collapsible Pneuma's State Card -->
     <div class="card mb-4 shadow-sm">
-      <div class="card-header d-flex align-items-center"
-           data-bs-toggle="collapse"
-           data-bs-target="#pneumaCardBody"
-           aria-expanded="true"
-           aria-controls="pneumaCardBody">
+      <div class="card-header d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#pneumaCardBody"
+        aria-expanded="true" aria-controls="pneumaCardBody">
         <i class="bi bi-database-fill me-2"></i> Pneuma's State
       </div>
 
@@ -106,13 +107,26 @@
 
     <!-- Pyvis Provenance Graph Card -->
     <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#provCardBody"
+        aria-expanded="true" aria-controls="provCardBody">
+        <i class="bi bi-diagram-3-fill me-2"></i> Provenance Graph
+      </div>
+
+      <div id="provCardBody" class="collapse show">
+        <div class="card-body p-0">
+          <iframe id="prov-iframe" class="prov-iframe"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- <div class="card mb-4 shadow-sm">
       <div class="card-header d-flex align-items-center">
         <i class="bi bi-diagram-3-fill me-2"></i> Provenance Graph
       </div>
       <div class="card-body p-0">
         <iframe id="prov-iframe" class="prov-iframe"></iframe>
       </div>
-    </div>
+    </div> -->
 
   </div>
 
