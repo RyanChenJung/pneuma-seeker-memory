@@ -30,24 +30,25 @@ class SQLExecutor:
             db.register(name, df)
 
         try:
-            print(f"Sanity checking the SQL query {sql_query}")
-            fixed_sql = parse_sql(
-                "".join(
-                    self.llm.chat(
-                        [
-                            LLMMessage(
-                                role=Role.SYSTEM.value,
-                                content="""You are a SQL query fixer. Given an input SQL query, check if it contains any syntactic or semantic errors (e.g., case sensitivity, unescaped identifiers, invalid field names, type mismatches, or non-standard functions for the target SQL engine: DuckDB). Fix the query as needed to ensure it runs correctly in the specified engine. Use double quotes for identifiers (e.g., "Beach Name" instead of Beach Name), and handle case sensitivity appropriately for string comparisons. Also, we use DuckDB, so you may need to adjust the functions (e.g., change the function substring_index to substring). Output the updated/fixed/same-if-no-issue SQL query directly without any explanation or formatting.""",
-                            ),
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=f"SQL Query: {sql_query}\n\nAvailable Tables: {self.__format_available_tables(tables)}",
-                            ),
-                        ]
-                    )
-                )
-            )
-            print(f"Executing Fixed SQL: {fixed_sql}")
+            # print(f"Sanity checking the SQL query {sql_query}")
+            # fixed_sql = parse_sql(
+            #     "".join(
+            #         self.llm.chat(
+            #             [
+            #                 LLMMessage(
+            #                     role=Role.SYSTEM.value,
+            #                     content="""You are a SQL query fixer. Given an input SQL query, check if it contains any syntactic or semantic errors (e.g., case sensitivity, unescaped identifiers, invalid field names, type mismatches, or non-standard functions for the target SQL engine: DuckDB). Fix the query as needed to ensure it runs correctly in the specified engine. Use double quotes for identifiers (e.g., "Beach Name" instead of Beach Name), and handle case sensitivity appropriately for string comparisons. Also, we use DuckDB, so you may need to adjust the functions (e.g., change the function substring_index to substring). Output the updated/fixed/same-if-no-issue SQL query directly without any explanation or formatting.""",
+            #                 ),
+            #                 LLMMessage(
+            #                     role=Role.USER.value,
+            #                     content=f"SQL Query: {sql_query}\n\nAvailable Tables: {self.__format_available_tables(tables)}",
+            #                 ),
+            #             ]
+            #         )
+            #     )
+            # )
+            # print(f"Executing Fixed SQL: {fixed_sql}")
+            fixed_sql = sql_query
             return {
                 "exec_res": db.execute(fixed_sql).fetchdf(),
                 "used_table_ids": self.__extract_table_ids(fixed_sql, db),
