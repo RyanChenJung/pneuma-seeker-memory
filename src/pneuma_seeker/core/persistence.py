@@ -61,19 +61,17 @@ def save_state(
     """
     Persists info_need_state and retrieval_results as JSON.
     """
-    serialized_T = json.dumps(
-        {
-            doc_id: {
-                "doc_id": doc.doc_id,
-                "retriever_type": doc.retriever_type.value,
-                "content": None if doc.path else doc.content,
-                "metadata": doc.metadata,
-                "path": doc.path,
-                "last_node_id": doc.last_node_id,
-            }
-            for doc_id, doc in info_need_state.T.items()
+    serialized_T = {
+        doc_id: {
+            "doc_id": doc.doc_id,
+            "retriever_type": doc.retriever_type.value,
+            "content": None if doc.path else doc.content,
+            "metadata": doc.metadata,
+            "path": doc.path,
+            "last_node_id": doc.last_node_id,
         }
-    )
+        for doc_id, doc in info_need_state.T.items()
+    }
 
     info_need_state_json = json.dumps(
         {

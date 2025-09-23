@@ -47,11 +47,11 @@ class Materializer:
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
     ):
-        self.__log("Initializing Materializer")
-
         self.llm = llm
         self.embed_model = embed_model
         self.logger = logger
+
+        self.__log("Initializing Materializer")
 
         self.prompt_factory = MaterializerPromptFactory()
         self.state = MaterializerState()

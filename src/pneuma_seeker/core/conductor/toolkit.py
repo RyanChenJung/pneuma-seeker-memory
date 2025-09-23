@@ -31,7 +31,7 @@ class Toolkit:
 
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.materializer = Materializer(
-            self.llm, embed_model, logger, data_sources, prov_graph
+            self.llm, embed_model, self.logger, self.data_sources, self.prov_graph
         )
 
     def retrieve_multi_retriever_documents(
