@@ -129,9 +129,15 @@ class Pneuma(AbstractRetriever):
 
                 actual_table = pd.read_csv(table)
                 if metadata is None:
-                    metadata = pd.read_csv(f'../../data_src/{dataset}/metadata.csv')
-                table_name = table.split("/")[-1][:-4]
-                table_description = metadata.loc[metadata['table'] == table_name, 'value'].head(1).item()
+                    metadata = pd.read_csv(f"../../data_src/{dataset}/metadata.csv")
+                table_name = table.split("/")[-1]
+                if table_name.endswith(".csv"):
+                    table_name = table_name[:-4]
+                table_description = (
+                    metadata.loc[metadata["table_name"] == table_name, "description"]
+                    .head(1)
+                    .item()
+                )
 
                 table_metadata: dict[str, str] = dict()
                 if isinstance(table_description, str):
@@ -570,7 +576,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer # type: ignore
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
@@ -607,7 +613,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer # type: ignore
         for table in tqdm(unique_tables):
             table_rows = [
                 row for row in sample_rows if row.metadata["table_name"] == table
@@ -647,7 +653,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         )
         processed_table_context: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer
+        tokenizer = self.embed_model.model.tokenizer # type: ignore
         for table in tqdm(unique_tables):
             table_contexts = [
                 context
@@ -741,12 +747,12 @@ class HybridRetriever:
         self, items, missing_ids, collection: Collection, question_embedding
     ):
         extra_information = collection.get_fast(
-            ids=missing_ids, limit=len(missing_ids), include=["documents", "embeddings"]
+            ids=missing_ids, limit=len(missing_ids), include=["documents", "embeddings"] # type: ignore
         )
         items["ids"][0].extend(extra_information["ids"])
         items["documents"][0].extend(extra_information["documents"])
         items["distances"][0].extend(
-            cosine(question_embedding, extra_information["embeddings"][i])
+            cosine(question_embedding, extra_information["embeddings"][i]) # type: ignore
             for i in range(len(missing_ids))
         )
 
@@ -867,11 +873,11 @@ Is the table relevant to answer the question? Begin your answer with yes/no."""
         for node_id in sorted(vec_ids | bm25_ids):
             bm25_score_doc = processed_nodes_bm25.get(node_id)
             vec_score_doc = processed_nodes_vec.get(node_id)
-            combined_score = alpha * bm25_score_doc[0] + (1 - alpha) * vec_score_doc[0]
-            if bm25_score_doc[1] is None:
-                doc = vec_score_doc[1]
+            combined_score = alpha * bm25_score_doc[0] + (1 - alpha) * vec_score_doc[0] # type: ignore
+            if bm25_score_doc[1] is None: # type: ignore
+                doc = vec_score_doc[1] # type: ignore
             else:
-                doc = bm25_score_doc[1]
+                doc = bm25_score_doc[1] # type: ignore
             all_nodes.append((node_id, combined_score, doc))
 
         sorted_nodes = sorted(all_nodes, key=lambda node: (-node[1], node[0]))[:k]
