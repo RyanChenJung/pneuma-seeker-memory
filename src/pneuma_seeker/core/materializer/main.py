@@ -10,16 +10,10 @@ from pneuma_seeker.core.ir_system.data_model import (
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.ir_system.main import IRSystem
 from pneuma_seeker.core.materializer.operation.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.materializer.operation.python_executor import PythonExecutor
-from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
-    SemanticColumnGenerator,
-)
 from pneuma_seeker.core.materializer.operation.semantic_joiner import (
-    SemanticJoiner,
     SyntacticSimMetric,
 )
 from pneuma_seeker.core.materializer.operation.sql_executor import SQLExecutor
@@ -29,6 +23,7 @@ from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.core.common.toolkit.main import Toolkit
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_code, parse_json
 
@@ -46,6 +41,7 @@ class Materializer:
         logger: Logger,
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
+        toolkit: Toolkit,
     ):
         self.llm = llm
         self.embed_model = embed_model
@@ -60,11 +56,8 @@ class Materializer:
         self.data_sources = data_sources
         self.prov_graph = prov_graph
 
-        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
-        self.python_executor = PythonExecutor(self.logger, self.prov_graph)
-        self.sql_executor = SQLExecutor(self.llm, self.logger)
-        self.semantic_joiner = SemanticJoiner(self.llm, self.embed_model)
-        self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20)
+        self.toolkit = toolkit
+        self.sql_executor = SQLExecutor()
 
         self.is_sql_alignment_checked = False
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -200,11 +193,7 @@ class Materializer:
                 self.__log("Executing Document Retriever")
                 prompt: str = op_args.get("prompt", "")
                 self.state.current_retrieved_documents = (
-                    self.ir_system.retrieve_multisource_documents(
-                        prompt,
-                        self.data_sources,
-                        10,
-                    )
+                    self.toolkit.retrieve_multi_retriever_documents(prompt, 10)
                 )
                 self.actions.append(
                     f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
@@ -215,10 +204,8 @@ class Materializer:
                 ):
                     if doc.path is not None:
                         new_node = ProvenanceNode(
-                            output_data_id=doc.doc_id,
-                            output_data_ref={"doc_path": doc.path},
                             source_retriever=RetrieverType.PNEUMA,
-                            op_description="Data retrieved from Pneuma",
+                            python_code=self.toolkit.generate_pandas_read_code(doc),
                         )
                         self.prov_graph.add_node(new_node, True)
                         doc.last_node_id = new_node.id
@@ -227,34 +214,28 @@ class Materializer:
                     RetrieverType.DOCUMENT_DB
                 ]:
                     new_node = ProvenanceNode(
-                        output_data_id=doc.doc_id,
-                        output_data_ref={"doc_content": doc.content},
                         source_retriever=RetrieverType.DOCUMENT_DB,
-                        op_description="Data retrieved from Document DB",
+                        python_code=self.toolkit.generate_view_textual_document_code(
+                            doc
+                        ),
                     )
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
             elif op_name == "Table Enumerator":
                 self.__log("Executing Table Enumerator")
                 pattern: str = op_args.get("pattern", "")
-                extra_tables: list[AbstractDocument] = (
-                    self.ir_system.retrieve_documents(
-                        RetrieverType.ENUMERATOR,
-                        pattern,
-                        self.data_sources,
-                    )
+                extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
+                    pattern, RetrieverType.ENUMERATOR
                 )
-
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.ENUMERATOR,
+                    python_code=self.toolkit.generate_pandas_read_multi_doc_code(
+                        extra_tables
+                    ),
+                )
+                self.prov_graph.add_node(new_node, True)
                 for extra_table in extra_tables:
-                    if extra_table.path is not None:
-                        new_node = ProvenanceNode(
-                            output_data_id=extra_table.doc_id,
-                            output_data_ref={"extra_table_path": extra_table.path},
-                            source_retriever=RetrieverType.ENUMERATOR,
-                            op_description=f"Enumerate tables using this pattern: {pattern}",
-                        )
-                        self.prov_graph.add_node(new_node, True)
-                        extra_table.last_node_id = new_node.id
+                    extra_table.last_node_id = new_node.id
 
                 if len(self.state.current_retrieved_documents.keys()) == 0:
                     if len(extra_tables) > 0:
@@ -280,6 +261,7 @@ class Materializer:
                 for target_schema_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
                         retrieved_table_info = retrieved_table_info[0]
+
                     table_id_to_select: str = retrieved_table_info.get("id", "")
                     relevant_columns: list[str] = retrieved_table_info.get(
                         "columns", []
@@ -312,13 +294,12 @@ class Materializer:
                             and table_to_select_doc.last_node_id is not None
                         ):
                             child_node = ProvenanceNode(
-                                output_data_id=target_schema_id,
-                                output_data_ref={
-                                    "selected_table_path": table_to_select_doc.path,
-                                    "relevant_columns": str(relevant_columns),
-                                },
                                 source_retriever=RetrieverType.MATERIALIZER,
-                                op_description="Directly select a relevant retrieved table",
+                                python_code=self.toolkit.generate_table_select_code(
+                                    target_schema_id,
+                                    table_to_select_doc.doc_id,
+                                    relevant_columns,
+                                ),
                             )
                             parent_node = self.prov_graph.get_node_by_id(
                                 table_to_select_doc.last_node_id
@@ -388,7 +369,7 @@ class Materializer:
                     return
 
                 new_column_values = (
-                    self.semantic_col_generator.generate_semantic_column(
+                    self.toolkit.generate_semantic_column(
                         conditioned_table[table_relevant_columns],
                         new_column_name,
                         instruction,
@@ -400,15 +381,16 @@ class Materializer:
                 )
 
                 new_node = ProvenanceNode(
-                    output_data_id=conditioned_table_doc.doc_id,
-                    output_data_ref={
-                        "semantically_appended_table_path": os.path.join(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code=self.toolkit.generate_semantic_col_generator_code(
+                        table_relevant_columns,
+                        conditioned_table_doc,
+                        new_column_name,
+                        os.path.join(
                             self.__get_intermediate_table_dir_path(),
                             f"{conditioned_table_doc.doc_id}.csv",
-                        )
-                    },
-                    source_retriever=RetrieverType.MATERIALIZER,
-                    op_description="Generates column semantically",
+                        ),
+                    ),
                 )
                 self.prov_graph.add_node(new_node, True)
                 parent_node = self.prov_graph.get_node_by_id(
@@ -497,25 +479,29 @@ class Materializer:
                     self.actions.append("joined_table_id is not provided.")
                     return
 
-                joined_table = self.semantic_joiner.semantic_join(
+                top_k = 2
+                joined_table = self.toolkit.semantic_join(
                     left_table,
                     right_table,
                     relevant_left_cols,
                     relevant_right_cols,
                     syntactic_sim_metric=SyntacticSimMetric.JACCARD_QGRAM,
-                    top_k=2,
+                    top_k=top_k,
                 )
 
                 new_node = ProvenanceNode(
-                    output_data_id=joined_table_id,
-                    output_data_ref={
-                        "joined_table_path": os.path.join(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code=self.toolkit.generate_semantic_join_generator_code(
+                        left_table_doc,
+                        right_table_doc,
+                        relevant_left_cols,
+                        relevant_right_cols,
+                        top_k,
+                        os.path.join(
                             self.__get_intermediate_table_dir_path(),
                             f"{joined_table_id}.csv",
-                        )
-                    },
-                    source_retriever=RetrieverType.MATERIALIZER,
-                    op_description="Joins tables semantically",
+                        ),
+                    ),
                 )
                 parent_node_1 = self.prov_graph.get_node_by_id(
                     left_table_doc.last_node_id or ""
@@ -552,9 +538,7 @@ class Materializer:
                     id_docs[table_doc.doc_id] = table_doc
 
                 python_code: str = parse_code(op_args.get("code", ""))
-                python_executor_output = self.python_executor.execute_code(
-                    id_dfs, python_code
-                )
+                python_executor_output = self.toolkit.execute_code(id_dfs, python_code)
 
                 exec_res = python_executor_output["exec_res"]
                 used_table_ids = python_executor_output["used_table_ids"]
@@ -573,15 +557,14 @@ class Materializer:
 
                 if isinstance(exec_res, DataFrame):
                     new_node = ProvenanceNode(
-                        output_data_id=assign_to,
-                        output_data_ref={
-                            "exec_res_path": os.path.join(
+                        source_retriever=RetrieverType.MATERIALIZER,
+                        python_code=self.toolkit.append_comment_to_existing_code(
+                            python_code,
+                            f"Result path: {os.path.join(
                                 self.__get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
-                            )
-                        },
-                        source_retriever=RetrieverType.MATERIALIZER,
-                        op_description=f"Executes this Python code: {python_code}",
+                            )}",
+                        ),
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -637,6 +620,8 @@ class Materializer:
             elif op_name == "SQL Executor":
                 try:
                     sql_query: str = op_args["sql_query"]
+                    self.logger.info(f"Executing this SQL query: {sql_query}")
+
                     id_dfs: dict[str, DataFrame] = {}
                     id_docs: dict[str, AbstractDocument] = {}
                     for doc in all_tables:
@@ -658,15 +643,15 @@ class Materializer:
                             parent_nodes.append(parent_node)
 
                     new_node = ProvenanceNode(
-                        output_data_id=assign_to,
-                        output_data_ref={
-                            "exec_res_path": os.path.join(
+                        source_retriever=RetrieverType.MATERIALIZER,
+                        python_code=self.toolkit.generate_sql_executor_code(
+                            sql_query,
+                            id_dfs,
+                            os.path.join(
                                 self.__get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
-                            )
-                        },
-                        source_retriever=RetrieverType.MATERIALIZER,
-                        op_description=f"Executes this SQL query: {sql_query}",
+                            ),
+                        ),
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
