@@ -7,12 +7,13 @@ import requests
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.toolkit.toolkit import Toolkit
+from pneuma_seeker.core.common.toolkit.main import Toolkit
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
+from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
@@ -43,13 +44,21 @@ class Conductor:
 
         self.prov_graph = ProvenanceGraph(self.logger)
         self.prompt_factory = ConductorPromptFactory()
+
         self.toolkit = Toolkit(
             self.llm,
             self.embed_model,
             self.logger,
             self.data_sources,
             self.prov_graph,
-            self.prompt_factory,
+        )
+        self.materializer = Materializer(
+            self.llm,
+            self.embed_model,
+            self.logger,
+            self.data_sources,
+            self.prov_graph,
+            self.toolkit,
         )
 
         self.info_need_state = InformationNeedState()
@@ -419,7 +428,7 @@ class Conductor:
 
             self.__log(f"Materializer called (note: {note})")
 
-            self.info_need_state.T = self.toolkit.materialize_T(
+            self.info_need_state.T = self.__materialize_T_driver(
                 self.info_need_state.T,
                 self.info_need_state.column_descriptions,
                 self.info_need_state.Q,
@@ -503,6 +512,34 @@ class Conductor:
                 return "Argument must be a specified key-value pairs with keys `id` and `columns`."
 
         return f"Tool calling failed; {tool} is unknown"
+
+    def __materialize_T_driver(
+        self,
+        T: dict[str, AbstractDocument],
+        col_descriptions: dict[str, dict[str, str]],
+        Q: list[str],
+        user_side_note: str,
+        external_data: list[AbstractDocument],
+        prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]],
+    ):
+        T_dfs: dict[str, pd.DataFrame] = {}
+        for T_id, T_doc in T.items():
+            T_dfs[T_id] = T_doc.content
+
+        materialized_T_dfs = self.materializer.materialize_T(
+            T_dfs,
+            col_descriptions,
+            Q,
+            user_side_note,
+            external_data,
+            prefetched_ir_docs,
+        )
+
+        materialized_T: dict[str, AbstractDocument] = {}
+        for T_id, T_df in materialized_T_dfs.items():
+            materialized_T[T_id] = T[T_id]
+            materialized_T[T_id].content = T_df
+        return materialized_T
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)
