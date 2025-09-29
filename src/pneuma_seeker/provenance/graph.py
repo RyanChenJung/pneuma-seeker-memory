@@ -35,22 +35,6 @@ class ProvenanceGraph:
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
 
-        self._graph_version: int = 0
-        self._cached_html: str | None = None
-        self._cached_version: int = -1
-        self._lock = threading.RLock()
-
-    def _increment_version(self) -> None:
-        with self._lock:
-            self._graph_version += 1
-            self._cached_version = -1
-            self._cached_html = None
-
-    def _invalidate_cache(self) -> None:
-        with self._lock:
-            self._cached_version = -1
-            self._cached_html = None
-
     def add_node(self, node: ProvenanceNode, overwrite=False):
         if not isinstance(node, ProvenanceNode):
             raise ValueError(f"node must be a ProvenanceNode, got {type(node)}")
@@ -59,7 +43,6 @@ class ProvenanceGraph:
                 f"node {node.id} already exists; set overwrite = True to update"
             )
         self.nodes[node.id] = node
-        self._increment_version()
         return node
 
     def connect(self, parent: ProvenanceNode, child: ProvenanceNode):
@@ -68,7 +51,6 @@ class ProvenanceGraph:
         if not isinstance(child, ProvenanceNode):
             raise ValueError(f"child must be a ProvenanceNode, got {type(child)}")
         parent.add_child(child)
-        self._increment_version()
         self.logger.info(
             f"[PROV GRAPH] Parent node {parent.id} and child node {child.id} connected successfully."
         )
@@ -80,7 +62,6 @@ class ProvenanceGraph:
             if node.source_retriever == RetrieverType.USER
         }
         self.nodes = new_nodes
-        self._increment_version()
         self.logger.info(f"[PROV GRAPH] The graph has been reset successfully.")
 
     def get_node_by_id(self, node_id: str):
@@ -116,21 +97,11 @@ class ProvenanceGraph:
                     stack.append(neighbor)
         return result
 
-    def get_graph_visualization(self, force_refresh: bool = False) -> str:
+    def get_graph_visualization(self) -> str:
         """
-        Return cached html if available and up-to-date, otherwise regenerate and cache.
+        Generates HTML visualization of the graph.
         """
-        with self._lock:
-            if (
-                not force_refresh
-                and self._cached_html is not None
-                and self._cached_version == self._graph_version
-            ):
-                self.logger.debug("[PROV GRAPH] Returning cached graph visualization.")
-                return self._cached_html
-
         net = Network(notebook=True, directed=True, cdn_resources="in_line")
-
         for node in self.nodes.values():
             if node.id not in net.get_nodes():
                 tooltip = f"""
@@ -162,14 +133,7 @@ class ProvenanceGraph:
                     )
                 net.add_edge(node.id, child.id)
 
-        html_out = net.generate_html()
-
-        with self._lock:
-            self._cached_html = html_out
-            self._cached_version = self._graph_version
-            self.logger.debug("[PROV GRAPH] Graph visualization cached.")
-
-        return html_out
+        return net.generate_html()
 
     def to_text(self, node: ProvenanceNode | None = None, max_depth: int = 5) -> str:
         id_map: dict[str, int] = {}
