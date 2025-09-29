@@ -10,10 +10,10 @@ from pneuma_seeker.core.ir_system.data_model import (
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.materializer.operation.operation_description import (
+from pneuma_seeker.core.shared.toolkit.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.materializer.operation.sql_executor import SQLExecutor
+from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
@@ -53,9 +53,7 @@ class Materializer:
         self.actions: list[str] = []
         self.data_sources = data_sources
         self.prov_graph = prov_graph
-
         self.toolkit = toolkit
-        self.sql_executor = SQLExecutor()
 
         self.is_sql_alignment_checked = False
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -623,7 +621,7 @@ class Materializer:
                     for doc in all_tables:
                         id_dfs[doc.doc_id] = doc.content
                         id_docs[doc.doc_id] = doc
-                    sql_executor_output = self.sql_executor.execute_sql(
+                    sql_executor_output = self.toolkit.execute_sql_df(
                         sql_query, id_dfs
                     )
 

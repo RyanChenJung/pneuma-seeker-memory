@@ -10,6 +10,7 @@ from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import (
     SemanticOperator,
     SyntacticSimMetric,
 )
+from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.logger import formatted_log
@@ -32,6 +33,7 @@ class Toolkit:
 
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.python_executor = PythonExecutor(self.logger, self.prov_graph)
+        self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 
     def retrieve_multi_retriever_documents(
@@ -90,6 +92,9 @@ class Toolkit:
                 else:
                     final_output.append(str(result))
             return final_output
+
+    def execute_sql_df(self, sql_query: str, tables: dict[str, DataFrame]):
+        return self.sql_executor.execute_sql(sql_query, tables)
 
     def execute_code(self, tables: dict[str, DataFrame], code: str):
         return self.python_executor.execute_code(tables, code)

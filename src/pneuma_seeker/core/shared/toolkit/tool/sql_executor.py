@@ -3,7 +3,7 @@ import re
 import duckdb
 from pandas import DataFrame
 
-from pneuma_seeker.core.materializer.data_model import ExecutorOutput
+from pneuma_seeker.core.shared.toolkit.data_model import ExecutorOutput
 
 
 class SQLExecutor:
