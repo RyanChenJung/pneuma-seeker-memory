@@ -13,17 +13,15 @@ from pneuma_seeker.core.ir_system.data_model import (
 from pneuma_seeker.core.materializer.operation.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.materializer.operation.semantic_joiner import (
-    SyntacticSimMetric,
-)
 from pneuma_seeker.core.materializer.operation.sql_executor import SQLExecutor
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
+from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.core.common.toolkit.main import Toolkit
+from pneuma_seeker.core.shared.toolkit.main import Toolkit
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_code, parse_json
 
@@ -368,12 +366,10 @@ class Materializer:
                     self.actions.append("instruction is not provided.")
                     return
 
-                new_column_values = (
-                    self.toolkit.generate_semantic_column(
-                        conditioned_table[table_relevant_columns],
-                        new_column_name,
-                        instruction,
-                    )
+                new_column_values = self.toolkit.generate_semantic_column(
+                    conditioned_table[table_relevant_columns],
+                    new_column_name,
+                    instruction,
                 )
                 conditioned_table[new_column_name] = new_column_values
                 self.actions.append(

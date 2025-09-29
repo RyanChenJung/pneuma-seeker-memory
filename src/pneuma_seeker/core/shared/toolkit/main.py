@@ -5,12 +5,9 @@ from pandas import DataFrame
 
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.main import IRSystem
-from pneuma_seeker.core.materializer.operation.python_executor import PythonExecutor
-from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
-    SemanticColumnGenerator,
-)
-from pneuma_seeker.core.materializer.operation.semantic_joiner import (
-    SemanticJoiner,
+from pneuma_seeker.core.shared.toolkit.tool.python_executor import PythonExecutor
+from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import (
+    SemanticOperator,
     SyntacticSimMetric,
 )
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
@@ -35,8 +32,7 @@ class Toolkit:
 
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
         self.python_executor = PythonExecutor(self.logger, self.prov_graph)
-        self.semantic_joiner = SemanticJoiner(self.llm, self.embed_model)
-        self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20)
+        self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 
     def retrieve_multi_retriever_documents(
         self, prompt: str, k=10, retriever_types: list[RetrieverType] | None = None
@@ -111,7 +107,7 @@ class Toolkit:
         syntactic_sim_metric: SyntacticSimMetric = SyntacticSimMetric.EDIT_DIST,
         use_llm=False,
     ) -> DataFrame:
-        return self.semantic_joiner.semantic_join(
+        return self.semantic_operator.semantic_join(
             left_df,
             right_df,
             left_cols,
@@ -130,7 +126,7 @@ class Toolkit:
         new_column_name: str,
         instruction: str,  # Explanation includes the possible values, i.e., the domain
     ) -> list[str]:
-        return self.semantic_col_generator.generate_semantic_column(
+        return self.semantic_operator.generate_semantic_column(
             source_table, new_column_name, instruction
         )
 

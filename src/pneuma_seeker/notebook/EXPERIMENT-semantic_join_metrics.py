@@ -4,7 +4,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from torch.backends import cudnn
 
-from pneuma_seeker.core.materializer.operation.semantic_joiner import SemanticJoiner
 from pneuma_seeker.model.interface.model_factory import get_embed_model
 
 import numpy as np
