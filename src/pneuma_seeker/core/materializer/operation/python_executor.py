@@ -9,9 +9,6 @@ from pneuma_seeker.core.materializer.data_model import ExecutorOutput
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 
 
-
-
-
 class PythonExecutor:
     def __init__(self, logger: Logger, prov_graph: ProvenanceGraph) -> None:
         self.logger = logger
