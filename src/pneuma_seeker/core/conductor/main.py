@@ -7,7 +7,7 @@ import requests
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.conductor.toolkit import Toolkit
+from pneuma_seeker.toolkit.toolkit import Toolkit
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
