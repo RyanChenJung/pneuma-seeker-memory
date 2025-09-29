@@ -5,6 +5,7 @@ import pandas as pd
 
 from logging import Logger
 
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.materializer.data_model import ExecutorOutput
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 
@@ -48,3 +49,9 @@ class PythonExecutor:
 
         TableVisitor().visit(tree)
         return ids
+
+    def generate_pandas_read_code(self, doc: AbstractDocument):
+        doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
+        doc_path = doc.path or "<no_path_provided>"
+        return f"""import pandas as pd
+{doc_var_name} = pd.read_csv(r"{doc_path}")"""
