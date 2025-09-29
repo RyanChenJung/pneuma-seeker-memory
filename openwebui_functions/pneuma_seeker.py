@@ -1,4 +1,3 @@
-import asyncio
 import json
 import time
 from typing import Callable
@@ -14,13 +13,6 @@ class Pipe:
 
     def __init__(self):
         self.valves = self.Valves()
-        # Persistent connections keyed by (user_id, chat_id)
-        self.connections: dict[
-            tuple[str, str],
-            websockets.WebSocketClientProtocol,
-        ] = {}
-        # Locks to ensure one recv at a time per connection
-        self.locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     def get_capabilities(self):
         return {
@@ -32,31 +24,10 @@ class Pipe:
     async def get_connection(
         self, user_id: str, chat_id: str
     ):
-        key = (user_id, chat_id)
-        conn = self.connections.get(key)
-
-        # Determine if connection is missing or closed
-        should_connect = False
-        if conn is None:
-            should_connect = True
-        else:
-            # websockets < 12 (WebSocketClientProtocol)
-            if hasattr(conn, "open"):
-                should_connect = not conn.open
-            elif hasattr(conn, "closed"):
-                # websockets >= 12 (ClientConnection.closed is a Future)
-                closed = getattr(conn, "closed", None)
-                if closed is not None and hasattr(closed, "done"):
-                    should_connect = closed.done()
-
-        if should_connect:
-            uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
-            conn = await websockets.connect(
-                uri, open_timeout=50, ping_interval=20, ping_timeout=20
-            )
-            self.connections[key] = conn
-            self.locks[key] = asyncio.Lock()
-
+        uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
+        conn = await websockets.connect(
+            uri, open_timeout=50, ping_interval=20, ping_timeout=20
+        )
         return conn
 
     async def pipe(
@@ -85,29 +56,28 @@ class Pipe:
         )
 
         websocket = await self.get_connection(user_id, chat_id)
-        lock = self.locks[(user_id, chat_id)]
 
-        await websocket.send(
-            json.dumps(
+        try:
+            await websocket.send(
+                json.dumps(
+                    {
+                        "chat_messages": chat_messages,
+                        "files": files,
+                    }
+                )
+            )
+
+            await __event_emitter__(
                 {
-                    "chat_messages": chat_messages,
-                    "files": files,
+                    "type": "status",
+                    "data": {
+                        "description": "Processing input...",
+                        "done": False,
+                        "hidden": False,
+                    },
                 }
             )
-        )
 
-        await __event_emitter__(
-            {
-                "type": "status",
-                "data": {
-                    "description": "Processing input...",
-                    "done": False,
-                    "hidden": False,
-                },
-            }
-        )
-
-        async with lock:
             while True:
                 try:
                     message = await websocket.recv()
@@ -157,6 +127,6 @@ class Pipe:
                             },
                         }
                     )
-                    self.connections.pop((user_id, chat_id), None)
-                    self.locks.pop((user_id, chat_id), None)
                     break
+        finally:
+            await websocket.close()
