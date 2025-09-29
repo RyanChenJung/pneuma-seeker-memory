@@ -1,0 +1,193 @@
+from logging import Logger
+
+import duckdb
+from pandas import DataFrame
+
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.main import IRSystem
+from pneuma_seeker.core.materializer.operation.python_executor import PythonExecutor
+from pneuma_seeker.core.materializer.operation.semantic_column_generator import (
+    SemanticColumnGenerator,
+)
+from pneuma_seeker.core.materializer.operation.semantic_joiner import (
+    SemanticJoiner,
+    SyntacticSimMetric,
+)
+from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.provenance.graph import ProvenanceGraph
+from pneuma_seeker.utils.logger import formatted_log
+
+
+class Toolkit:
+    def __init__(
+        self,
+        llm: AbstractModel,
+        embed_model: AbstractModel,
+        logger: Logger,
+        data_sources: list[str],
+        prov_graph: ProvenanceGraph,
+    ) -> None:
+        self.llm = llm
+        self.embed_model = embed_model
+        self.logger = logger
+        self.data_sources = data_sources
+        self.prov_graph = prov_graph
+
+        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
+        self.python_executor = PythonExecutor(self.logger, self.prov_graph)
+        self.semantic_joiner = SemanticJoiner(self.llm, self.embed_model)
+        self.semantic_col_generator = SemanticColumnGenerator(self.llm, 20)
+
+    def retrieve_multi_retriever_documents(
+        self, prompt: str, k=10, retriever_types: list[RetrieverType] | None = None
+    ):
+        return self.ir_system.retrieve_multisource_documents(
+            prompt,
+            self.data_sources,
+            k,
+            retriever_types,
+        )
+
+    def retrieve_documents(self, prompt: str, retriever_type: RetrieverType, k=10):
+        return self.ir_system.retrieve_documents(
+            retriever_type, prompt, self.data_sources, k
+        )
+
+    def execute_sql(self, T: dict[str, AbstractDocument], Q: list[str]):
+        """
+        Executes the SQLs (sequentially) over the target schemas.
+        """
+        with duckdb.connect(database=":memory:") as con:
+            tables: dict[str, DataFrame] = {
+                T_id: T_doc.content for T_id, T_doc in T.items()
+            }
+
+            self.__log(f"Executing these SQL statements on the (materialized) T: {Q}")
+
+            for table_name, df in tables.items():
+                con.register(table_name, df)
+
+            results: list[DataFrame] = []
+            for sql_idx, sql in enumerate(Q):
+                try:
+                    self.__log(f"=> ({sql_idx+1}) Executing {sql}")
+                    result = con.execute(sql).fetchdf()
+                    results.append(result)
+                except Exception as e:
+                    results = [
+                        DataFrame(
+                            columns=["error"],
+                            data=[
+                                [
+                                    f"Error encountered when executing this SQL: ```{sql}``` on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue (e.g., referencing non-existent tables, non-standard SQL, etc.) and how to fix it."
+                                ]
+                            ],
+                        )
+                    ]
+                    print(e)
+                    break
+
+            final_output: list[str] = []
+            for result in results:
+                if result.shape == (1, 1):
+                    final_output.append(str(result.iat[0, 0]))
+                else:
+                    final_output.append(str(result))
+            return final_output
+
+    def execute_code(self, tables: dict[str, DataFrame], code: str):
+        return self.python_executor.execute_code(tables, code)
+
+    def semantic_join(
+        self,
+        left_df: DataFrame,
+        right_df: DataFrame,
+        left_cols: list[str],
+        right_cols: list[str],
+        alpha: float = 0.5,
+        top_k: int = 3,
+        delimiter: str = " [SEP] ",
+        embed_batch_size=30,
+        syntactic_sim_metric: SyntacticSimMetric = SyntacticSimMetric.EDIT_DIST,
+        use_llm=False,
+    ) -> DataFrame:
+        return self.semantic_joiner.semantic_join(
+            left_df,
+            right_df,
+            left_cols,
+            right_cols,
+            alpha,
+            top_k,
+            delimiter,
+            embed_batch_size,
+            syntactic_sim_metric,
+            use_llm,
+        )
+
+    def generate_semantic_column(
+        self,
+        source_table: DataFrame,
+        new_column_name: str,
+        instruction: str,  # Explanation includes the possible values, i.e., the domain
+    ) -> list[str]:
+        return self.semantic_col_generator.generate_semantic_column(
+            source_table, new_column_name, instruction
+        )
+
+    def generate_pandas_read_code(self, doc: AbstractDocument):
+        return self.python_executor.generate_pandas_read_code(doc)
+
+    def generate_view_textual_document_code(self, doc: AbstractDocument):
+        return self.python_executor.generate_view_textual_document_code(doc)
+
+    def generate_pandas_read_multi_doc_code(self, docs: list[AbstractDocument]):
+        return self.python_executor.generate_pandas_read_multi_doc_code(docs)
+
+    def generate_table_select_code(
+        self, target_var_name: str, source_id: str, relevant_cols: list[str]
+    ):
+        return self.python_executor.generate_table_select_code(
+            target_var_name, source_id, relevant_cols
+        )
+
+    def generate_semantic_col_generator_code(
+        self,
+        conditioned_cols: list[str],
+        doc: AbstractDocument,
+        new_col_name: str,
+        path: str,
+    ):
+        return self.python_executor.generate_semantic_col_generator_code(
+            conditioned_cols, doc, new_col_name, path
+        )
+
+    def generate_semantic_join_generator_code(
+        self,
+        doc_1: AbstractDocument,
+        doc_2: AbstractDocument,
+        relevant_left_cols: list[str],
+        relevant_right_cols: list[str],
+        top_k: int,
+        path: str,
+    ):
+        return self.python_executor.generate_semantic_join_generator_code(
+            doc_1, doc_2, relevant_left_cols, relevant_right_cols, top_k, path
+        )
+
+    def append_comment_to_existing_code(self, code: str, comment: str):
+        return self.python_executor.append_comment_to_existing_code(code, comment)
+
+    def generate_sql_executor_code(
+        self,
+        sql_query: str,
+        id_dfs: dict[str, DataFrame],
+        path: str,
+    ):
+        return self.python_executor.generate_sql_executor_code(
+            sql_query,
+            id_dfs,
+            path,
+        )
+
+    def __log(self, text):
+        formatted_log(self.logger, "CONDUCTOR'S TOOLKIT", text)
