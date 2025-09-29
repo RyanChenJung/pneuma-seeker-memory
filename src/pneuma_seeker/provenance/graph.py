@@ -1,11 +1,11 @@
 import html
 import uuid
-import threading
 from logging import Logger
 from typing import Any
 
-from pneuma_seeker.core.ir_system.data_model import RetrieverType
 from pyvis.network import Network
+
+from pneuma_seeker.core.ir_system.data_model import RetrieverType
 
 
 class ProvenanceNode:
