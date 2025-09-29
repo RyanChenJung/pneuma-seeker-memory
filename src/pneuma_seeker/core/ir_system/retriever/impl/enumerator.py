@@ -5,7 +5,7 @@ import pandas as pd
 from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
-from pneuma_seeker.utils.cleaner import clean_column_table_name
+from pneuma_seeker.utils.str_processor import clean_column_table_name
 
 
 class Enumerator(AbstractRetriever):

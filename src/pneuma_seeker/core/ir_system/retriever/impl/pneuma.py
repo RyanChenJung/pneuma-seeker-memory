@@ -30,7 +30,7 @@ from chromadb_deterministic.api.models.Collection import Collection
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.utils.cleaner import clean_column_table_name
+from pneuma_seeker.utils.str_processor import clean_column_table_name
 
 
 class Pneuma(AbstractRetriever):

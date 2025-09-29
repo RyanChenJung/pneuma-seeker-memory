@@ -18,7 +18,7 @@ from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.utils.cleaner import clean_column_table_name
+from pneuma_seeker.utils.str_processor import clean_column_table_name
 from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_json
