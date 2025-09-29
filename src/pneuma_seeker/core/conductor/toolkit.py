@@ -7,6 +7,7 @@ from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.main import IRSystem
 from pneuma_seeker.core.materializer.main import Materializer
+from pneuma_seeker.core.materializer.operation.python_executor import PythonExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.logger import formatted_log
@@ -33,6 +34,7 @@ class Toolkit:
         self.materializer = Materializer(
             self.llm, embed_model, self.logger, self.data_sources, self.prov_graph
         )
+        self.python_executor = PythonExecutor(self.logger, self.prov_graph)
 
     def retrieve_multi_retriever_documents(
         self, prompt: str, k=10, retriever_types: list[RetrieverType] | None = None
