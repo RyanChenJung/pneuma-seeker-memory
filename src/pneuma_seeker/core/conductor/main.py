@@ -111,9 +111,9 @@ class Conductor:
                 )
             )
 
-            full_response = "".join(self.llm.chat(
-                llm_messages, LLMOption(json_mode=True, stream=True)
-            ))
+            full_response = "".join(
+                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
+            )
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
             )
@@ -188,10 +188,10 @@ class Conductor:
             self.external_documents = self.__unpack_external_data(external_data_paths)
             for doc in self.external_documents:
                 new_node = ProvenanceNode(
-                    output_data_id=doc.doc_id,
-                    output_data_ref={"doc_path": doc.path or ""},
                     source_retriever=RetrieverType.USER,
-                    op_description="User-uploaded data",
+                    python_code=self.toolkit.python_executor.generate_pandas_read_code(
+                        doc
+                    ),
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
@@ -243,7 +243,9 @@ class Conductor:
                         raise ValueError(f"Unsupported content type: {content_type}")
 
                     try:
-                        external_docs.extend(self.__read_external_data_content(local_path))
+                        external_docs.extend(
+                            self.__read_external_data_content(local_path)
+                        )
                     finally:
                         if local_path.startswith("temp") and os.path.exists(local_path):
                             try:
@@ -364,9 +366,7 @@ class Conductor:
                 if column_descriptions is not None:
                     T_docs: dict[str, AbstractDocument] = dict()
                     for schema_id in T:
-                        target_schema_df = pd.DataFrame(
-                            columns=T[schema_id]
-                        )
+                        target_schema_df = pd.DataFrame(columns=T[schema_id])
 
                         target_schema_path = os.path.join(
                             self.target_tables_path,
@@ -399,9 +399,7 @@ class Conductor:
                 is_Q_modified = True
 
             if is_T_modified and is_Q_modified:
-                return (
-                    "Successfully modified both T and Q."
-                )
+                return "Successfully modified both T and Q."
             if is_T_modified:
                 return "Successfully modified T."
             if is_Q_modified:
@@ -409,7 +407,9 @@ class Conductor:
             return "No modification is done."
         if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
-                error_message = "T has to already be defined before calling Materializer"
+                error_message = (
+                    "T has to already be defined before calling Materializer"
+                )
                 self.__log(f"=> {error_message}")
                 return error_message
 
@@ -453,9 +453,7 @@ class Conductor:
             self.__log(f"SQL execution result output: {execution_result}")
 
             self.info_need_state.is_Q_executed = True
-            return (
-                f"Executed Q, which resulted in this output: {execution_result}"
-            )
+            return f"Executed Q, which resulted in this output: {execution_result}"
         if tool == "categorical_column_information":
             if isinstance(args, dict):
                 self.__log(
