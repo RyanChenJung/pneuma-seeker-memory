@@ -11,16 +11,12 @@ from pneuma_seeker.core.ir_system.data_model import RetrieverType
 class ProvenanceNode:
     def __init__(
         self,
-        output_data_id: str,
-        output_data_ref: dict[str, str],
         source_retriever: RetrieverType,
-        op_description: str,
+        python_code: str,
     ):
         self.id = str(uuid.uuid4())
-        self.output_data_id = output_data_id
-        self.output_data_ref = output_data_ref
-        self.op_description = op_description
         self.source_retriever = source_retriever
+        self.python_code = python_code
 
         self.children: list[ProvenanceNode] = []
         self.parents: list[ProvenanceNode] = []
@@ -105,30 +101,28 @@ class ProvenanceGraph:
         for node in self.nodes.values():
             if node.id not in net.get_nodes():
                 tooltip = f"""
-                Output Data ID: {html.escape(node.output_data_id)}
-                Source: {html.escape(str(node.source_retriever.value))}
-                Description: {html.escape(node.op_description)}
+                Source Retriever: {html.escape(str(node.source_retriever.value))}
+                Python Code: {html.escape(node.python_code)}
                 # Children: {len(node.children)}
                 # Parents: {len(node.parents)}
                 """
                 net.add_node(
                     node.id,
-                    label=node.output_data_id,
+                    label=node.id,
                     title=tooltip,
                 )
 
             for child in node.children:
                 if child.id not in net.get_nodes():
                     tooltip = f"""
-                    Output Data ID: {html.escape(child.output_data_id)}
-                    Source: {html.escape(str(child.source_retriever.value))}
-                    Description: {html.escape(child.op_description)}
+                    Source Retriever: {html.escape(str(child.source_retriever.value))}
+                    Python Code: {html.escape(child.python_code)}
                     # Children: {len(child.children)}
                     # Parents: {len(child.parents)}
                     """
                     net.add_node(
                         child.id,
-                        label=child.output_data_id,
+                        label=child.id,
                         title=tooltip,
                     )
                 net.add_edge(node.id, child.id)
@@ -153,9 +147,8 @@ class ProvenanceGraph:
             int_id = _get_int_id(n.id)
             lines = [
                 f"{'  ' * depth}- Node {int_id}",
-                f"{'  ' * depth}  Output Data ID: {n.output_data_id}",
-                f"{'  ' * depth}  Source: {n.source_retriever.value}",
-                f"{'  ' * depth}  Description: {n.op_description}",
+                f"{'  ' * depth}  Source Retriever: {n.source_retriever.value}",
+                f"{'  ' * depth}  Python Code: {n.python_code}",
                 f"{'  ' * depth}  Children: {[ _get_int_id(c.id) for c in n.children ]}",
                 f"{'  ' * depth}  Parents: {[ _get_int_id(p.id) for p in n.parents ]}",
             ]
