@@ -10,17 +10,17 @@ from pneuma_seeker.core.ir_system.data_model import (
     RetrieverType,
     Table,
 )
+from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
+from pneuma_seeker.core.materializer.state import MaterializerState
+from pneuma_seeker.core.shared.toolkit.main import Toolkit
 from pneuma_seeker.core.shared.toolkit.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
-from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.core.shared.toolkit.main import Toolkit
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_code, parse_json
 
@@ -54,7 +54,6 @@ class Materializer:
         self.prov_graph = prov_graph
         self.toolkit = toolkit
 
-        self.is_sql_alignment_checked = False
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
 
     def materialize_T(
@@ -66,22 +65,18 @@ class Materializer:
         external_data: list[AbstractDocument] = [],
         prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
     ) -> dict[str, DataFrame]:
-        """Materialize target schemas T based on the provided queries Q and external data."""
+        """Materialize target tables T based on the provided queries Q and external data."""
         self.__log(f"Materializing {len(T)} target tables")
         self.__cleanup_system()
 
         if len(prefetched_ir_docs) > 0:
             for retriever_type in prefetched_ir_docs:
-                prefetched_docs = prefetched_ir_docs[retriever_type]
-                if len(prefetched_docs) > 0:
+                retriever_prefetched_docs = prefetched_ir_docs[retriever_type]
+                if len(retriever_prefetched_docs) > 0:
                     self.state.current_retrieved_documents[retriever_type] = (
-                        prefetched_docs
+                        retriever_prefetched_docs
                     )
 
-        # Future-TODO: Use more fundamental safeguard; currently, we
-        # prevent repetitive iteration that can happen, usually if
-        # the model is confident it has produced all tables specified
-        # in T, even though it is not (fundamentally) enough.
         prev_response = ""
         repetitive_response_count = 0
 
@@ -115,6 +110,8 @@ class Materializer:
             )
 
             response = "".join(self.llm.chat(llm_messages, LLMOption(json_mode=True)))
+            self.__log(f"LLM response: {response}")
+
             if response == prev_response:
                 repetitive_response_count += 1
             else:
@@ -123,7 +120,6 @@ class Materializer:
             if repetitive_response_count == 5:
                 break
 
-            self.__log(f"LLM response: {response}")
             llm_messages.append(
                 LLMMessage(
                     role=Role.ASSISTANT.value,
@@ -136,14 +132,18 @@ class Materializer:
             except ValueError as exc:
                 self.__log(f"Error parsing JSON: {exc}")
                 self.actions.append(
-                    "Error parsing the response from the model. Please ensure the response is in valid JSON format."
+                    "Error parsing the response. Please ensure the response is a valid JSON object."
                 )
                 continue
 
             step_type: str = plan.get("step_type", "")
-            self.__handle_step(
-                step_type, plan, self.__gather_all_tables(external_data), T
-            )
+            if len(step_type) == 0:
+                error_msg = "The step_type is not defined. Please define it properly."
+                self.__log(error_msg)
+                self.actions.append(error_msg)
+                continue
+
+            self.__handle_step(step_type, plan, external_data, T)
 
         self.__log("Materialization completed successfully")
         final_result: dict[str, DataFrame] = {}
@@ -154,25 +154,11 @@ class Materializer:
                 )
         return final_result
 
-    def __gather_all_tables(self, external_data: list[AbstractDocument]):
-        """Gather all tables from retrieved documents, external data, and intermediate tables."""
-        pneuma_retrieval_results: list[AbstractDocument] = (
-            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
-        )
-        external_data_tables_only: list[AbstractDocument] = [
-            i for i in external_data if isinstance(i, Table)
-        ]
-        return (
-            pneuma_retrieval_results
-            + external_data_tables_only
-            + list(self.state.intermediate_tables)
-        )
-
     def __handle_step(
         self,
         step_type: str,
         plan: dict[str, Any],
-        all_tables: list[AbstractDocument],
+        external_data: list[AbstractDocument],
         T: dict[str, DataFrame],
     ):
         """Handles a single step in the materialization process."""
@@ -180,11 +166,33 @@ class Materializer:
             message: str = plan["message"]
             self.actions.append(f"Reasoned internally: {message}")
         elif step_type == "operation":
-            op_name: str = plan.get("name", "")
-            op_args: dict[str, Any] = plan.get("args", {})
-            assign_to: str = plan.get("assign_to", "")
+            op_name, op_args, assign_to = (
+                plan.get("name", ""),
+                plan.get("args", {}),
+                plan.get("assign_to", ""),
+            )
 
-            if op_name == "Document Retriever":
+            if len(op_name) == 0:
+                error_msg = "The op_name is not defined. Please define it properly."
+                self.__log(error_msg)
+                self.actions.append(error_msg)
+                return
+
+            self.__handle_operation(T, external_data, op_name, op_args, assign_to)
+        else:
+            self.actions.append(f"The step {step_type} is not a valid action.")
+
+    def __handle_operation(
+        self,
+        T: dict[str, DataFrame],
+        external_data: list[AbstractDocument],
+        op_name: str,
+        op_args: dict[str, Any],
+        assign_to: str,
+    ):
+        all_tables = self.__gather_all_tables(external_data)
+        match op_name:
+            case "Document Retriever":
                 self.__log("Executing Document Retriever")
                 prompt: str = op_args.get("prompt", "")
                 self.state.current_retrieved_documents = (
@@ -216,7 +224,7 @@ class Materializer:
                     )
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
-            elif op_name == "Table Enumerator":
+            case "Table Enumerator":
                 self.__log("Executing Table Enumerator")
                 pattern: str = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
@@ -251,7 +259,7 @@ class Materializer:
                     )
                 else:
                     self.actions.append("There are no tables that match the pattern.")
-            elif op_name == "Table Select":
+            case "Table Select":
                 self.__log("Executing Table Select:")
                 for target_schema_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
@@ -327,7 +335,7 @@ class Materializer:
                         self.actions.append(
                             f"Error: The ID {table_id_to_select} does not exist in either the retrieved tables OR the intermediate tables so far. Please fix it."
                         )
-            elif op_name == "Semantic Column Generator":
+            case "Semantic Column Generator":
                 table_id: str | None = op_args.get("table_id")
                 new_column_name: str | None = op_args.get("new_column_name")
                 table_relevant_columns: list[str] | None = op_args.get(
@@ -396,7 +404,7 @@ class Materializer:
                 self.__save_new_or_updated_intermediate_table(
                     conditioned_table_doc.doc_id
                 )
-            elif op_name == "Semantic Join":
+            case "Semantic Join":
                 left_table_id: str | None = op_args.get("left_table_id")
                 right_table_id: str | None = op_args.get("right_table_id")
                 relevant_left_cols: list[str] | None = op_args.get("relevant_left_cols")
@@ -523,7 +531,7 @@ class Materializer:
                 self.actions.append(
                     "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 )
-            elif op_name == "Python Executor":
+            case "Python Executor":
                 id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
                 for table_doc in all_tables:
@@ -611,7 +619,7 @@ class Materializer:
                         self.prov_graph.add_node(new_node, True)
                         for parent_node in parent_nodes:
                             self.prov_graph.connect(parent_node, new_node)
-            elif op_name == "SQL Executor":
+            case "SQL Executor":
                 try:
                     sql_query: str = op_args["sql_query"]
                     self.logger.info(f"Executing this SQL query: {sql_query}")
@@ -621,9 +629,7 @@ class Materializer:
                     for doc in all_tables:
                         id_dfs[doc.doc_id] = doc.content
                         id_docs[doc.doc_id] = doc
-                    sql_executor_output = self.toolkit.execute_sql_df(
-                        sql_query, id_dfs
-                    )
+                    sql_executor_output = self.toolkit.execute_sql_df(sql_query, id_dfs)
 
                     exec_res: DataFrame = sql_executor_output["exec_res"]
                     used_table_ids = sql_executor_output["used_table_ids"]
@@ -670,12 +676,10 @@ class Materializer:
                     self.actions.append(
                         f"Error when executing the SQL query: {e}. Please fix it (you may want to quote identifiers with, for instance, `-` symbol)."
                     )
-            else:
+            case _:
                 self.actions.append(
                     f"Trying to perform/execute {op_name}, but it is not a valid operation."
                 )
-        else:
-            self.actions.append(f"The step {step_type} is not a valid action.")
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
         """Check if all target schemas in T have been materialized correctly."""
@@ -737,13 +741,26 @@ class Materializer:
         )
         return is_complete
 
+    def __gather_all_tables(self, external_data: list[AbstractDocument]):
+        """Gather all tables from retrieved documents, external data, and intermediate tables."""
+        pneuma_retrieval_results: list[AbstractDocument] = (
+            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
+        )
+        external_data_tables_only: list[AbstractDocument] = [
+            i for i in external_data if isinstance(i, Table)
+        ]
+        return (
+            pneuma_retrieval_results
+            + external_data_tables_only
+            + list(self.state.intermediate_tables)
+        )
+
     def __cleanup_system(self):
         """Reset the state and clear intermediate files."""
         self.__log("Cleaning up Materializer...")
         self.state.reset()
         self.prov_graph.reset_for_materialization()
         self.__clear_csv_files()
-        self.is_sql_alignment_checked = False
         self.actions = []
 
     def __clear_csv_files(self):
