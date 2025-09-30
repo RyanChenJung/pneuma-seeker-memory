@@ -261,52 +261,73 @@ class Materializer:
                         set(existing_tables).union(set(extra_tables))
                     )
             case "Table Select":
-                self.__log("Executing Table Select:")
-                for target_schema_id, retrieved_table_info in op_args.items():
+                for target_table_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
+                        if len(retrieved_table_info) == 0:
+                            msg = f"Skipping {target_table_id!r}: empty list provided as value."
+                            self.__log(msg)
+                            self.actions.append(msg)
+                            continue
                         retrieved_table_info = retrieved_table_info[0]
 
-                    table_id_to_select: str = retrieved_table_info.get("id", "")
-                    relevant_columns: list[str] = retrieved_table_info.get(
-                        "columns", []
-                    )
+                    if not isinstance(retrieved_table_info, dict):
+                        msg = f"Invalid argument for target {target_table_id!r}: expected a dict."
+                        self.__log(msg)
+                        self.actions.append(msg)
+                        continue
 
+                    table_id_to_select = str(retrieved_table_info.get("id", "")).strip()
                     if table_id_to_select.startswith("Table "):
-                        table_id_to_select = table_id_to_select[6:]
-                    table_id_to_select = table_id_to_select.strip()
-                    target_schema_id = target_schema_id.strip()
-
-                    self.__log(
-                        f"=> target_schema_id: {target_schema_id}; table_id_to_select: {table_id_to_select}"
-                    )
+                        table_id_to_select = table_id_to_select[6:].strip()
+                    relevant_columns = retrieved_table_info.get("columns", [])
+                    target_table_id = target_table_id.strip()
 
                     all_table_doc_ids = [i.doc_id for i in all_tables]
-                    if (
-                        target_schema_id in T
-                        and table_id_to_select in all_table_doc_ids
-                    ):
-                        table_to_select_doc = [
-                            i for i in all_tables if i.doc_id == table_id_to_select
-                        ][0]
-                        table_to_select: DataFrame = table_to_select_doc.content[
-                            relevant_columns
-                        ]
+                    if table_id_to_select not in all_table_doc_ids:
+                        error_msg = (
+                            f"Invalid table ID to select. Ensure the table exists."
+                        )
+                        self.__log(error_msg)
+                        self.actions.append(error_msg)
+                        return
 
-                        new_node_id = None
-                        if (
-                            table_to_select_doc.path is not None
-                            and table_to_select_doc.last_node_id is not None
-                        ):
+                    if target_table_id in T:
+                        matches = [
+                            i for i in all_tables if i.doc_id == table_id_to_select
+                        ]
+                        if not matches:
+                            error_msg = f"Table {table_id_to_select!r} not found in the available tables."
+                            self.__log(error_msg)
+                            self.actions.append(error_msg)
+                            return
+
+                        table_to_select_doc = matches[0]
+                        self.__log(
+                            f"=> target_table_id: {target_table_id}; table_id_to_select: {table_id_to_select}"
+                        )
+
+                        try:
+                            table_to_select: DataFrame = table_to_select_doc.content[
+                                relevant_columns
+                            ]
+                        except Exception as e:
+                            error_msg = f"Failed selecting columns {relevant_columns!r} from table {table_id_to_select!r}: {e}"
+                            self.__log(error_msg)
+                            self.actions.append(error_msg)
+                            return
+
+                        new_node_id: str | None = None
+                        if table_to_select_doc.path is not None:
                             child_node = ProvenanceNode(
                                 source_retriever=RetrieverType.MATERIALIZER,
                                 python_code=self.toolkit.generate_table_select_code(
-                                    target_schema_id,
+                                    target_table_id,
                                     table_to_select_doc.doc_id,
                                     relevant_columns,
                                 ),
                             )
                             parent_node = self.prov_graph.get_node_by_id(
-                                table_to_select_doc.last_node_id
+                                table_to_select_doc.last_node_id or ""
                             )
 
                             new_node_id = child_node.id
@@ -316,25 +337,20 @@ class Materializer:
 
                         self.state.add_intermediate_table(
                             Table(
-                                doc_id=target_schema_id,
+                                doc_id=target_table_id,
                                 retriever_type=RetrieverType.MATERIALIZER,
                                 content=table_to_select,
                                 metadata={},
                                 last_node_id=new_node_id,
                             )
                         )
-                        self.__save_new_or_updated_intermediate_table(target_schema_id)
+                        self.__save_new_or_updated_intermediate_table(target_table_id)
                         self.actions.append(
-                            "Successfully selecting retrieved tables in the mapping as target schema tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target schemas."
-                        )
-
-                    elif target_schema_id not in T:
-                        self.actions.append(
-                            f"Error: The ID {target_schema_id} does not exist in the target schemas. Please fix it."
+                            "Successfully selecting retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
                         )
                     else:
                         self.actions.append(
-                            f"Error: The ID {table_id_to_select} does not exist in either the retrieved tables OR the intermediate tables so far. Please fix it."
+                            f"Error: The ID {target_table_id} does not exist in T. Please fix it."
                         )
             case "Semantic Column Generator":
                 table_id: str | None = op_args.get("table_id")
@@ -773,7 +789,7 @@ class Materializer:
             except Exception:
                 continue
 
-    def __log(self, text):
+    def __log(self, text: str):
         formatted_log(self.logger, "MATERIALIZER", text)
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):

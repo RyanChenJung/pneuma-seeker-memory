@@ -3,7 +3,7 @@ def get_operation_description():
 - **Document Retriever**
     - Retrieves relevant tabular or textual data from the internal database based on natural-language prompts.
     - Does not affect user-provided external data. Internal data is replaced each time this tool is called.
-    - Args: {"prompt": "<retrieval query string, contextualized with columns of target schemas, not just using the target schema IDs>"}
+    - Args: {"prompt": "<retrieval query string, contextualized with columns of the target tables (T), not just using the target table IDs>"}
     - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
 
 - **Table Enumerator**
@@ -25,15 +25,15 @@ def get_operation_description():
     - Args: {"code": "<Python code string>"}
 
 - **Table Select**
-    - Directly maps an existing table (internal, external, or intermediate) to a target schema (or a subset of its columns).
-    - Args: {"<target_schema_id>": {
+    - Directly maps an existing table (internal, external, or intermediate) to a target table (or a subset of its columns).
+    - Args: {"<target_table_id>": {
                     {
                         "id": "<source_table_id>",
                         "columns": ["<subset of columns from source table to use>"]
                     }
                 }
             }
-    - Example use case: If table A has columns that match some columns of target schema B, you can select it directly instead of creating SQL queries or Python code.
+    - Example use case: If table A has columns that match some columns of target table B, you can select it directly instead of creating SQL queries or Python code.
 
 - **SQL Executor**
     - Executes SQL queries on available tables (internal, external, or intermediate).
