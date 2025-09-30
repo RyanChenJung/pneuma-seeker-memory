@@ -225,11 +225,18 @@ class Materializer:
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
             case "Table Enumerator":
-                self.__log("Executing Table Enumerator")
-                pattern: str = op_args.get("pattern", "")
+                pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
                     pattern, RetrieverType.ENUMERATOR
                 )
+
+                if len(extra_tables) > 0:
+                    self.actions.append(
+                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called Document Retriever before, as these tables have been included to "Previously retrieved documents".'
+                    )
+                else:
+                    self.actions.append("There are no tables that match the pattern.")
+
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.ENUMERATOR,
                     python_code=self.toolkit.generate_pandas_read_multi_doc_code(
@@ -237,28 +244,22 @@ class Materializer:
                     ),
                 )
                 self.prov_graph.add_node(new_node, True)
+
                 for extra_table in extra_tables:
                     extra_table.last_node_id = new_node.id
 
-                if len(self.state.current_retrieved_documents.keys()) == 0:
+                if not self.state.current_retrieved_documents:
                     if len(extra_tables) > 0:
                         self.state.current_retrieved_documents = {
                             RetrieverType.PNEUMA: extra_tables
                         }
                 else:
+                    existing_tables = self.state.current_retrieved_documents.get(
+                        RetrieverType.PNEUMA, []
+                    )
                     self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
-                        set(
-                            self.state.current_retrieved_documents.get(
-                                RetrieverType.PNEUMA, []
-                            )
-                        ).union(set(extra_tables))
+                        set(existing_tables).union(set(extra_tables))
                     )
-                if len(extra_tables) > 0:
-                    self.actions.append(
-                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize target schemas, even if you have not called Document Retriever before, as these tables have been included to "Previously retrieved documents".'
-                    )
-                else:
-                    self.actions.append("There are no tables that match the pattern.")
             case "Table Select":
                 self.__log("Executing Table Select:")
                 for target_schema_id, retrieved_table_info in op_args.items():
