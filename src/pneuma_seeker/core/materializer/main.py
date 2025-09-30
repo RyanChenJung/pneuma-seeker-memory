@@ -13,7 +13,6 @@ from pneuma_seeker.core.ir_system.data_model import (
 from pneuma_seeker.core.shared.toolkit.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
@@ -603,10 +602,11 @@ class Materializer:
                             f"Successfully executed the Python code, resulting in this: {exec_res}"
                         )
                         new_node = ProvenanceNode(
-                            output_data_id="",
-                            output_data_ref={"exec_res": exec_res},
                             source_retriever=RetrieverType.MATERIALIZER,
-                            op_description=f"Executes this Python code: {python_code}",
+                            python_code=self.toolkit.append_comment_to_existing_code(
+                                python_code,
+                                "The execution did not result in a DataFrame, but something else.",
+                            ),
                         )
                         self.prov_graph.add_node(new_node, True)
                         for parent_node in parent_nodes:
