@@ -699,64 +699,129 @@ class Materializer:
                 )
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
-        """Check if all target schemas in T have been materialized correctly."""
-        self.__log("Check completion")
-        all_schema_ids = set(T.keys())
+        """Check if all target tables (T) have been materialized correctly."""
+        self.__log("Checking completion...")
+        all_T_ids = set(T.keys())
         id_dfs: dict[str, DataFrame] = {}
-        materialized_schema_ids: set[str] = set()
+
+        materialized_table_ids: set[str] = set()
         for doc in self.state.intermediate_tables:
-            id_dfs[doc.doc_id] = doc.content
-            materialized_schema_ids.add(doc.doc_id)
+            if isinstance(doc.content, DataFrame):
+                id_dfs[doc.doc_id] = doc.content
+                materialized_table_ids.add(doc.doc_id)
+            else:
+                self.__log(f"Warning: doc {doc.doc_id} has invalid content type {type(doc.content)}")
 
-        self.__log(f"=> all_schema_ids: {all_schema_ids}")
-        self.__log(f"=> materialized_schema_ids: {materialized_schema_ids}")
-        is_complete = all_schema_ids <= materialized_schema_ids
+        self.__log(f"=> all_T_ids: {all_T_ids}")
+        self.__log(f"=> materialized_table_ids: {materialized_table_ids}")
+        ids_complete = all_T_ids <= materialized_table_ids
+        is_complete = ids_complete
 
-        if not is_complete:
+        if not ids_complete:
             self.actions.append(
-                f"==> You have not materialized these tables: {all_schema_ids - materialized_schema_ids}"
+                f"==> You have not materialized these tables: {all_T_ids - materialized_table_ids}"
             )
 
-        already_complete = is_complete
-        column_issues: list[str] = []
+        column_issues: list[str] = ["Fix the following column issues:"]
+        if ids_complete:
+            for target_table_id in all_T_ids:
+                df = id_dfs.get(target_table_id)
+                if df is None or not isinstance(df, DataFrame):
+                    issue_msg = f"- For table `{target_table_id}`: no valid DataFrame was materialized."
+                    self.__log(issue_msg)
+                    column_issues.append(issue_msg)
+                    is_complete = False
+                    continue
 
-        if is_complete:
-            for target_schema_id in all_schema_ids:
-                if target_schema_id in materialized_schema_ids:
-                    self.__log(f"=> Checking the target schema {target_schema_id}.")
+                self.__log(f"=> Checking the target schema {target_table_id}.")
+                target_cols = set(T[target_table_id].columns)
+                materialized_cols = set(df.columns)
 
-                    target_cols = set(T[target_schema_id].columns)
-                    materialized_cols = set(id_dfs[target_schema_id].columns)
+                self.__log(f"==> target_cols {target_cols}")
+                self.__log(f"==> materialized_cols {materialized_cols}")
 
-                    self.__log(f"==> target_cols {target_cols}")
-                    self.__log(f"==> materialized_cols {materialized_cols}")
+                missing_cols = target_cols - materialized_cols
+                extra_cols = materialized_cols - target_cols
 
-                    missing_cols = target_cols - materialized_cols
-                    extra_cols = materialized_cols - target_cols
+                if missing_cols or extra_cols:
+                    is_complete = False
+                    issue_msg = f"- For table `{target_table_id}`: "
+                    if missing_cols:
+                        issue_msg += f"missing columns {sorted(missing_cols)}. "
+                    if extra_cols:
+                        issue_msg += f"unexpected columns {sorted(extra_cols)}. "
+                    column_issues.append(issue_msg.strip())
 
-                    if missing_cols or extra_cols:
-                        is_complete = False
-                        issue_msg = f"For table `{target_schema_id}`: "
-
-                        if missing_cols:
-                            issue_msg += f"missing columns {sorted(missing_cols)}. "
-                        if extra_cols:
-                            issue_msg += f"unexpected columns {sorted(extra_cols)}. "
-
-                        column_issues.append(issue_msg.strip())
-
-        if already_complete and not is_complete:
-            for issue in column_issues:
-                self.actions.append(issue)
-            self.actions.append(
-                "Fix the above column issues. If some columns have different names (e.g., `Doc ID` vs `doc_id`), rename them using Python."
-            )
+        if ids_complete and not is_complete:
+            self.actions.append("\n".join(column_issues))
 
         self.__log(f"==> is_complete: {is_complete}")
         self.__log(
-            f"Completion check: {is_complete} ({len(materialized_schema_ids)}/{len(all_schema_ids)} schemas materialized)"
+            f"Completion check: {is_complete} ({len(materialized_table_ids)}/{len(all_T_ids)} tables materialized)"
         )
         return is_complete
+
+    # def __check_completion(self, T: dict[str, DataFrame]) -> bool:
+    #     """Check if all target tables (T) have been materialized correctly."""
+    #     self.__log("Checking completion...")
+    #     all_T_ids = set(T.keys())
+    #     id_dfs: dict[str, DataFrame] = {}
+
+    #     materialized_table_ids: set[str] = set()
+    #     for doc in self.state.intermediate_tables:
+    #         if isinstance(doc.content, DataFrame):
+    #             id_dfs[doc.doc_id] = doc.content
+    #             materialized_table_ids.add(doc.doc_id)
+
+    #     self.__log(f"=> all_T_ids: {all_T_ids}")
+    #     self.__log(f"=> materialized_table_ids: {materialized_table_ids}")
+    #     is_complete = all_T_ids <= materialized_table_ids
+
+    #     if not is_complete:
+    #         self.actions.append(
+    #             f"==> You have not materialized these tables: {all_T_ids - materialized_table_ids}"
+    #         )
+
+    #     already_complete = is_complete
+    #     column_issues: list[str] = []
+
+    #     if is_complete:
+    #         for target_table_id in all_T_ids:
+    #             if target_table_id in materialized_table_ids:
+    #                 self.__log(f"=> Checking the target table {target_table_id}.")
+
+    #                 target_cols = set(T[target_table_id].columns)
+    #                 materialized_cols = set(id_dfs[target_table_id].columns)
+
+    #                 self.__log(f"==> target_cols {target_cols}")
+    #                 self.__log(f"==> materialized_cols {materialized_cols}")
+
+    #                 missing_cols = target_cols - materialized_cols
+    #                 extra_cols = materialized_cols - target_cols
+
+    #                 if missing_cols or extra_cols:
+    #                     is_complete = False
+    #                     issue_msg = f"For table `{target_table_id}`: "
+
+    #                     if missing_cols:
+    #                         issue_msg += f"missing columns {sorted(missing_cols)}. "
+    #                     if extra_cols:
+    #                         issue_msg += f"unexpected columns {sorted(extra_cols)}. "
+
+    #                     column_issues.append(issue_msg.strip())
+
+    #     if already_complete and not is_complete:
+    #         for issue in column_issues:
+    #             self.actions.append(issue)
+    #         self.actions.append(
+    #             "Fix the above column issues. If some columns have different names (e.g., `Doc ID` vs `doc_id`), rename them using Python."
+    #         )
+
+    #     self.__log(f"==> is_complete: {is_complete}")
+    #     self.__log(
+    #         f"Completion check: {is_complete} ({len(materialized_table_ids)}/{len(all_T_ids)} schemas materialized)"
+    #     )
+    #     return is_complete
 
     def __gather_all_tables(self, external_data: list[AbstractDocument]):
         """Gather all tables from retrieved documents, external data, and intermediate tables."""
