@@ -191,10 +191,10 @@ class Materializer:
         assign_to: str,
     ):
         all_tables = self.__gather_all_tables(external_data)
+        self.__log(f"Executing {op_name}...")
         match op_name:
             case "Document Retriever":
-                self.__log("Executing Document Retriever")
-                prompt: str = op_args.get("prompt", "")
+                prompt = op_args.get("prompt", "")
                 self.state.current_retrieved_documents = (
                     self.toolkit.retrieve_multi_retriever_documents(prompt, 10)
                 )
@@ -213,9 +213,9 @@ class Materializer:
                         self.prov_graph.add_node(new_node, True)
                         doc.last_node_id = new_node.id
 
-                for doc in self.state.current_retrieved_documents[
-                    RetrieverType.DOCUMENT_DB
-                ]:
+                for doc in self.state.current_retrieved_documents.get(
+                    RetrieverType.DOCUMENT_DB, []
+                ):
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.DOCUMENT_DB,
                         python_code=self.toolkit.generate_view_textual_document_code(
