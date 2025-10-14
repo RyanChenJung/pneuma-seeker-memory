@@ -16,7 +16,7 @@ class MaterializerPromptFactory:
         self,
         T: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
-        Q: list[str],
+        S: str,
         operation_description: str,
     ) -> str:
         """Generates the initial planning prompt for the Materializer."""
@@ -34,8 +34,8 @@ TARGET TABLES:
 COLUMN DESCRIPTIONS:
 {column_descriptions}
 
-REFERENCE SQL QUERIES (for value format guidance only — not to execute directly):
-{Q}
+REFERENCE SCRIPT (for value format guidance only — not to execute directly):
+{S}
 
 AVAILABLE OPERATIONS:
 {operation_description}

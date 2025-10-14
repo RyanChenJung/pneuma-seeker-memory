@@ -86,8 +86,6 @@ class Conductor:
     ):
         """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
-        if len(interaction_history) > 0:
-            user_input = f"{user_input} (Note: please check the current state (T & Q), if already defined, are they still relevant, or do they need any adjustments? For Q, ensure all queries use ONLY available columns in T, so we do not run into errors.)"
         self.__process_external_data(external_data_paths)
 
         num_actions_taken = 0
@@ -121,7 +119,7 @@ class Conductor:
             )
 
             full_response = "".join(
-                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
+                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True, temperature=0))
             )
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
@@ -368,7 +366,7 @@ class Conductor:
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
                 "column_descriptions"
             )
-            Q: list[str] | None = args.get("Q")
+            S: str | None = args.get("S")
 
             is_T_modified = False
             if T is not None and column_descriptions is not None:
@@ -401,18 +399,18 @@ class Conductor:
                 else:
                     return "If you want to change T, make sure to also define column_descriptions."
 
-            is_Q_modified = False
-            if Q is not None:
-                self.info_need_state.Q = Q
-                self.info_need_state.is_Q_executed = False
-                is_Q_modified = True
+            is_S_modified = False
+            if S is not None:
+                self.info_need_state.S = S
+                self.info_need_state.is_S_executed = False
+                is_S_modified = True
 
-            if is_T_modified and is_Q_modified:
-                return "Successfully modified both T and Q."
+            if is_T_modified and is_S_modified:
+                return "Successfully modified both T and S."
             if is_T_modified:
                 return "Successfully modified T."
-            if is_Q_modified:
-                return "Successfully modified Q."
+            if is_S_modified:
+                return "Successfully modified S."
             return "No modification is done."
         if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
@@ -431,7 +429,7 @@ class Conductor:
             self.info_need_state.T = self.__materialize_T_driver(
                 self.info_need_state.T,
                 self.info_need_state.column_descriptions,
-                self.info_need_state.Q,
+                self.info_need_state.S,
                 note,
                 self.external_documents,
                 self.current_retrieval_results,
@@ -443,30 +441,33 @@ class Conductor:
                 updated_content.to_csv(T_doc.path, index=False)
 
             return "Successfully materialized T."
-        if tool == "sql_engine":
-            self.__log("SQL Engine called")
-            execution_result: list[str] = []
+        if tool == "executor":
+            self.__log("Executor called")
+            execution_result: str = ""
             if not self.info_need_state.is_T_materialized:
-                error_message = "T has not been materialized, so running SQL Engine will produce empty results. Call Materializer first, then you can call SQL Engine."
+                error_message = "T has not been materialized, so running Executor will produce useful results. Call Materializer first, then you can call Executor."
                 self.__log(f"=> {error_message}")
                 return error_message
-            if len(self.info_need_state.Q) == 0:
-                error_message = "Q is still empty, which means there is nothing to execute. Please define Q first, then ensure T has been materialized using Materializer, and finally, you can call SQL Engine again."
+            if len(self.info_need_state.S) == 0:
+                error_message = "S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call Executor again."
                 self.__log(f"=> {error_message}")
                 return error_message
+            
+            T_df: dict[str, pd.DataFrame] = {}
+            for t_id, i in self.info_need_state.T.items():
+                T_df[t_id] = i.content
+            
+            execution_result = self.toolkit.python_executor.execute_code(
+                T_df, self.info_need_state.S
+            )["exec_res"]
+            self.__log(f"Script (S) execution result: {execution_result}")
 
-            execution_result = self.toolkit.execute_sql(
-                self.info_need_state.T,
-                self.info_need_state.Q,
-            )
-            self.__log(f"SQL execution result output: {execution_result}")
-
-            self.info_need_state.is_Q_executed = True
-            return f"Executed Q, which resulted in this output: {execution_result}"
-        if tool == "categorical_column_information":
+            self.info_need_state.is_S_executed = True
+            return f"Executed S, which resulted in this output: {execution_result}"
+        if tool == "categorical_column_info":
             if isinstance(args, dict):
                 self.__log(
-                    f"categorical_column_information request with params: {args}"
+                    f"categorical_column_info request with params: {args}"
                 )
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
@@ -517,7 +518,7 @@ class Conductor:
         self,
         T: dict[str, AbstractDocument],
         col_descriptions: dict[str, dict[str, str]],
-        Q: list[str],
+        S: str,
         user_side_note: str,
         external_data: list[AbstractDocument],
         prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]],
@@ -529,7 +530,7 @@ class Conductor:
         materialized_T_dfs = self.materializer.materialize_T(
             T_dfs,
             col_descriptions,
-            Q,
+            S,
             user_side_note,
             external_data,
             prefetched_ir_docs,

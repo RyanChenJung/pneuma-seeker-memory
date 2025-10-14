@@ -78,8 +78,8 @@ def save_state(
             "T": serialized_T,
             "is_T_materialized": info_need_state.is_T_materialized,
             "column_descriptions": info_need_state.column_descriptions,
-            "Q": info_need_state.Q,
-            "is_Q_executed": info_need_state.is_Q_executed,
+            "S": info_need_state.S,
+            "is_S_executed": info_need_state.is_S_executed,
             "enumerated_table_ids": enumerated_table_ids,
         }
     )
@@ -189,8 +189,8 @@ def load_state(user_id: str, chat_id: str, logger: Logger) -> tuple[
     info_state.T = T
     info_state.is_T_materialized = state_data.get("is_T_materialized", False)
     info_state.column_descriptions = state_data.get("column_descriptions", {})
-    info_state.Q = state_data.get("Q", [])
-    info_state.is_Q_executed = state_data.get("is_Q_executed", False)
+    info_state.S = state_data.get("S", [])
+    info_state.is_S_executed = state_data.get("is_S_executed", False)
 
     retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
     for retriever_type, docs in retr_data.items():
@@ -227,10 +227,8 @@ def _serialize_provenance_graph(graph: ProvenanceGraph) -> dict[str, Any]:
         "nodes": [
             {
                 "id": node.id,
-                "output_data_id": node.output_data_id,
-                "output_data_ref": node.output_data_ref,
                 "source_retriever": node.source_retriever.value,
-                "op_description": node.op_description,
+                "python_code": node.python_code,
                 "children": [child.id for child in node.children],
                 "parents": [parent.id for parent in node.parents],
             }
@@ -251,10 +249,8 @@ def _deserialize_provenance_graph(
     # 1. create all nodes first
     for n in obj.get("nodes", []):
         node = ProvenanceNode(
-            output_data_id=n["output_data_id"],
-            output_data_ref=n["output_data_ref"],
             source_retriever=RetrieverType(n["source_retriever"]),
-            op_description=n["op_description"],
+            python_code=n["python_code"]
         )
         node.id = n["id"]
         graph.add_node(node)

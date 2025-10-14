@@ -60,12 +60,12 @@ class Materializer:
         self,
         T: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
-        Q: list[str],
+        S: str,
         user_side_note="",
         external_data: list[AbstractDocument] = [],
         prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
     ) -> dict[str, DataFrame]:
-        """Materialize target tables T based on the provided queries Q and external data."""
+        """Materialize target tables T based on the provided script S and external data."""
         self.__log(f"Materializing {len(T)} target tables")
         self.__cleanup_system()
 
@@ -87,7 +87,7 @@ class Materializer:
                 content=self.prompt_factory.get_planning_prompt(
                     T=T,
                     column_descriptions=column_descriptions,
-                    Q=Q,
+                    S=S,
                     operation_description=get_operation_description(),
                 ),
             )
