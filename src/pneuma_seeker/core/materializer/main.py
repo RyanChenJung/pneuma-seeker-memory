@@ -497,7 +497,7 @@ class Materializer:
                     self.actions.append("joined_table_id is not provided.")
                     return
 
-                top_k = 2
+                top_k = 1
                 joined_table = self.toolkit.semantic_join(
                     left_table,
                     right_table,

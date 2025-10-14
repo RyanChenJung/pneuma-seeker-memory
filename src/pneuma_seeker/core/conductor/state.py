@@ -42,5 +42,5 @@ Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
             "is_T_materialized": self.is_T_materialized,
             "column_descriptions": self.column_descriptions,
             "S": self.S,
-            "is_Q_executed": self.is_S_executed,
+            "is_S_executed": self.is_S_executed,
         }

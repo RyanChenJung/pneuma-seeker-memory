@@ -13,26 +13,20 @@
       font-family: system-ui, sans-serif;
     }
 
-    /* Header styling for all cards */
     .card-header {
       font-weight: 600;
       background-color: #f8f9fa;
-      /* soft light gray */
       color: #1d1d1d;
       cursor: pointer;
-      /* indicates clickable if collapsible */
     }
 
-    /* Badges */
     .badge-materialized {
       background-color: #FFD580;
-      /* soft orange */
       color: #1d1d1d;
     }
 
     .badge-executed {
       background-color: #A9C1FF;
-      /* soft blue */
       color: #1d1d1d;
     }
 
@@ -60,8 +54,17 @@
       margin-bottom: 0.25rem;
     }
 
-    ol#sql-list {
-      margin-bottom: 1rem;
+    /* Script container styling */
+    .script-wrapper {
+      background: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 0.5rem;
+      max-height: 360px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+      font-size: 0.9rem;
+      white-space: pre;
     }
 
     .prov-iframe {
@@ -88,19 +91,24 @@
           <!-- Target Tables Section -->
           <h5 class="mb-3 d-flex align-items-center">
             <i class="bi bi-table"></i>
-            <span class="ms-2">T (Target Tables) <sup data-bs-toggle="tooltip"
-                title="Tables are shown with sample rows.">*</sup></span>
+            <span class="ms-2">T (Target Tables)
+              <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
+            </span>
             <span class="badge ms-2 badge-materialized">Materialized: <span id="materialized-status">No</span></span>
           </h5>
           <div id="T" class="tables-flex mb-4"></div>
 
-          <!-- SQL Queries Section -->
+          <!-- Python Script Section (single string) -->
           <h5 class="mb-3 d-flex align-items-center">
-            <i class="bi bi-code-slash"></i>
-            <span class="ms-2">Q (SQL Queries)</span>
-            <span class="badge ms-2 badge-executed">Executed: <span id="sql-status">No</span></span>
+            <i class="bi bi-file-earmark-code-fill"></i>
+            <span class="ms-2">S (Python Script)</span>
+            <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
           </h5>
-          <ol id="sql-list" class="list-group list-group-numbered"></ol>
+
+          <!-- Instead of an <ol>, use a scrollable pre/code block -->
+          <div id="script-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
+            <pre id="script-pre" class="mb-0"></pre>
+          </div>
         </div>
       </div>
     </div>
@@ -119,23 +127,17 @@
       </div>
     </div>
 
-    <!-- <div class="card mb-4 shadow-sm">
-      <div class="card-header d-flex align-items-center">
-        <i class="bi bi-diagram-3-fill me-2"></i> Provenance Graph
-      </div>
-      <div class="card-body p-0">
-        <iframe id="prov-iframe" class="prov-iframe"></iframe>
-      </div>
-    </div> -->
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const state = {{ state | tojson }};
-    document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
-    document.getElementById("sql-status").textContent = state.is_Q_executed ? "Yes" : "No";
 
+    // Status badges
+    document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
+    document.getElementById("script-status").textContent = state.is_S_executed ? "Yes" : "No";
+
+    // Render target tables (unchanged)
     const targetSchemasDiv = document.getElementById("T");
     for (const [tableName, rows] of Object.entries(state.T || {})) {
       const tableContainer = document.createElement("div");
@@ -182,18 +184,16 @@
       targetSchemasDiv.appendChild(tableContainer);
     }
 
+    // Activate tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
       return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    const sqlList = document.getElementById("sql-list");
-    (state.Q || []).forEach(sql => {
-      const li = document.createElement("li");
-      li.className = "list-group-item font-monospace";
-      li.textContent = sql;
-      sqlList.appendChild(li);
-    });
+    // Render Python script as a single string inside a <pre>
+    const scriptPre = document.getElementById("script-pre");
+    // state.S is expected to be a single string (possibly multiline). Fallback to empty string.
+    scriptPre.textContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
 
     // Insert Pyvis graph HTML
     const provIframe = document.getElementById("prov-iframe");
