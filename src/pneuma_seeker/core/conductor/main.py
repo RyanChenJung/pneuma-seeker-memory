@@ -59,6 +59,7 @@ class Conductor:
             self.data_sources,
             self.prov_graph,
             self.toolkit,
+            self.config,
         )
 
         self.info_need_state = InformationNeedState()
@@ -119,7 +120,9 @@ class Conductor:
             )
 
             full_response = "".join(
-                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True, temperature=0))
+                self.llm.chat(
+                    llm_messages, LLMOption(json_mode=True, stream=True)
+                )
             )
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
@@ -452,11 +455,11 @@ class Conductor:
                 error_message = "S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call Executor again."
                 self.__log(f"=> {error_message}")
                 return error_message
-            
+
             T_df: dict[str, pd.DataFrame] = {}
             for t_id, i in self.info_need_state.T.items():
                 T_df[t_id] = i.content
-            
+
             execution_result = self.toolkit.python_executor.execute_code(
                 T_df, self.info_need_state.S
             )["exec_res"]
@@ -466,9 +469,7 @@ class Conductor:
             return f"Executed S, which resulted in this output: {execution_result}"
         if tool == "categorical_column_info":
             if isinstance(args, dict):
-                self.__log(
-                    f"categorical_column_info request with params: {args}"
-                )
+                self.__log(f"categorical_column_info request with params: {args}")
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
                 if table_id is None:
