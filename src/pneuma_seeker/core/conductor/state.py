@@ -3,8 +3,8 @@ from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 
 class InformationNeedState:
     """
-    Represents a user's information need as a pair (T,Q), where T is a set of
-    tables and Q is a sequence of SQL queries to be executed over them. For example,
+    Represents a user's information need as a pair (T,S), where T is a set of
+    tables and S is a script to be executed over them. For example,
     if the user needs to know about the work addresses of faculty members, the target schemas
     may be ["name", "work address"], where name represents the names of the members, and work address represents
     the corresponding work address of each of them. After materialized by Materializer Engine, the SQLs can be
@@ -16,8 +16,8 @@ class InformationNeedState:
         self.is_T_materialized = False
         self.column_descriptions: dict[str, dict[str, str]] = dict()
 
-        self.Q: list[str] = []
-        self.is_Q_executed = False
+        self.S: str = ""
+        self.is_S_executed = False
 
     def __str__(self) -> str:
         T_repr = ""
@@ -29,8 +29,8 @@ class InformationNeedState:
 Column descriptions of T:
 {self.column_descriptions}
 
-SQL queries (Q) to be run sequentially over T (Is executed yet? {self.is_Q_executed}):
-{self.Q}"""
+Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
+{self.S}"""
 
     def get_current_state_instance(self):
         MAX_ROWS = 10
@@ -41,6 +41,6 @@ SQL queries (Q) to be run sequentially over T (Is executed yet? {self.is_Q_execu
             },
             "is_T_materialized": self.is_T_materialized,
             "column_descriptions": self.column_descriptions,
-            "Q": self.Q,
-            "is_Q_executed": self.is_Q_executed,
+            "S": self.S,
+            "is_S_executed": self.is_S_executed,
         }
