@@ -65,20 +65,15 @@ class Materializer:
         column_descriptions: dict[str, dict[str, str]],
         S: str,
         user_side_note="",
-        external_data: list[AbstractDocument] = [],
-        prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]] = {},
+        external_tables: list[AbstractDocument] = [],
+        prefetched_tables: list[AbstractDocument] = [],
     ) -> dict[str, DataFrame]:
         """Materialize target tables T based on the provided script S and external data."""
         self.__log(f"Materializing {len(T)} target tables")
         self.__cleanup_system()
 
-        if len(prefetched_ir_docs) > 0:
-            for retriever_type in prefetched_ir_docs:
-                retriever_prefetched_docs = prefetched_ir_docs[retriever_type]
-                if len(retriever_prefetched_docs) > 0:
-                    self.state.current_retrieved_documents[retriever_type] = (
-                        retriever_prefetched_docs
-                    )
+        if len(prefetched_tables) > 0:
+            self.state.current_retrieved_tables = prefetched_tables
 
         prev_response = ""
         repetitive_response_count = 0
@@ -102,12 +97,12 @@ class Materializer:
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_context_prompt(
-                        self.state.current_retrieved_documents,
+                        self.state.current_retrieved_tables,
                         list(self.state.intermediate_tables),
                         self.actions,
                         curr_iteration,
                         user_side_note,
-                        external_data,
+                        external_tables,
                     ),
                 )
             )
@@ -146,7 +141,7 @@ class Materializer:
                 self.actions.append(error_msg)
                 continue
 
-            self.__handle_step(step_type, plan, external_data, T)
+            self.__handle_step(step_type, plan, external_tables, T)
 
         self.__log("Materialization completed successfully")
         final_result: dict[str, DataFrame] = {}
@@ -198,16 +193,12 @@ class Materializer:
         match op_name:
             case "pneuma_seeker":
                 prompt = op_args.get("prompt", "")
-                self.state.current_retrieved_documents = (
-                    self.toolkit.retrieve_multi_retriever_documents(prompt, 10)
-                )
+                self.state.current_retrieved_tables = self.toolkit.retrieve_documents(prompt, RetrieverType.PNEUMA, 10)
                 self.actions.append(
                     f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
                 )
 
-                for doc in self.state.current_retrieved_documents.get(
-                    RetrieverType.PNEUMA, []
-                ):
+                for doc in self.state.current_retrieved_tables:
                     if doc.path is not None:
                         new_node = ProvenanceNode(
                             source_retriever=RetrieverType.PNEUMA,
@@ -215,18 +206,6 @@ class Materializer:
                         )
                         self.prov_graph.add_node(new_node, True)
                         doc.last_node_id = new_node.id
-
-                for doc in self.state.current_retrieved_documents.get(
-                    RetrieverType.DOCUMENT_DB, []
-                ):
-                    new_node = ProvenanceNode(
-                        source_retriever=RetrieverType.DOCUMENT_DB,
-                        python_code=self.toolkit.generate_view_textual_document_code(
-                            doc
-                        ),
-                    )
-                    self.prov_graph.add_node(new_node, True)
-                    doc.last_node_id = new_node.id
             case "table_enumerator":
                 pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
@@ -237,32 +216,24 @@ class Materializer:
                     self.actions.append(
                         f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "Previously retrieved documents".'
                     )
-                else:
-                    self.actions.append("There are no tables that match the pattern.")
 
-                new_node = ProvenanceNode(
-                    source_retriever=RetrieverType.ENUMERATOR,
-                    python_code=self.toolkit.generate_pandas_read_multi_doc_code(
-                        extra_tables
-                    ),
-                )
-                self.prov_graph.add_node(new_node, True)
-
-                for extra_table in extra_tables:
-                    extra_table.last_node_id = new_node.id
-
-                if not self.state.current_retrieved_documents:
-                    if len(extra_tables) > 0:
-                        self.state.current_retrieved_documents = {
-                            RetrieverType.PNEUMA: extra_tables
-                        }
-                else:
-                    existing_tables = self.state.current_retrieved_documents.get(
-                        RetrieverType.PNEUMA, []
+                    new_node = ProvenanceNode(
+                        source_retriever=RetrieverType.ENUMERATOR,
+                        python_code=self.toolkit.generate_pandas_read_multi_doc_code(
+                            extra_tables
+                        ),
                     )
-                    self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
+                    self.prov_graph.add_node(new_node, True)
+
+                    for extra_table in extra_tables:
+                        extra_table.last_node_id = new_node.id
+                    
+                    existing_tables = self.state.current_retrieved_tables
+                    self.state.current_retrieved_tables = list(
                         set(existing_tables).union(set(extra_tables))
                     )
+                else:
+                    self.actions.append("There are no tables that match the pattern.")
             case "table_select":
                 for target_table_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
@@ -763,78 +734,13 @@ class Materializer:
         )
         return is_complete
 
-    # def __check_completion(self, T: dict[str, DataFrame]) -> bool:
-    #     """Check if all target tables (T) have been materialized correctly."""
-    #     self.__log("Checking completion...")
-    #     all_T_ids = set(T.keys())
-    #     id_dfs: dict[str, DataFrame] = {}
-
-    #     materialized_table_ids: set[str] = set()
-    #     for doc in self.state.intermediate_tables:
-    #         if isinstance(doc.content, DataFrame):
-    #             id_dfs[doc.doc_id] = doc.content
-    #             materialized_table_ids.add(doc.doc_id)
-
-    #     self.__log(f"=> all_T_ids: {all_T_ids}")
-    #     self.__log(f"=> materialized_table_ids: {materialized_table_ids}")
-    #     is_complete = all_T_ids <= materialized_table_ids
-
-    #     if not is_complete:
-    #         self.actions.append(
-    #             f"==> You have not materialized these tables: {all_T_ids - materialized_table_ids}"
-    #         )
-
-    #     already_complete = is_complete
-    #     column_issues: list[str] = []
-
-    #     if is_complete:
-    #         for target_table_id in all_T_ids:
-    #             if target_table_id in materialized_table_ids:
-    #                 self.__log(f"=> Checking the target table {target_table_id}.")
-
-    #                 target_cols = set(T[target_table_id].columns)
-    #                 materialized_cols = set(id_dfs[target_table_id].columns)
-
-    #                 self.__log(f"==> target_cols {target_cols}")
-    #                 self.__log(f"==> materialized_cols {materialized_cols}")
-
-    #                 missing_cols = target_cols - materialized_cols
-    #                 extra_cols = materialized_cols - target_cols
-
-    #                 if missing_cols or extra_cols:
-    #                     is_complete = False
-    #                     issue_msg = f"For table `{target_table_id}`: "
-
-    #                     if missing_cols:
-    #                         issue_msg += f"missing columns {sorted(missing_cols)}. "
-    #                     if extra_cols:
-    #                         issue_msg += f"unexpected columns {sorted(extra_cols)}. "
-
-    #                     column_issues.append(issue_msg.strip())
-
-    #     if already_complete and not is_complete:
-    #         for issue in column_issues:
-    #             self.actions.append(issue)
-    #         self.actions.append(
-    #             "Fix the above column issues. If some columns have different names (e.g., `Doc ID` vs `doc_id`), rename them using Python."
-    #         )
-
-    #     self.__log(f"==> is_complete: {is_complete}")
-    #     self.__log(
-    #         f"Completion check: {is_complete} ({len(materialized_table_ids)}/{len(all_T_ids)} schemas materialized)"
-    #     )
-    #     return is_complete
-
     def __gather_all_tables(self, external_data: list[AbstractDocument]):
         """Gather all tables from retrieved documents, external data, and intermediate tables."""
-        pneuma_retrieval_results: list[AbstractDocument] = (
-            self.state.current_retrieved_documents.get(RetrieverType.PNEUMA, [])
-        )
         external_data_tables_only: list[AbstractDocument] = [
             i for i in external_data if isinstance(i, Table)
         ]
         return (
-            pneuma_retrieval_results
+            self.state.current_retrieved_tables
             + external_data_tables_only
             + list(self.state.intermediate_tables)
         )

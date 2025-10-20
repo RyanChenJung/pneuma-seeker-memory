@@ -63,7 +63,7 @@ class Conductor:
         )
 
         self.info_need_state = InformationNeedState()
-        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
+        self.current_retrieved_tables: list[AbstractDocument] = []
         self.external_documents: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
 
@@ -111,7 +111,7 @@ class Conductor:
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
-                        self.current_retrieval_results,
+                        self.current_retrieved_tables,
                         user_input,
                         self.enumerated_table_ids,
                         self.external_documents,
@@ -335,9 +335,9 @@ class Conductor:
                 error_message = "=> `args` must have a `prompt` property"
                 self.__log(f"=> {error_message}")
                 return error_message
-
-            self.current_retrieval_results = (
-                self.toolkit.retrieve_multi_retriever_documents(args["prompt"])
+            
+            self.current_retrieved_tables = self.toolkit.retrieve_documents(
+                args["prompt"], RetrieverType.PNEUMA
             )
             return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
         if tool == "table_enumerator":
@@ -435,7 +435,6 @@ class Conductor:
                 self.info_need_state.S,
                 note,
                 self.external_documents,
-                self.current_retrieval_results,
             )
             self.info_need_state.is_T_materialized = True
 
@@ -485,7 +484,7 @@ class Conductor:
                     self.__log(f"=> {error_message}")
                     return error_message
 
-                for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
+                for document in self.current_retrieved_tables:
                     if document.doc_id == table_id:
                         cat_col_info = ""
                         table: pd.DataFrame = document.content
@@ -522,7 +521,6 @@ class Conductor:
         S: str,
         user_side_note: str,
         external_data: list[AbstractDocument],
-        prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]],
     ):
         T_dfs: dict[str, pd.DataFrame] = {}
         for T_id, T_doc in T.items():
@@ -534,7 +532,7 @@ class Conductor:
             S,
             user_side_note,
             external_data,
-            prefetched_ir_docs,
+            self.current_retrieved_tables,
         )
 
         materialized_T: dict[str, AbstractDocument] = {}

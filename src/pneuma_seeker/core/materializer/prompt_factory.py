@@ -67,7 +67,7 @@ Produce exactly ONE JSON object:
     
     def get_context_prompt(
         self,
-        retrieved_documents: dict[RetrieverType, list[AbstractDocument]],
+        retrieved_tables: list[AbstractDocument],
         intermediate_tables: list[AbstractDocument],
         recent_actions: list[str],
         num_iterations: int,
@@ -81,7 +81,7 @@ This is iteration {num_iterations} of materializing the target tables.
 CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
-- Retrieved internal tables: {convert_multi_retriever_results_to_str(retrieved_documents)}
+- Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables)}
 - User-uploaded external tables: {convert_retrieval_results_to_str(user_provided_external_data)}
 - User note: {user_side_note}
 

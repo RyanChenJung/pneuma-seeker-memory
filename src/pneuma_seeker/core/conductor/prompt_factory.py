@@ -151,7 +151,7 @@ OR
         info_need_state: InformationNeedState,
         interaction_history: list[HumanConductorInteraction],
         actions_taken: list[str],
-        curr_retrieval_results: dict[RetrieverType, list[AbstractDocument]],
+        curr_retrieved_tables: list[AbstractDocument],
         human_input: str,
         enumerated_table_ids: list[str],
         external_data: list[AbstractDocument],
@@ -170,7 +170,7 @@ RECENT USER INTERACTIONS:
 {self.__convert_interactions_to_str(interaction_history)}
 
 RETRIEVED DATA:
-{convert_multi_retriever_results_to_str(curr_retrieval_results)}
+{convert_retrieval_results_to_str(curr_retrieved_tables)}
 
 OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
 {enumerated_table_ids}
