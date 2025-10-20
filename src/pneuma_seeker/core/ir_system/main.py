@@ -1,5 +1,4 @@
 from logging import Logger
-from typing import Optional
 
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.prompt_factory import PromptFactory
