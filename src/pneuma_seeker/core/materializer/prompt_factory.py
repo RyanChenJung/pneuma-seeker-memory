@@ -26,7 +26,7 @@ You are the Materializer. Your task is to fill all rows for the target tables us
 2. User-uploaded external tables (if any)
 3. Allowed operations described below
 
-Treat external tables just like internal data, except it is fixed and will never be replaced by calling Document Retriever again.
+Treat external tables just like internal data, except it is fixed and will never be replaced by calling pneuma_retriever again.
 
 TARGET TABLES:
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
@@ -42,17 +42,17 @@ AVAILABLE OPERATIONS:
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
-2. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
-3. Internal data is reset each time Document Retriever is used; external tables persist.
+2. Use external tables if available and internal data; call pneuma_retriever to retrieve or re-retrieve internal data (if necessary).
+3. Internal data is reset each time pneuma_retriever is used; external tables persist.
 4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 5. Always assign results to the correct target table IDs, matching column names **exactly (case-sensitive)**.
 6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
-7. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
+7. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - (semantically_derived) and user notes are hints, not guarantees.
-- If reliable data exists for a column (tagged or untagged), fill it normally using Python Executor or SQL Executor — no semantic generation needed.
-- If no reliable data exists to fill a column, use the Semantic Column Generator as a fallback — whether or not the column is tagged.
+- If reliable data exists for a column (tagged or untagged), fill it normally using python_executor or sql_executor — no semantic generation needed.
+- If no reliable data exists to fill a column, use the semantic_column_generator as a fallback — whether or not the column is tagged.
 
 OUTPUT FORMAT:
 Produce exactly ONE JSON object:
@@ -81,26 +81,26 @@ This is iteration {num_iterations} of materializing the target tables.
 CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
-- Retrieved internal data: {convert_multi_retriever_results_to_str(retrieved_documents)}
+- Retrieved internal tables: {convert_multi_retriever_results_to_str(retrieved_documents)}
 - User-uploaded external tables: {convert_retrieval_results_to_str(user_provided_external_data)}
 - User note: {user_side_note}
 
 CORE RULES:
-1. Use external tables if available and internal data; call Document Retriever to retrieve or re-retrieve internal data (if necessary).
-2. Internal data is reset each time Document Retriever is used; external tables persist.
+1. Use external tables if available and internal data; call pneuma_retriever to retrieve or re-retrieve internal data (if necessary).
+2. Internal data is reset each time pneuma_retriever is used; external tables persist.
 3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 4. Always match target table column names exactly (case-sensitive).
 5. Assign completed tables only to their correct target table IDs.
-6. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call Document Retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
+6. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - Treat (semantically_derived) and user notes as hints only.
-- If reliable data exists, compute normally using Python Executor or SQL Executor.
-- Use Semantic Column Generator only when no reliable direct computation is available.
+- If reliable data exists, compute normally using python_executor or sql_executor.
+- Use semantic_column_generator only when no reliable direct computation is available.
 
 TOOL USAGE:
-- If you retrieve tables from Document Retriever and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use Table Enumerator to list all matching table IDs.
-- Use Semantic Column Generator only when no reliable direct computation is available.
+- If you retrieve tables from pneuma_retriever and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use table_enumerator to list all matching table IDs.
+- Use semantic_column_generator only when no reliable direct computation is available.
 
 OUTPUT FORMAT:
 Return exactly ONE JSON object per iteration:
@@ -113,7 +113,7 @@ OR
 
 {{
   "step_type": "operation",
-  "name": "Document Retriever" | "Table Enumerator" | "Table Select",
+  "name": "pneuma_retriever" | "table_enumerator" | "table_select",
   "args": {{...}},
 }}
 
@@ -121,7 +121,7 @@ OR
 
 {{
   "step_type": "operation",
-  "name": "Python Executor" | "SQL Executor",
+  "name": "python_executor" | "sql_executor",
   "args": {{...}},
   "assign_to": "<target_table_id_or_intermediate_id>"
 }}

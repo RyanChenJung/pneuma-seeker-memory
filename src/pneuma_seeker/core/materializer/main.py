@@ -196,7 +196,7 @@ class Materializer:
         all_tables = self.__gather_all_tables(external_data)
         self.__log(f"Executing {op_name}...")
         match op_name:
-            case "Document Retriever":
+            case "pneuma_seeker":
                 prompt = op_args.get("prompt", "")
                 self.state.current_retrieved_documents = (
                     self.toolkit.retrieve_multi_retriever_documents(prompt, 10)
@@ -227,7 +227,7 @@ class Materializer:
                     )
                     self.prov_graph.add_node(new_node, True)
                     doc.last_node_id = new_node.id
-            case "Table Enumerator":
+            case "table_enumerator":
                 pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
                     pattern, RetrieverType.ENUMERATOR
@@ -235,7 +235,7 @@ class Materializer:
 
                 if len(extra_tables) > 0:
                     self.actions.append(
-                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called Document Retriever before, as these tables have been included to "Previously retrieved documents".'
+                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "Previously retrieved documents".'
                     )
                 else:
                     self.actions.append("There are no tables that match the pattern.")
@@ -263,7 +263,7 @@ class Materializer:
                     self.state.current_retrieved_documents[RetrieverType.PNEUMA] = list(
                         set(existing_tables).union(set(extra_tables))
                     )
-            case "Table Select":
+            case "table_select":
                 for target_table_id, retrieved_table_info in op_args.items():
                     if isinstance(retrieved_table_info, list):
                         if len(retrieved_table_info) == 0:
@@ -355,7 +355,7 @@ class Materializer:
                         self.actions.append(
                             f"Error: The ID {target_table_id} does not exist in T. Please fix it."
                         )
-            case "Semantic Column Generator":
+            case "semantic_column_generator":
                 table_id: str | None = op_args.get("table_id")
                 new_column_name: str | None = op_args.get("new_column_name")
                 table_relevant_columns: list[str] | None = op_args.get(
@@ -424,7 +424,7 @@ class Materializer:
                 self.__save_new_or_updated_intermediate_table(
                     conditioned_table_doc.doc_id
                 )
-            case "Semantic Join":
+            case "semantic_join":
                 left_table_id: str | None = op_args.get("left_table_id")
                 right_table_id: str | None = op_args.get("right_table_id")
                 relevant_left_cols: list[str] | None = op_args.get("relevant_left_cols")
@@ -550,7 +550,7 @@ class Materializer:
                 self.actions.append(
                     "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 )
-            case "Python Executor":
+            case "python_executor":
                 id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
                 for table_doc in all_tables:
@@ -638,7 +638,7 @@ class Materializer:
                         self.prov_graph.add_node(new_node, True)
                         for parent_node in parent_nodes:
                             self.prov_graph.connect(parent_node, new_node)
-            case "SQL Executor":
+            case "sql_executor":
                 try:
                     sql_query: str = op_args["sql_query"]
                     self.logger.info(f"Executing this SQL query: {sql_query}")
