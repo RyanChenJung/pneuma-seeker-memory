@@ -19,8 +19,7 @@ class Config:
         self.CONDUCTOR_ITERATION_LIMIT = int(
             os.getenv("CONDUCTOR_ITERATION_LIMIT", "5")
         )
-        self.SEMANTIC_JOIN_DYNAMIC_TOP_K = True
-        self.SEMANTIC_JOIN_DEFAULT_TOP_K = 3
+        self.SEMANTIC_JOIN_TOP_K = 1
 
     def __get_use_azure(self):
         use_azure = os.getenv("USE_AZURE", "false").lower()

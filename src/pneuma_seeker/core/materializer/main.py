@@ -21,6 +21,7 @@ from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_code, parse_json
 
@@ -39,6 +40,7 @@ class Materializer:
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
         toolkit: Toolkit,
+        config: Config,
     ):
         self.llm = llm
         self.embed_model = embed_model
@@ -55,6 +57,7 @@ class Materializer:
         self.toolkit = toolkit
 
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config = config
 
     def materialize_T(
         self,
@@ -497,14 +500,13 @@ class Materializer:
                     self.actions.append("joined_table_id is not provided.")
                     return
 
-                top_k = 1
                 joined_table = self.toolkit.semantic_join(
                     left_table,
                     right_table,
                     relevant_left_cols,
                     relevant_right_cols,
                     syntactic_sim_metric=SyntacticSimMetric.JACCARD_QGRAM,
-                    top_k=top_k,
+                    top_k=self.config.SEMANTIC_JOIN_TOP_K,
                 )
 
                 new_node = ProvenanceNode(
@@ -514,7 +516,7 @@ class Materializer:
                         right_table_doc,
                         relevant_left_cols,
                         relevant_right_cols,
-                        top_k,
+                        self.config.SEMANTIC_JOIN_TOP_K,
                         os.path.join(
                             self.__get_intermediate_table_dir_path(),
                             f"{joined_table_id}.csv",
