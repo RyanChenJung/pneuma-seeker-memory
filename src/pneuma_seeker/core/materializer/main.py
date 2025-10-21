@@ -500,12 +500,12 @@ class Materializer:
                     return
                 if not set(relevant_left_cols) <= set(list(left_table.columns)):
                     self.actions.append(
-                        "relevant_left_cols is not a subseet of left_table's columns."
+                        "relevant_left_cols is not a subset of left_table's columns."
                     )
                     return
                 if not set(relevant_right_cols) <= set(list(right_table.columns)):
                     self.actions.append(
-                        "relevant_right_cols is not a subseet of right_table's columns."
+                        "relevant_right_cols is not a subset of right_table's columns."
                     )
                     return
                 if not joined_table_id:
@@ -810,8 +810,10 @@ class Materializer:
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):
         """Save a new or updated intermediate table to a CSV file."""
+        intermediate_table_dir_path = self.__get_intermediate_table_dir_path()
+        os.makedirs(intermediate_table_dir_path, exist_ok=True)
         csv_path = os.path.join(
-            self.__get_intermediate_table_dir_path(), f"{table_id}.csv"
+            intermediate_table_dir_path, f"{table_id}.csv"
         )
         intermediate_table: DataFrame | None = None
         for table_doc in self.state.intermediate_tables:
