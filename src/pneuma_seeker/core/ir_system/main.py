@@ -8,6 +8,7 @@ from pneuma_seeker.core.ir_system.retriever.retriever_factory import (
     RetrieverType,
 )
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 
 
@@ -16,13 +17,21 @@ class IRSystem:
     Information Retrieval System that manages multiple retrievers
     and handles document indexing and retrieval.
     """
-    def __init__(self, llm: AbstractModel, embed_model: AbstractModel, logger: Logger):
+
+    def __init__(
+        self,
+        llm: AbstractModel,
+        embed_model: AbstractModel,
+        logger: Logger,
+        config: Config,
+    ):
         self.prompt_factory = PromptFactory()
         self.llm = llm
         self.embed_model = embed_model
         self.logger = logger
+        self.config = config
         self.retriever_factory = RetrieverFactory(
-            RetrieverModel(llm=self.llm, embed_model=self.embed_model)
+            RetrieverModel(llm=self.llm, embed_model=self.embed_model), config
         )
 
     def index_documents(

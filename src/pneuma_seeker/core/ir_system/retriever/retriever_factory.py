@@ -4,15 +4,19 @@ from pneuma_seeker.core.ir_system.retriever.impl.enumerator import Enumerator
 from pneuma_seeker.core.ir_system.retriever.impl.pneuma import Pneuma
 from pneuma_seeker.core.ir_system.retriever.impl.document_db import DocumentDB
 from pneuma_seeker.core.ir_system.retriever.impl.web_search import WebSearch
+from pneuma_seeker.utils.config import Config
 
 
 class RetrieverFactory:
-    def __init__(self, models: RetrieverModel):
+    """Factory class to create Retriever instances based on the RetrieverType."""
+
+    def __init__(self, models: RetrieverModel, config: Config):
+        """Initialize the RetrieverFactory with available retriever instances."""
         self.retriever_instances = {
-            RetrieverType.PNEUMA: Pneuma(models),
-            RetrieverType.DOCUMENT_DB: DocumentDB(models),
-            RetrieverType.WEB_SEARCH: WebSearch(models),
-            RetrieverType.ENUMERATOR: Enumerator(models),
+            RetrieverType.PNEUMA_RETRIEVER: Pneuma(models, config),
+            RetrieverType.DOCUMENT_DB: DocumentDB(models, config),
+            RetrieverType.WEB_SEARCH: WebSearch(models, config),
+            RetrieverType.ENUMERATOR: Enumerator(models, config),
         }
 
     def get_retriever(self, retriever_type: RetrieverType) -> AbstractRetriever:

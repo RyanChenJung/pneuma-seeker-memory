@@ -168,7 +168,7 @@ def load_state(user_id: str, chat_id: str, logger: Logger) -> tuple[
     for T_id, T_dict in raw_T.items():
         doc_id: str = T_dict.get("doc_id", "")
         retriever_type = RetrieverType(
-            T_dict.get("retriever_type", RetrieverType.PNEUMA.value)
+            T_dict.get("retriever_type", RetrieverType.PNEUMA_RETRIEVER.value)
         )
         path: str = T_dict.get("path", "")
         if len(path) == 0 or not os.path.isfile(path):

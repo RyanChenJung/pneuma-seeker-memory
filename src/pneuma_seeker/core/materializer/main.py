@@ -191,7 +191,7 @@ class Materializer:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
                 self.state.retrieved_tables = self.toolkit.retrieve_documents(
-                    prompt, RetrieverType.PNEUMA, 10
+                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 self.actions.append(
                     f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "Retrieved internal tables" have been filled.'
@@ -200,7 +200,7 @@ class Materializer:
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
                         new_node = ProvenanceNode(
-                            source_retriever=RetrieverType.PNEUMA,
+                            source_retriever=RetrieverType.PNEUMA_RETRIEVER,
                             python_code=self.toolkit.generate_pandas_read_code(doc),
                         )
                         self.prov_graph.add_node(new_node, True)

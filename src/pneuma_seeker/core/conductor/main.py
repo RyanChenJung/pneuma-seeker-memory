@@ -337,7 +337,7 @@ class Conductor:
                 return error_message
 
             self.retrieved_tables = self.toolkit.retrieve_documents(
-                args["prompt"], RetrieverType.PNEUMA
+                args["prompt"], RetrieverType.PNEUMA_RETRIEVER
             )
             return "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
         if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:

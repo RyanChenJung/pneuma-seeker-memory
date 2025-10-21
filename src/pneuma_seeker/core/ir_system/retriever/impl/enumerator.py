@@ -45,7 +45,7 @@ class Enumerator(AbstractRetriever):
                 results.append(
                     Table(
                         doc_id=clean_column_table_name(table_path[:-4].split("/")[-1]),
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=actual_table,
                         metadata=dict(),
                         path=f"{dataset_path}/{table_path}",
