@@ -1,3 +1,4 @@
+# src/pneuma_seeker/core/materializer/state.py
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 
 
@@ -15,3 +16,4 @@ class MaterializerState:
     def reset(self) -> None:
         self.retrieved_tables = []
         self.intermediate_tables = set()
+        self.web_search_result = None
