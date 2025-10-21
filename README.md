@@ -13,10 +13,10 @@ cd src/pneuma_seeker
 nohup fastapi dev server.py >> server.out &
 ```
 
-<!-- ## Test (NOTE: outdated tests; will be updated)
+## Testing the system (ongoing)
 
 ```bash
-cd ./tests/processor
+cd ./tests/pneuma_seeker
 python -m coverage run -m unittest discover
 python -m coverage html
-``` -->
+```
