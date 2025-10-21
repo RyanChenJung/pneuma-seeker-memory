@@ -812,9 +812,7 @@ class Materializer:
         """Save a new or updated intermediate table to a CSV file."""
         intermediate_table_dir_path = self.__get_intermediate_table_dir_path()
         os.makedirs(intermediate_table_dir_path, exist_ok=True)
-        csv_path = os.path.join(
-            intermediate_table_dir_path, f"{table_id}.csv"
-        )
+        csv_path = os.path.join(intermediate_table_dir_path, f"{table_id}.csv")
         intermediate_table: DataFrame | None = None
         for table_doc in self.state.intermediate_tables:
             if table_doc.doc_id == table_id:
