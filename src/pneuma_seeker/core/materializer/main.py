@@ -1,3 +1,4 @@
+# src/pneuma_seeker/core/materializer/main.py
 import glob
 import os
 from logging import Logger
