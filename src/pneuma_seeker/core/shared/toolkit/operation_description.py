@@ -1,6 +1,6 @@
 def get_operation_description(enable_web_search = False):
     return """
-- **pneuma_seeker**
+- **pneuma_retriever**
     - Retrieves relevant tables from the internal database based on natural-language prompts.
     - Does not affect user-provided external tables. However, previously retrieved internal tables are replaced each time this tool is called.
     - Args: {"prompt": "<retrieval query string, contextualized with columns of the target tables (T), not just using the target table IDs>"}

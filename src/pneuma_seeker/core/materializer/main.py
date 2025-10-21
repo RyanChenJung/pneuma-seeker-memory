@@ -194,7 +194,7 @@ class Materializer:
                     prompt, RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 self.actions.append(
-                    f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "Retrieved internal tables" have been filled.'
+                    f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "retrieved internal tables" have been filled.'
                 )
 
                 for doc in self.state.retrieved_tables:
@@ -239,7 +239,7 @@ class Materializer:
 
                 if len(extra_tables) > 0:
                     self.actions.append(
-                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "Previously retrieved documents".'
+                        f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "retrieved internal tables".'
                     )
 
                     new_node = ProvenanceNode(
