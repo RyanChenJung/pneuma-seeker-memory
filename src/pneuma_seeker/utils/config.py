@@ -23,11 +23,16 @@ class Config:
 
         self.SEMANTIC_JOIN_TOP_K = 1
 
-        self.ENABLE_WEB_SEARCH = False
-
+        self.ENABLE_WEB_SEARCH = self.__get_enable_web_search()
 
     def __get_use_azure(self):
         use_azure = os.getenv("USE_AZURE", "false").lower()
         if use_azure == "true":
+            return True
+        return False
+
+    def __get_enable_web_search(self):
+        enable_web_search = os.getenv("ENABLE_WEB_SEARCH", "false").lower()
+        if enable_web_search == "true":
             return True
         return False
