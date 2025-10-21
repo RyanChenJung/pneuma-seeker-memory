@@ -1,127 +1,315 @@
+# tests/pneuma_seeker/core/conductor/test_main.py
 import logging
 import os
 import sys
-from typing import Any
-import unittest
-from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
+from typing import Optional
 
-from pandas import DataFrame
-
-from pneuma_seeker.core.conductor.main import Conductor
+from numpy import ndarray
 
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
 
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
 
-class TestBaseTableReducer(unittest.TestCase):
+import pandas as pd
+
+from pneuma_seeker.core.ir_system.data_model import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+)
+from pneuma_seeker.core.ir_system.data_model import RetrieverType, Text
+from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.utils.config import Config
+
+
+class MockLLM:
+    """Simple deterministic LLM mock that returns queued JSON strings."""
+
+    def __init__(self, responses=None):
+        self._responses = list(responses or [])
+
+    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None):
+        # return a list (chat API returns iterable); use last queued response or default
+        if not self._responses:
+            yield '{"action":"communicate_with_user","message":"default"}'
+        yield self._responses.pop(0)
+
+
+class MockEmbedModel:
+    def encode(
+        self,
+        texts: str | list[str],
+        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+    ) -> ndarray:
+        return ndarray([])
+
+
+class ConductorTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir_1 = TemporaryDirectory()
-        self.temp_dir_2 = TemporaryDirectory()
+        import pneuma_seeker.core.conductor.main as conductor_mod
 
+        self.mock_llm = MockLLM()
+        self.mock_embed_model = MockEmbedModel()
+        self.patcher_get_llm = patch.object(
+            conductor_mod, "get_llm", lambda *a, **k: (lambda p, c, l: self.mock_llm)
+        )
+        self.patcher_get_embed = patch.object(
+            conductor_mod,
+            "get_embed_model",
+            lambda *a, **k: (lambda p, c, l: self.mock_embed_model),
+        )
+
+        self.patcher_get_llm.start()
+        self.patcher_get_embed.start()
+
+        from pneuma_seeker.core.conductor.main import Conductor
+
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.logger = logging.getLogger("test_conductor")
+        self.logger.setLevel(logging.ERROR)
         self.conductor = Conductor(
-            "azure_openai"
-        )
-
-        self.target_schema = ["target_col_1"]
-        self.question = "This is a sample question."
-        self.db_schema = "test_db"
-        self.table_id = "base_table"
-        self.table_descriptions = {
-            self.table_id: "This is the base table.",
-        }
-
-        self.table_store = PyTableStore(self.temp_dir_1.name)
-        self.table_store.create_db_schema(self.db_schema)
-        self.table_store.add_table(
-            self.db_schema,
-            self.table_id,
-            DFTable(
-                DataFrame(
-                    {
-                        "id": [1, 2, 3, 4, 5],
-                        "school_name": [
-                            "school 1",
-                            "school 2",
-                            "school 3",
-                            "school 4",
-                            "school 5",
-                        ],
-                    }
-                )
-            ),
-        )
-
-        os.environ["OPENAI_API_KEY"] = "test_api_key"
-        self.conductor_state = ConductorState(
-            table_store=self.table_store,
-            logger=setup_logger(
-                name="processor_logger",
-                log_file=f"{self.temp_dir_2.name}/processor.log",
-                level=logging.INFO,
-                max_bytes=10_000_000,
-                backup_count=5,
-            ),
-            llm=GPT(),
-            embedding_model=None,
-            computation_graph=ComputationGraph(),
+            llm_path="unused",
+            embed_model_path="unused",
+            logger=self.logger,
+            data_sources=[],
+            config=Config(".env.test"),
         )
 
     def tearDown(self):
-        self.temp_dir_1.cleanup()
-        logger = logging.getLogger("processor_logger")
-        handlers = logger.handlers[:]
-        for handler in handlers:
-            handler.close()
-            logger.removeHandler(handler)
+        self.temp_dir.cleanup()
+        patch.stopall()
 
-        self.temp_dir_2.cleanup()
+    def test_pneuma_retriever_updates_retrieved_tables(self):
+        plan1 = '{"action":"tool_call","tool":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        plan2 = '{"action":"communicate_with_user","message":"done"}'
+        self.mock_llm._responses = [plan1, plan2]
 
-    def test_communicate_with_user(self):
-        mock_return_value = """
-            { 
-                "action": "communicate_with_user",
-                "message": "I keep an internal “state” with three parts:\n\n1. T: a dictionary of target tables, each with its list of columns.\n2. column_descriptions: for each table, a description of what each column means.\n3. Q: an ordered list of SQL queries that will run against those tables.\n\nRight now, all three are empty (no tables defined, no columns described, no SQL written). \n\nNext, please tell me what data or business question you’d like to explore. From there, I’ll propose a target table schema (T), describe its columns, and build the SQL (Q) step by step—ensuring every query only references columns actually in our defined tables."
+        self.conductor.toolkit.retrieve_documents = MagicMock(
+            return_value=[
+                Table(
+                    doc_id="table1",
+                    retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                    content=pd.DataFrame({"A": [1, 2], "B": [3, 4]}),
+                    metadata={},
+                )
+            ]
+        )
+
+        gen = self.conductor.process_input(
+            user_input="Find relevant tables",
+            user_id="uX",
+            chat_id="cX",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn(
+            "done",
+            responses[-1],
+            "Expected final user-facing response to contain 'done'",
+        )
+        self.assertTrue(
+            len(self.conductor.retrieved_tables) > 0,
+            "retrieved_tables should have been updated",
+        )
+
+    def test_web_search_sets_web_search_result(self):
+        plan1 = '{"action":"tool_call","tool":"web_search","args":{"prompt":"query"}}'
+        plan2 = '{"action":"communicate_with_user","message":"web done"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        self.conductor.toolkit.retrieve_documents = MagicMock(
+            return_value=[
+                Text(
+                    doc_id="web_result_1",
+                    retriever_type=RetrieverType.WEB_SEARCH,
+                    content="This is a web search result.",
+                    metadata={},
+                )
+            ]
+        )
+
+        gen = self.conductor.process_input(
+            user_input="Look up web",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("web done", responses[-1], "Expected web done in final response")
+        self.assertIsNotNone(
+            self.conductor.web_search_result,
+            "web_search_result should be set after web_search call",
+        )
+
+    def test_table_enumerator_updates_enumerated_ids(self):
+        plan1 = '{"action":"tool_call","tool":"table_enumerator","args":{"pattern":"pattern"}}'
+        plan2 = '{"action":"communicate_with_user","message":"enum done"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        self.conductor.toolkit.retrieve_documents = MagicMock(
+            return_value=[
+                Table(
+                    doc_id="table1",
+                    retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                    content=pd.DataFrame({"A": [1, 2], "B": [3, 4]}),
+                    metadata={},
+                )
+            ]
+        )
+
+        gen = self.conductor.process_input(
+            user_input="enumerate",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("enum done", responses[-1])
+        self.assertIsInstance(self.conductor.enumerated_table_ids, list)
+
+    def test_state_manipulation_sets_only_S(self):
+        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"S":"result = something"}}"""
+        plan2 = '{"action":"communicate_with_user","message":"S set"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        gen = self.conductor.process_input(
+            user_input="set S",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("S set", responses[-1])
+
+        state = self.conductor.info_need_state
+        self.assertEqual(state.S, "result = something")
+        self.assertFalse(state.T)
+        self.assertFalse(state.is_T_materialized)
+        self.assertFalse(state.is_S_executed)
+        self.assertEqual(state.column_descriptions, {})
+
+    def test_state_manipulation_sets_only_T(self):
+        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}}}}"""
+        plan2 = '{"action":"communicate_with_user","message":"T set"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        gen = self.conductor.process_input(
+            user_input="set T",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("T set", responses[-1])
+
+        state = self.conductor.info_need_state
+        self.assertIn("t1", state.T)
+        self.assertIsInstance(state.T["t1"], AbstractDocument)
+        self.assertEqual(set(state.T["t1"].content.columns), {"a", "b"})
+        self.assertEqual(state.column_descriptions, {"t1": {"a": "col a"}})
+        self.assertEqual(state.S, "")
+        self.assertFalse(state.is_T_materialized)
+        self.assertFalse(state.is_S_executed)
+
+    def test_state_manipulation_sets_S_and_T(self):
+        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}}"""
+        plan2 = '{"action":"communicate_with_user","message":"state done"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        gen = self.conductor.process_input(
+            user_input="set S and T",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+
+        self.assertIn("state done", responses[-1])
+
+        state = self.conductor.info_need_state
+        self.assertIn("t1", state.T)
+        self.assertIsInstance(state.T["t1"], AbstractDocument)
+        self.assertEqual(set(state.T["t1"].content.columns), {"a", "b"})
+        self.assertEqual(state.column_descriptions, {"t1": {"a": "col a"}})
+        self.assertEqual(state.S, "result = something")
+        self.assertFalse(state.is_T_materialized)
+        self.assertFalse(state.is_S_executed)
+
+    def test_materializer_and_executor(self):
+        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}}"""
+        plan2 = """{"action":"tool_call","tool":"materializer","args":{"note":""}}"""
+        plan3 = """{"action":"tool_call","tool":"executor","args":{}}"""
+        plan4 = '{"action":"communicate_with_user","message":"materialization and execution done"}'
+        self.mock_llm._responses = [plan1, plan2, plan3, plan4]
+
+        self.conductor.materializer.materialize_T = MagicMock(
+            return_value={"t1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
+        )
+        self.conductor.toolkit.execute_code = MagicMock(
+            return_value={
+                "exec_res": "ran:result = something",
+                "used_table_ids": ["t1"],
             }
-        """
-
-
-    def test_compute_target_table(self):
-        self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
-        output_node = self.base_table_reducer.compute_target_table(
-            ctx=self.conductor_state,
-            base_table=self.conductor_state.table_store.get_table(
-                self.db_schema, self.table_id
-            ),
-            target_schema=self.target_schema,
         )
-        target_table: AbstractTable = output_node.computation_output
-        expected_data = self.conductor_state.table_store.get_table(
-            self.db_schema, self.table_id
-        ).get_data()[["school_name"]]
-        expected_data.columns = self.target_schema
-        expected_table = DFTable(expected_data)
-        self.assertEqual(target_table, expected_table)
-        self.assertTrue(output_node.function_name, "project_columns")
-        self.assertTrue(output_node.class_name, "BaseTableReducer")
 
-    def test_apply_predicate_to_rows(self):
-        mock_return_value = """SELECT * FROM target_table;"""
-        self.conductor_state.llm.chat = MagicMock(return_value=mock_return_value)
-        output_node = self.base_table_reducer.apply_predicate_to_target_table(
-            self.conductor_state,
-            self.table_store.get_table(self.db_schema, self.table_id),
-            self.question,
+        gen = self.conductor.process_input(
+            user_input="materialize T",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
         )
-        final_table = output_node.computation_output
-        self.assertEqual(
-            final_table, self.table_store.get_table(self.db_schema, self.table_id)
-        )
-        self.assertTrue(output_node.function_name, "apply_predicate_to_rows")
-        self.assertTrue(output_node.class_name, "BaseTableReducer")
+        responses = list(gen)
+        self.assertIn("materialization and execution done", responses[-1])
 
+        self.assertTrue(
+            self.conductor.info_need_state.is_T_materialized,
+            "T should be marked as materialized",
+        )
+        self.assertTrue(
+            self.conductor.info_need_state.is_S_executed,
+            "S should be marked as executed",
+        )
+        self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
+        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2])
+        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4])
+
+    def test_categorical_column_info_produces_expected_string(self):
+        df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "x", "y"]})
+        self.conductor.retrieved_tables = [
+            Table(
+                doc_id="table1",
+                retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                content=df,
+                metadata={},
+            )
+        ]
+
+        plan1 = """{"action":"tool_call","tool":"categorical_column_info","args":{"id":"table1","columns":["B"]}}"""
+        plan2 = '{"action":"communicate_with_user","message":"info provided"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        gen = self.conductor.process_input(
+            user_input="materialize T",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("info provided", responses[-1])  # Expected info: "B: x, y\n"
 
 if __name__ == "__main__":
     unittest.main()
