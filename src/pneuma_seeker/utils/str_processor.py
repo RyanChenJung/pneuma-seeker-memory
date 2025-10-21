@@ -1,7 +1,9 @@
+# src/pneuma_seeker/utils/str_processor.py
 import re
 
 
 def clean_column_table_name(name):
+    """Cleans and normalizes column/table names."""
     name = name.lower()
     # Replace spaces and hyphens with underscores
     name = name.replace("-", "_").replace(" ", "_")

@@ -1,3 +1,4 @@
+# src/pneuma_seeker/utils/parser.py
 import json
 import re
 
@@ -24,6 +25,9 @@ def parse_json(json_string: str) -> dict:
 
 
 def parse_sql(sql_string: str) -> str:
+    """
+    Parses SQL string
+    """
     if sql_string.startswith("```"):
         sql_string = sql_string[3:]
     if sql_string.endswith("```"):
@@ -47,6 +51,10 @@ def parse_code(code: str):
 
 
 def augmented_literal_eval(text: str):
+    """
+    Evaluates a Python literal expression from a string, removing any surrounding
+    code block markers if present.
+    """
     if text.startswith("```"):
         text = text[3:]
     if text.endswith("```"):
