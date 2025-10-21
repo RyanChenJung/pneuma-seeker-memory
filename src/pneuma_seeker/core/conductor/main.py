@@ -51,6 +51,7 @@ class Conductor:
             self.logger,
             self.data_sources,
             self.prov_graph,
+            self.config,
         )
         self.materializer = Materializer(
             self.llm,
@@ -354,7 +355,7 @@ class Conductor:
             retrieved_docs = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.WEB_SEARCH
             )
-            self.web_search_result = retrieved_docs[0] if retrieved_docs else None
+            self.web_search_result = retrieved_docs[0] if len(retrieved_docs) > 0 else None
             if self.web_search_result is None:
                 return "No relevant information was found from Web Search."
             return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
