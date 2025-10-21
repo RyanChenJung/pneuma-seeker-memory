@@ -89,6 +89,11 @@ class Materializer:
         while not self.__check_completion(T):
             self.__log("Planning next materialization step")
             curr_iteration += 1
+
+            # Prevent forever loop in the worst-case scenario
+            if curr_iteration == self.config.MATERIALIZER_HARD_ITERATION_LIMIT:
+                break
+
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
@@ -125,9 +130,14 @@ class Materializer:
             try:
                 plan: dict[str, Any] = parse_json(response)
             except ValueError as exc:
-                self.__log(f"Error parsing JSON: {exc}")
-                self.actions.append(
-                    "Error parsing the response. Please ensure the response is a valid JSON object."
+                error_msg = f"Error parsing the response: {exc}. Please ensure the response is a valid JSON object."
+                self.__log(error_msg)
+                self.actions.append(error_msg)
+                llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=error_msg,
+                    )
                 )
                 continue
 
@@ -136,6 +146,12 @@ class Materializer:
                 error_msg = "The step_type is not defined. Please define it properly."
                 self.__log(error_msg)
                 self.actions.append(error_msg)
+                llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=error_msg,
+                    )
+                )
                 continue
 
             self.__handle_step(step_type, plan, external_tables, T)

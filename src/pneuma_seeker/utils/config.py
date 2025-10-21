@@ -24,7 +24,7 @@ class Config:
         )
 
         self.SEMANTIC_JOIN_TOP_K = 1
-
+        self.MATERIALIZER_HARD_ITERATION_LIMIT = 100
         self.ENABLE_WEB_SEARCH = self.__get_enable_web_search()
 
     def __get_use_azure(self):
