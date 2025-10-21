@@ -13,9 +13,6 @@ from pneuma_seeker.core.ir_system.data_model import (
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.shared.toolkit.main import Toolkit
-from pneuma_seeker.core.shared.toolkit.operation_description import (
-    get_operation_description,
-)
 from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
@@ -45,10 +42,11 @@ class Materializer:
         self.llm = llm
         self.embed_model = embed_model
         self.logger = logger
+        self.config = config
 
         self.__log("Initializing Materializer")
 
-        self.prompt_factory = MaterializerPromptFactory()
+        self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
 
         self.actions: list[str] = []
@@ -57,7 +55,6 @@ class Materializer:
         self.toolkit = toolkit
 
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
-        self.config = config
 
     def materialize_T(
         self,
@@ -68,12 +65,12 @@ class Materializer:
         external_tables: list[AbstractDocument] = [],
         prefetched_tables: list[AbstractDocument] = [],
     ) -> dict[str, DataFrame]:
-        """Materialize target tables T based on the provided script S and external data."""
+        """Materialize target tables T based on the provided script S and external tables."""
         self.__log(f"Materializing {len(T)} target tables")
         self.__cleanup_system()
 
         if len(prefetched_tables) > 0:
-            self.state.current_retrieved_tables = prefetched_tables
+            self.state.retrieved_tables = prefetched_tables
 
         prev_response = ""
         repetitive_response_count = 0
@@ -86,7 +83,6 @@ class Materializer:
                     T=T,
                     column_descriptions=column_descriptions,
                     S=S,
-                    operation_description=get_operation_description(),
                 ),
             )
         ]
@@ -97,12 +93,13 @@ class Materializer:
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_context_prompt(
-                        self.state.current_retrieved_tables,
+                        self.state.retrieved_tables,
                         list(self.state.intermediate_tables),
                         self.actions,
                         curr_iteration,
                         user_side_note,
                         external_tables,
+                        self.state.web_search_result,
                     ),
                 )
             )
@@ -191,14 +188,16 @@ class Materializer:
         all_tables = self.__gather_all_tables(external_data)
         self.__log(f"Executing {op_name}...")
         match op_name:
-            case "pneuma_seeker":
+            case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
-                self.state.current_retrieved_tables = self.toolkit.retrieve_documents(prompt, RetrieverType.PNEUMA, 10)
+                self.state.retrieved_tables = self.toolkit.retrieve_documents(
+                    prompt, RetrieverType.PNEUMA, 10
+                )
                 self.actions.append(
-                    f'Successfully retrieved documents using this prompt: ```{prompt}```. Notice that the "Previously retrieved documents" have been filled.'
+                    f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "Retrieved internal tables" have been filled.'
                 )
 
-                for doc in self.state.current_retrieved_tables:
+                for doc in self.state.retrieved_tables:
                     if doc.path is not None:
                         new_node = ProvenanceNode(
                             source_retriever=RetrieverType.PNEUMA,
@@ -206,6 +205,32 @@ class Materializer:
                         )
                         self.prov_graph.add_node(new_node, True)
                         doc.last_node_id = new_node.id
+            case "web_search":
+                if not self.config.ENABLE_WEB_SEARCH:
+                    self.actions.append(
+                        "Web search is not enabled in the configuration."
+                    )
+                    return
+                prompt = op_args.get("prompt", "")
+                web_search_results = self.toolkit.retrieve_documents(
+                    prompt, RetrieverType.WEB_SEARCH
+                )
+                if len(web_search_results) == 0:
+                    self.actions.append(
+                        "No relevant information was found from web search."
+                    )
+                    return
+                self.state.web_search_result = web_search_results[0]
+                self.actions.append(
+                    f'Successfully retrieved information from Web Search using this prompt: ```{prompt}```. Notice that the "Retrieved internal tables" have been filled.'
+                )
+
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.WEB_SEARCH,
+                    python_code=f'result = "{self.state.web_search_result.content}"',
+                )
+                self.prov_graph.add_node(new_node, True)
+                self.state.web_search_result.last_node_id = new_node.id
             case "table_enumerator":
                 pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
@@ -227,9 +252,9 @@ class Materializer:
 
                     for extra_table in extra_tables:
                         extra_table.last_node_id = new_node.id
-                    
-                    existing_tables = self.state.current_retrieved_tables
-                    self.state.current_retrieved_tables = list(
+
+                    existing_tables = self.state.retrieved_tables
+                    self.state.retrieved_tables = list(
                         set(existing_tables).union(set(extra_tables))
                     )
                 else:
@@ -683,7 +708,9 @@ class Materializer:
                 id_dfs[doc.doc_id] = doc.content
                 materialized_table_ids.add(doc.doc_id)
             else:
-                self.__log(f"Warning: doc {doc.doc_id} has invalid content type {type(doc.content)}")
+                self.__log(
+                    f"Warning: doc {doc.doc_id} has invalid content type {type(doc.content)}"
+                )
 
         self.__log(f"=> all_T_ids: {all_T_ids}")
         self.__log(f"=> materialized_table_ids: {materialized_table_ids}")
@@ -740,7 +767,7 @@ class Materializer:
             i for i in external_data if isinstance(i, Table)
         ]
         return (
-            self.state.current_retrieved_tables
+            self.state.retrieved_tables
             + external_data_tables_only
             + list(self.state.intermediate_tables)
         )

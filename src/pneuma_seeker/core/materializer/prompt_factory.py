@@ -4,29 +4,31 @@ from pandas import DataFrame
 
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
-    RetrieverType,
-    convert_multi_retriever_results_to_str,
     convert_retrieval_results_to_str,
 )
+from pneuma_seeker.core.shared.toolkit.operation_description import get_operation_description
+from pneuma_seeker.utils.config import Config
 
 
 class MaterializerPromptFactory:
     """Generates prompts for the Materializer LLM agent."""
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
     def get_planning_prompt(
         self,
         T: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
         S: str,
-        operation_description: str,
     ) -> str:
         """Generates the initial planning prompt for the Materializer."""
         return f"""
 You are the Materializer. Your task is to fill all rows for the target tables using:
-1. Retrieved internal data
+1. Retrieved internal tables
 2. User-uploaded external tables (if any)
 3. Allowed operations described below
 
-Treat external tables just like internal data, except it is fixed and will never be replaced by calling pneuma_retriever again.
+Treat external tables just like internal tables, except it is fixed and will never be replaced by calling pneuma_retriever again.
 
 TARGET TABLES:
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
@@ -38,16 +40,16 @@ REFERENCE SCRIPT (for value format guidance only — not to execute directly):
 {S}
 
 AVAILABLE OPERATIONS:
-{operation_description}
+{get_operation_description(self.config.ENABLE_WEB_SEARCH)}
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
-2. Use external tables if available and internal data; call pneuma_retriever to retrieve or re-retrieve internal data (if necessary).
-3. Internal data is reset each time pneuma_retriever is used; external tables persist.
+2. Use external tables if available and internal tables; call pneuma_retriever to retrieve or re-retrieve internal tables (if necessary).
+3. Internal tables are reset each time pneuma_retriever is used; external tables persist.
 4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 5. Always assign results to the correct target table IDs, matching column names **exactly (case-sensitive)**.
 6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
-7. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
+7. Note: You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched tables is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - (semantically_derived) and user notes are hints, not guarantees.
@@ -72,7 +74,8 @@ Produce exactly ONE JSON object:
         recent_actions: list[str],
         num_iterations: int,
         user_side_note: str,
-        user_provided_external_data: list[AbstractDocument],
+        user_uploaded_external_tables: list[AbstractDocument],
+        web_search_result: AbstractDocument | None,
     ) -> str:
         """Generates the context prompt for each iteration of the Materializer."""
         return f"""
@@ -82,16 +85,16 @@ CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
 - Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables)}
-- User-uploaded external tables: {convert_retrieval_results_to_str(user_provided_external_data)}
+- User-uploaded external tables: {convert_retrieval_results_to_str(user_uploaded_external_tables)}
 - User note: {user_side_note}
-
+{f"- Web search result: {web_search_result}\n" if self.config.ENABLE_WEB_SEARCH and web_search_result else ""}
 CORE RULES:
-1. Use external tables if available and internal data; call pneuma_retriever to retrieve or re-retrieve internal data (if necessary).
-2. Internal data is reset each time pneuma_retriever is used; external tables persist.
+1. Use external tables if available and internal tables; call pneuma_retriever to retrieve or re-retrieve internal tables (if necessary).
+2. Internal tables are reset each time pneuma_retriever is used; external tables persist.
 3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
 4. Always match target table column names exactly (case-sensitive).
 5. Assign completed tables only to their correct target table IDs.
-6. Note: You may already see some internal data provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched data is not guaranteed to be complete or sufficient.
+6. Note: You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call pneuma_retriever again if needed. This pre-fetched tables is not guaranteed to be complete or sufficient.
 
 COLUMN HANDLING:
 - Treat (semantically_derived) and user notes as hints only.
@@ -141,7 +144,14 @@ Resulting in this error: {error}.
 
 Please provide direct feedback about what is wrong with the code, so the implementor can fix it.
 """
-    
+
+    def get_web_search_runtime_guidelines(self):
+        """Optional runtime guidelines for when web search is enabled."""
+        return """
+WEB SEARCH GUIDELINES:
+- Use web_search when neither internal nor external tables can provide enough data.
+""".strip()
+
     def __format_available_tables(self, tables: dict[str, DataFrame]):
         """Formats available tables for inclusion in prompts."""
         tables_repr = ""

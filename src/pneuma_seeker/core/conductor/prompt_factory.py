@@ -1,14 +1,20 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
+
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     convert_retrieval_results_to_str,
 )
+from pneuma_seeker.utils.config import Config
 
 
 class ConductorPromptFactory:
     """Factory for prompts used by Conductor."""
+
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
     def get_sys_prompt(self, iteration_limit: int) -> str:
         """Gets the system prompt for Conductor."""
         return f"""
@@ -33,20 +39,20 @@ You (Conductor) maintain and update a shared state (T,S) that formalizes the use
 - **Latent Information Need**: The true set of states needed to solve a task, often initially unknown to the user.
 - **Active Information Need**: The user's working hypothesis about what data is needed, which evolves through interaction and exploration to approximate the latent one.
 - **Shared State (T,S)**: A state object that represents the user's active information need.
-    - *Format:*  
-      - `T: dict[table_id (str) -> column names (list[str])]`  
-      - `column_descriptions: dict[table_id (str) -> dict[column (str) -> description (str)]]`  
+    - *Format:*
+      - `T: dict[table_id (str) -> column names (list[str])]`
+      - `column_descriptions: dict[table_id (str) -> dict[column (str) -> description (str)]]`
     - *Constraints:*
       - Columns of a table must collectively describe one coherent entity or concept.
-      - Define the columns of tables in **T** based on available internal and external (if any) documents; `materializer` will later populate these tables, regardless of origin.  
-      - When defining tables in **T**, use **descriptive and semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose.
+      - Define the columns of tables in **T** based on available internal and external (if any) data; `materializer` will later populate these tables, regardless of origin.
+      - When defining tables in **T**, use **descriptive, semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose.
   - **S**: A Python script that constrains, transforms, or manipulates the (materialized) tables in T to more specifically address the user's need.
     - *Execution context:*
-      - Tables in `T` are available as `dict[str, pd.DataFrame]`.  
-      - Access with `tables[table_id]`.  
-      - Only reference valid table IDs and columns.  
-      - Allowed libraries: NumPy, Pandas, SciPy, DuckDB.  
-      - The final result must be assigned to `result`.  
+      - Tables in `T` are available as `dict[str, pd.DataFrame]`.
+      - Access with `tables[table_id]`.
+      - Only reference valid table IDs and columns.
+      - Allowed libraries: NumPy, Pandas, SciPy, DuckDB.
+      - The final result must be assigned to `result`.
       - The script may leave `result = T` (or a subset) if no further transformation is needed.
     - *Format:*
       - `S: str` (Python code operating on `T`)
@@ -55,32 +61,37 @@ You (Conductor) maintain and update a shared state (T,S) that formalizes the use
 
 You (Conductor) must respect the following boundary between tools and scripts:
 
-- **Materializer** is responsible for *data integration* tasks such as joins (including semantic joins), merging tables, generating derived columns, or retrieving new data.  
+- **Materializer** is responsible for *data integration* tasks such as joins (including semantic joins), merging tables, generating derived columns, or retrieving new data.
   When a join or data fusion is needed, always invoke the `materializer` tool rather than implementing it directly inside `S`.
 
-- **S (Python script)** is responsible only for *post-integration processing*, such as applying filters, computing aggregates, ratios, or differences on already materialized tables.  
+- **S (Python script)** is responsible only for *post-integration processing*, such as applying filters, computing aggregates, ratios, or differences on already materialized tables.
   It must not perform table merges, semantic matching, or retrieval logic.
 
-If you find that a computation requires matching data from different tables, first ensure those tables are joined through `materializer`. Only after `T` contains the correctly integrated table should you write or execute `S`.     
+If you find that a computation requires matching data from different tables, first ensure those tables are joined through `materializer`. Only after `T` contains the correctly integrated table should you write or execute `S`.
 
 # Tool Usage
 
 ## Available Tools
 
-- **ir_system**:
-  Retrieve internal documents (tables or text).
+- **pneuma_retriever**:
+  Retrieve internal tables.
   - **Args**: {{"prompt": "<retrieval query>"}}
   - **Notes**:
     - Avoid retrying the same or slightly modified queries repeatedly.
-    - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
-    - If approximation is uncertain, warn the user explicitly before continuing.
+    - However, for different topics or aspects of an information need, feel free to call multiple times.
+    - In relation to defining columns of tables in T:
+      - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
+      - If the approximation is uncertain, explicitly warn the user before continuing.
 
 - **state_manipulation**:
   Update T, S, or both.
-  - **Args**: {{"T": {{...}}, "column_descriptions": {{...}}}} OR {{ "S": "..." }} OR {{"T": {{...}}, "column_descriptions": {{...}}, "S": "..."}}.
+  - **Args**:
+  {{"T": {{...}}, "column_descriptions": {{...}}}}
+  OR {{ "S": "..." }}
+  OR {{"T": {{...}}, "column_descriptions": {{...}}, "S": "..."}}.
   - **Notes**:
     - A `state_manipulation` call resets previous T rather than appending.
-  
+
 - **materializer**:
   Populate tables in T with rows based on data integration and processing.
   - **Args**: {{"note": "<additional note or empty string>"}}
@@ -107,10 +118,11 @@ If you find that a computation requires matching data from different tables, fir
   List all available internal tables whose names match a regex pattern.
   - **Args**: {{"pattern": "<regex>"}}
   - **Notes**:
-    - May only be called after at least one table is retrieved with `ir_system`.
+    - May only be called after at least one table is retrieved with `pneuma_retriever`.
     - Returns names only (not data), but `materializer` will access the actual data.
-    - E.g., if `ir_system` retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
+    - E.g., if `pneuma_retriever` retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
 
+{self.get_web_search_description() + "\n" if self.config.ENABLE_WEB_SEARCH else ""}
 ## Tool Dependencies
   - `T` and `S` must already be defined before calling `materializer`.
   - `T` must be materialized before executing `S` via `executor`.
@@ -119,9 +131,9 @@ If you find that a computation requires matching data from different tables, fir
 
 Both you (Conductor) and **materializer** share the same data layer. You define _what_ tables (T) and transformations (S) are needed, while `materializer` handles _how_ to populate all tables in T with actual tuples from the data.
 
-- **Internal Documents**: Retrievable via `ir_system`. May include tables or text. Use `table_enumerator` to discover related tables.
-- **External Documents**: User-uploaded tables if any. Already visible (do not call `ir_system`). These may be CSVs or extracted Excel sheets.
-
+- **Internal Tables**: Retrievable via `pneuma_retriever`. May include tables or text. Use `table_enumerator` to discover related tables.
+- **External Tables**: User-uploaded tables if any. Already visible (do not call `pneuma_retriever`). These may be CSVs or extracted Excel sheets.
+{"- **Web Search Results**: Relevant information from the web.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 # Output
 
 Return **only one** JSON object describing your next action in one of the formats below:
@@ -132,7 +144,7 @@ Return **only one** JSON object describing your next action in one of the format
 OR
 {{
     "action": "tool_call",
-    "tool": "<one_of: ir_system, table_enumerator, state_manipulation, materializer, executor, categorical_column_information>",
+    "tool": "<one_of: pneuma_retriever, table_enumerator, state_manipulation, materializer, executor, categorical_column_info{", web_search" if self.config.ENABLE_WEB_SEARCH else ""}>",
     "args": {{ ... }}
 }}
 OR
@@ -141,6 +153,17 @@ OR
     "message": "..."
 }}
 """.strip()
+
+    def get_web_search_description(self):
+        """Gets the web search tool description for Conductor."""
+        return """- **web_search**:
+Finds a piece of information from the web.
+- **Args**: {{"prompt": "<retrieval query>"}}
+- **Returns**: A summarized textual snippet from relevant web sources.
+- **Notes**:
+  - Avoid retrying the same or slightly modified queries repeatedly.
+  - However, for different topics or aspects of an information need, feel free to call multiple times.
+"""
 
     def get_env_state_prompt(
         self,
@@ -152,7 +175,8 @@ OR
         curr_retrieved_tables: list[AbstractDocument],
         human_input: str,
         enumerated_table_ids: list[str],
-        external_data: list[AbstractDocument],
+        external_tables: list[AbstractDocument],
+        web_search_result: AbstractDocument | None = None,
     ) -> str:
         """Gets the environment state prompt for Conductor."""
         return f"""
@@ -167,14 +191,16 @@ PREVIOUS ACTIONS IN THIS STEP:
 RECENT USER INTERACTIONS:
 {self.__convert_interactions_to_str(interaction_history)}
 
-RETRIEVED DATA:
+RETRIEVED TABLES:
 {convert_retrieval_results_to_str(curr_retrieved_tables)}
 
 OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
 {enumerated_table_ids}
 
 EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
-{convert_retrieval_results_to_str(external_data)}
+{convert_retrieval_results_to_str(external_tables)}
+
+{f"WEB SEARCH RESULT (IF ANY):\n {convert_retrieval_results_to_str([web_search_result] if web_search_result else [])}" if self.config.ENABLE_WEB_SEARCH else ""}
 
 CURRENT USER INPUT:
 {human_input}

@@ -43,7 +43,7 @@ class Conductor:
         self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
 
         self.prov_graph = ProvenanceGraph(self.logger)
-        self.prompt_factory = ConductorPromptFactory()
+        self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(
             self.llm,
@@ -63,9 +63,10 @@ class Conductor:
         )
 
         self.info_need_state = InformationNeedState()
-        self.current_retrieved_tables: list[AbstractDocument] = []
-        self.external_documents: list[AbstractDocument] = []
+        self.retrieved_tables: list[AbstractDocument] = []
+        self.external_tables: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
+        self.web_search_result: AbstractDocument | None = None
 
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -83,11 +84,11 @@ class Conductor:
         user_id: str,
         chat_id: str,
         interaction_history: list[HumanConductorInteraction],
-        external_data_paths: list[str],
+        external_table_paths: list[str],
     ):
         """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
-        self.__process_external_data(external_data_paths)
+        self.__process_external_tables(external_table_paths)
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -111,18 +112,17 @@ class Conductor:
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
-                        self.current_retrieved_tables,
+                        self.retrieved_tables,
                         user_input,
                         self.enumerated_table_ids,
-                        self.external_documents,
+                        self.external_tables,
+                        self.web_search_result,
                     ),
                 )
             )
 
             full_response = "".join(
-                self.llm.chat(
-                    llm_messages, LLMOption(json_mode=True, stream=True)
-                )
+                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
             )
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
@@ -191,12 +191,12 @@ class Conductor:
 
         yield user_facing_response
 
-    def __process_external_data(self, external_data_paths):
-        """Processes external data files and integrates them into the provenance graph."""
-        if len(external_data_paths) > 0:
-            self.__log("Utilizing external data...")
-            self.external_documents = self.__unpack_external_data(external_data_paths)
-            for doc in self.external_documents:
+    def __process_external_tables(self, external_table_paths):
+        """Processes external table files and integrates them into the provenance graph."""
+        if len(external_table_paths) > 0:
+            self.__log("Utilizing external table data...")
+            self.external_tables = self.__unpack_external_tables(external_table_paths)
+            for doc in self.external_tables:
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
                     python_code=self.toolkit.python_executor.generate_pandas_read_code(
@@ -206,13 +206,13 @@ class Conductor:
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
 
-    def __unpack_external_data(
-        self, external_data_paths: list[str]
+    def __unpack_external_tables(
+        self, external_table_paths: list[str]
     ) -> list[AbstractDocument]:
-        """Unpacks external data files (CSV or Excel) and returns a list of Table documents."""
+        """Unpacks external table files (CSV or Excel) and returns a list of Table documents."""
         external_docs: list[AbstractDocument] = []
         os.makedirs("temp", exist_ok=True)
-        for data_path in external_data_paths:
+        for data_path in external_table_paths:
             try:
                 if data_path.startswith("/api") or data_path.startswith("api"):
                     if self.config.OPENWEBUI_BASE_URL.endswith(
@@ -254,7 +254,7 @@ class Conductor:
 
                     try:
                         external_docs.extend(
-                            self.__read_external_data_content(local_path)
+                            self.__read_external_table_content(local_path)
                         )
                     finally:
                         if local_path.startswith("temp") and os.path.exists(local_path):
@@ -263,14 +263,14 @@ class Conductor:
                             except OSError:
                                 pass
                 else:
-                    external_docs.extend(self.__read_external_data_content(data_path))
+                    external_docs.extend(self.__read_external_table_content(data_path))
             except Exception:
                 continue
         return external_docs
 
-    def __read_external_data_content(self, path: str) -> list[AbstractDocument]:
+    def __read_external_table_content(self, path: str) -> list[AbstractDocument]:
         """
-        Reads external data (CSV or Excel) and returns a list of Table documents.
+        Reads external table (CSV or Excel) and returns a list of Table documents.
 
         Args:
             path (str): Path to the input file.
@@ -279,7 +279,7 @@ class Conductor:
             list[AbstractDocument]: A list of Table documents.
         """
         retriever_type = RetrieverType.USER
-        external_data_content: list[AbstractDocument] = []
+        external_table_content: list[AbstractDocument] = []
 
         def extract_file_stem(filepath: str) -> str:
             """Extracts the filename without extension."""
@@ -293,7 +293,7 @@ class Conductor:
                 standardized_name = f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
                 standardized_df = df.rename(columns=clean_column_table_name)
 
-                external_data_content.append(
+                external_table_content.append(
                     Table(
                         doc_id=standardized_name,
                         retriever_type=retriever_type,
@@ -306,7 +306,7 @@ class Conductor:
             file_stem = extract_file_stem(path)
             df = pd.read_csv(path).rename(columns=clean_column_table_name)
 
-            external_data_content.append(
+            external_table_content.append(
                 Table(
                     doc_id=clean_column_table_name(file_stem),
                     retriever_type=retriever_type,
@@ -318,14 +318,14 @@ class Conductor:
         else:
             raise ValueError(f"Unsupported file format: {path}")
 
-        return external_data_content
+        return external_table_content
 
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
     ) -> str:
         """Executes a specified tool with given arguments."""
-        if tool == "ir_system":
-            self.__log(f"IR System request with params: {args}")
+        if tool == "pneuma_retriever":
+            self.__log(f"Pneuma-Retriever request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "=> `args` must be an object with a `prompt` property"
@@ -335,13 +335,31 @@ class Conductor:
                 error_message = "=> `args` must have a `prompt` property"
                 self.__log(f"=> {error_message}")
                 return error_message
-            
-            self.current_retrieved_tables = self.toolkit.retrieve_documents(
+
+            self.retrieved_tables = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.PNEUMA
             )
-            return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
+            return "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
+        if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:
+            self.__log(f"Web Search request with params: {args}")
+            if not isinstance(args, dict):
+                error_message = "=> `args` must be an object with a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+            if "prompt" not in args:
+                error_message = "=> `args` must have a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+
+            retrieved_docs = self.toolkit.retrieve_documents(
+                args["prompt"], RetrieverType.WEB_SEARCH
+            )
+            self.web_search_result = retrieved_docs[0] if retrieved_docs else None
+            if self.web_search_result is None:
+                return "No relevant information was found from Web Search."
+            return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
         if tool == "table_enumerator":
-            self.__log(f"Table Enumerater request with params: {args}")
+            self.__log(f"Table Enumerator request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "`args` must be an object with a `pattern` property"
@@ -434,7 +452,7 @@ class Conductor:
                 self.info_need_state.column_descriptions,
                 self.info_need_state.S,
                 note,
-                self.external_documents,
+                self.external_tables,
             )
             self.info_need_state.is_T_materialized = True
 
@@ -484,7 +502,7 @@ class Conductor:
                     self.__log(f"=> {error_message}")
                     return error_message
 
-                for document in self.current_retrieved_tables:
+                for document in self.retrieved_tables:
                     if document.doc_id == table_id:
                         cat_col_info = ""
                         table: pd.DataFrame = document.content
@@ -520,7 +538,7 @@ class Conductor:
         col_descriptions: dict[str, dict[str, str]],
         S: str,
         user_side_note: str,
-        external_data: list[AbstractDocument],
+        external_tables: list[AbstractDocument],
     ):
         T_dfs: dict[str, pd.DataFrame] = {}
         for T_id, T_doc in T.items():
@@ -531,8 +549,8 @@ class Conductor:
             col_descriptions,
             S,
             user_side_note,
-            external_data,
-            self.current_retrieved_tables,
+            external_tables,
+            self.retrieved_tables,
         )
 
         materialized_T: dict[str, AbstractDocument] = {}

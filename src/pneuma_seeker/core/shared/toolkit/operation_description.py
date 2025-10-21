@@ -1,4 +1,4 @@
-def get_operation_description():
+def get_operation_description(enable_web_search = False):
     return """
 - **pneuma_seeker**
     - Retrieves relevant tables from the internal database based on natural-language prompts.
@@ -80,4 +80,13 @@ def get_operation_description():
         "relevant_columns": ["product_name", "description"],
         "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing'."
       }
-""".strip()
+""".strip() + (get_web_search_description() if enable_web_search else "")
+
+def get_web_search_description():
+    """Gets the optional web search description for the Materializer."""
+    return """\n- **web_search**
+    - Retrieves information from the web to assist in filling tables when internal and external data are insufficient.
+    - Args: {"prompt": "<query describing what data to retrieve or clarify>"}
+    - Usage notes:
+        - Use web_search only when no reliable internal/external source exists for the required column(s).
+        - Avoid repetitive or redundant queries."""
