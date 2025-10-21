@@ -2,7 +2,6 @@ import os
 from logging import Logger
 
 import pandas as pd
-import requests
 
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
@@ -18,10 +17,10 @@ from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.utils.str_processor import clean_column_table_name
 from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_json
+from pneuma_seeker.utils.table_reader import TableReader
 
 
 class Conductor:
@@ -62,6 +61,9 @@ class Conductor:
             self.toolkit,
             self.config,
         )
+        self.table_reader = TableReader(
+            self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
+        )
 
         self.info_need_state = InformationNeedState()
         self.retrieved_tables: list[AbstractDocument] = []
@@ -89,7 +91,20 @@ class Conductor:
     ):
         """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
-        self.__process_external_tables(external_table_paths)
+        self.external_tables = self.table_reader.process_external_tables(
+            external_table_paths
+        )
+        if len(self.external_tables) > 0:
+            self.__log("Utilizing external table data...")
+            for doc in self.external_tables:
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.USER,
+                    python_code=self.toolkit.python_executor.generate_pandas_read_code(
+                        doc
+                    ),
+                )
+                self.prov_graph.add_node(new_node, True)
+                doc.last_node_id = new_node.id
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -192,135 +207,6 @@ class Conductor:
 
         yield user_facing_response
 
-    def __process_external_tables(self, external_table_paths):
-        """Processes external table files and integrates them into the provenance graph."""
-        if len(external_table_paths) > 0:
-            self.__log("Utilizing external table data...")
-            self.external_tables = self.__unpack_external_tables(external_table_paths)
-            for doc in self.external_tables:
-                new_node = ProvenanceNode(
-                    source_retriever=RetrieverType.USER,
-                    python_code=self.toolkit.python_executor.generate_pandas_read_code(
-                        doc
-                    ),
-                )
-                self.prov_graph.add_node(new_node, True)
-                doc.last_node_id = new_node.id
-
-    def __unpack_external_tables(
-        self, external_table_paths: list[str]
-    ) -> list[AbstractDocument]:
-        """Unpacks external table files (CSV or Excel) and returns a list of Table documents."""
-        external_docs: list[AbstractDocument] = []
-        os.makedirs("temp", exist_ok=True)
-        for data_path in external_table_paths:
-            try:
-                if data_path.startswith("/api") or data_path.startswith("api"):
-                    if self.config.OPENWEBUI_BASE_URL.endswith(
-                        "/"
-                    ) and data_path.startswith("/"):
-                        data_path = data_path[1:]
-                    if data_path.endswith("/content"):
-                        data_path = data_path[: -len("/content")]
-                    data_url = self.config.OPENWEBUI_BASE_URL + data_path
-
-                    resp = requests.get(
-                        data_url,
-                        headers={
-                            "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
-                        },
-                        timeout=(10, 40),
-                    )
-                    resp.raise_for_status()
-
-                    content_type = resp.headers.get("Content-Type", "").lower()
-
-                    if "csv" in content_type or "excel" in content_type:
-                        # direct file (csv/xlsx)
-                        ext = ".csv" if "csv" in content_type else ".xlsx"
-                        local_path = os.path.join("temp", f"downloaded{ext}")
-                        with open(local_path, "wb") as f:
-                            f.write(resp.content)
-                    elif "json" in content_type:
-                        # metadata wrapper
-                        meta = resp.json()
-                        file_path = meta.get("path")
-                        if not file_path or not os.path.exists(file_path):
-                            raise ValueError(
-                                f"Invalid API response, no usable file path: {meta}"
-                            )
-                        local_path = file_path
-                    else:
-                        raise ValueError(f"Unsupported content type: {content_type}")
-
-                    try:
-                        external_docs.extend(
-                            self.__read_external_table_content(local_path)
-                        )
-                    finally:
-                        if local_path.startswith("temp") and os.path.exists(local_path):
-                            try:
-                                os.remove(local_path)
-                            except OSError:
-                                pass
-                else:
-                    external_docs.extend(self.__read_external_table_content(data_path))
-            except Exception:
-                continue
-        return external_docs
-
-    def __read_external_table_content(self, path: str) -> list[AbstractDocument]:
-        """
-        Reads external table (CSV or Excel) and returns a list of Table documents.
-
-        Args:
-            path (str): Path to the input file.
-
-        Returns:
-            list[AbstractDocument]: A list of Table documents.
-        """
-        retriever_type = RetrieverType.USER
-        external_table_content: list[AbstractDocument] = []
-
-        def extract_file_stem(filepath: str) -> str:
-            """Extracts the filename without extension."""
-            return os.path.splitext(filepath)[0].split("/")[-1]
-
-        if path.endswith((".xls", ".xlsx")):
-            excel_name = extract_file_stem(path)
-
-            sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
-            for original_name, df in sheets.items():
-                standardized_name = f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
-                standardized_df = df.rename(columns=clean_column_table_name)
-
-                external_table_content.append(
-                    Table(
-                        doc_id=standardized_name,
-                        retriever_type=retriever_type,
-                        content=standardized_df,
-                        metadata={"sheet_name": original_name},
-                        path=path,
-                    )
-                )
-        elif path.endswith(".csv"):
-            file_stem = extract_file_stem(path)
-            df = pd.read_csv(path).rename(columns=clean_column_table_name)
-
-            external_table_content.append(
-                Table(
-                    doc_id=clean_column_table_name(file_stem),
-                    retriever_type=retriever_type,
-                    content=df,
-                    metadata={},
-                    path=path,
-                )
-            )
-        else:
-            raise ValueError(f"Unsupported file format: {path}")
-
-        return external_table_content
-
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
     ) -> str:
@@ -355,7 +241,9 @@ class Conductor:
             retrieved_docs = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.WEB_SEARCH
             )
-            self.web_search_result = retrieved_docs[0] if len(retrieved_docs) > 0 else None
+            self.web_search_result = (
+                retrieved_docs[0] if len(retrieved_docs) > 0 else None
+            )
             if self.web_search_result is None:
                 return "No relevant information was found from Web Search."
             return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
