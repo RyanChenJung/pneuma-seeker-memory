@@ -1,10 +1,8 @@
 from collections import defaultdict
-import ast
 from enum import Enum
 import gc
 from math import ceil
 import os
-import re
 from typing import Optional
 from bm25s.tokenization import convert_tokenized_to_string_list
 import time
@@ -36,10 +34,10 @@ from pneuma_seeker.utils.str_processor import clean_column_table_name
 class Pneuma(AbstractRetriever):
     """Represents a tabular data retriever."""
 
-    def __init__(self, models):
-        super().__init__(models)
-        self.llm = models["llm"]
-        self.embed_model = models["embed_model"]
+    def __init__(self, models, config):
+        super().__init__(models, config)
+        self.llm = self.models["llm"]
+        self.embed_model = self.models["embed_model"]
         self.EMBEDDING_MAX_TOKENS = 768
         self.hybrid_retriever = HybridRetriever(
             self.llm,

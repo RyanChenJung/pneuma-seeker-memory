@@ -2,14 +2,17 @@ from abc import ABC, abstractmethod
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
 from pneuma_seeker.core.ir_system.retriever.retriever_factory import RetrieverModel
+from pneuma_seeker.utils.config import Config
 
 
 class AbstractRetriever(ABC):
-    def __init__(self, models: RetrieverModel):
+    def __init__(self, models: RetrieverModel, config: Config):
         """
         Initialize the Retriever class
         """
+        self.models = models
         self.is_loaded = False
+        self.config = config
 
     @property
     @abstractmethod
