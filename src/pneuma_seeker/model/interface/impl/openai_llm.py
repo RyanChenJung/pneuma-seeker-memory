@@ -1,11 +1,10 @@
 from logging import Logger
-import os
 
 from collections.abc import Generator
 from typing import Optional
 
 from numpy import ndarray
-from openai import NOT_GIVEN, OpenAI
+from openai import Omit, OpenAI
 
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.model.llm_message import LLMMessage
@@ -54,7 +53,7 @@ class OpenAILLM(AbstractModel):
                 seed=42,
                 temperature=temperature,
                 max_completion_tokens=max_completion_tokens,
-                response_format={"type": "json_object"} if json_mode else NOT_GIVEN,
+                response_format={"type": "json_object"} if json_mode else Omit(),
                 stream=stream,
             )  # type: ignore
 
@@ -73,7 +72,7 @@ class OpenAILLM(AbstractModel):
                     seed=42,
                     temperature=temperature,
                     max_completion_tokens=max_completion_tokens,
-                    response_format={"type": "json_object"} if json_mode else NOT_GIVEN,
+                    response_format={"type": "json_object"} if json_mode else Omit(),
                 )
                 .choices[0]
                 .message.content
