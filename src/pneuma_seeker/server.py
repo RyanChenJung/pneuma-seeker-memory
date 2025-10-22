@@ -1,21 +1,20 @@
 # backend: src/pneuma_seeker/server.py
 import asyncio
 import json
-import os
 from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from torch.backends import cudnn
 
 from pneuma_seeker.core.chat_interface import ChatInterface
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.persistence import get_unique_user_chat_ids
-from pneuma_seeker.model.llm_message import LLMMessage
 
+import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 cudnn.deterministic = True
@@ -31,15 +30,12 @@ app.add_middleware(
 )
 
 
-class ConnectionManager:
-    def __init__(self, llm_path: str, embed_model_path: str, data_sources: list[str]):
+class Manager:
+    def __init__(self, llm_path, embed_model_path, data_sources):
         self.llm_path = llm_path
         self.embed_model_path = embed_model_path
         self.data_sources = data_sources
-
-        self.active_connections: dict[tuple[str, str], list[WebSocket]] = {}
-        # TODO: Handle concurrency issue in the future!
-        self.chat_interfaces: dict[tuple[str, str], ChatInterface] = {}
+        self.chat_interfaces = {}
 
     def get_chat_interface(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
@@ -54,62 +50,7 @@ class ConnectionManager:
             )
         return self.chat_interfaces[key]
 
-    async def connect(self, websocket: WebSocket, user_id: str, chat_id: str):
-        key = (user_id, chat_id)
-        if key not in self.active_connections:
-            self.active_connections[key] = []
-        self.active_connections[key].append(websocket)
-
-        if key not in self.chat_interfaces:
-            self.chat_interfaces[key] = ChatInterface(
-                llm_path=self.llm_path,
-                embed_model_path=self.embed_model_path,
-                user_id=user_id,
-                chat_id=chat_id,
-                data_sources=self.data_sources,
-                env_path="../../.env",
-            )
-
-    def disconnect(self, websocket: WebSocket, user_id: str, chat_id: str):
-        key = (user_id, chat_id)
-        if key in self.active_connections:
-            self.active_connections[key].remove(websocket)
-            if not self.active_connections[key]:
-                del self.active_connections[key]
-
-    async def send_personal_message(
-        self,
-        user_id: str,
-        chat_id: str,
-        role: str,
-        log_message: str,
-        log_message_ts: int,
-    ):
-        key = (user_id, chat_id)
-        for conn in self.active_connections.get(key, []):
-            message = {
-                "sender": role,
-                "text": log_message,
-                "time_stamp": log_message_ts,
-            }
-            await conn.send_json(message)
-
-    def delete_chat(self, user_id: str, chat_id: str):
-        key = (user_id, chat_id)
-
-        # Close active connections for this chat
-        if key in self.active_connections:
-            for ws in self.active_connections[key]:
-                # Ideally close websocket connections gracefully
-                asyncio.create_task(ws.close())
-            del self.active_connections[key]
-
-        # Remove conductor
-        if key in self.chat_interfaces:
-            del self.chat_interfaces[key]
-
-
-manager = ConnectionManager(
+manager = Manager(
     llm_path="o4-mini",
     embed_model_path="model/weight/bge-base",
     data_sources=["buysite"],
@@ -153,51 +94,65 @@ async def helper():
     return {"data": res}
 
 
-@app.websocket("/ws/{user_id}/{chat_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str, chat_id: str):
-    await manager.connect(websocket, user_id, chat_id)
-    await websocket.accept()
-    try:
-        while True:
-            data_from_frontend: dict[str, Any] = json.loads(
-                await websocket.receive_text()
-            )
-            chat_messages: list[LLMMessage] = data_from_frontend["chat_messages"]
-            url_paths: list[str] = data_from_frontend.get("files", [])
+@app.post("/chat")
+async def chat_endpoint(request: Request):
+    """
+    Handles chat requests with HTTP streaming instead of WebSockets.
+    Streams logs and assistant messages in real time.
+    """
+    body = await request.json()
+    user_id = body.get("user_id", "default_user")
+    chat_id = body.get("chat_id", "default_chat")
 
-            for idx, url_path in enumerate(url_paths):
-                if not url_path.startswith("/"):
-                    url_paths[idx] = f"/{url_path}"
+    messages: list[dict[str, Any]] = body["messages"]
+    files: list[str] = body.get("files", [])
 
-            chat_interface = manager.get_chat_interface(user_id, chat_id)
-            loop = asyncio.get_running_loop()
+    chat_interface = manager.get_chat_interface(user_id, chat_id)
 
-            def run_generator():
-                for log_message in chat_interface.process_user_input(
-                    chat_messages, url_paths
-                ):
-                    actual_message = log_message
-                    role = "assistant"
-                    if log_message.startswith("LOG"):
-                        role = "log"
-                    elif log_message.startswith("DONE"):
-                        role = "done"
-                        actual_message = ""
-                    asyncio.run_coroutine_threadsafe(
-                        manager.send_personal_message(
-                            user_id,
-                            chat_id,
-                            role,
-                            actual_message,
-                            int(datetime.now().timestamp() * 1000),
-                        ),
-                        loop,
-                    )
+    async def event_stream():
+        start = datetime.now().timestamp()
 
-            await asyncio.to_thread(run_generator)
+        yield json.dumps({
+            "sender": "log",
+            "text": "Connecting to Pneuma Seeker...",
+            "time_stamp": int(datetime.now().timestamp() * 1000)
+        }) + "\n"
 
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, user_id, chat_id)
+        await asyncio.sleep(0.1)
+
+        yield json.dumps({
+            "sender": "log",
+            "text": "Processing input...",
+            "time_stamp": int(datetime.now().timestamp() * 1000)
+        }) + "\n"
+
+        await asyncio.sleep(0.1)
+
+        # Stream data from ChatInterface
+        for msg in chat_interface.process_user_input(messages, files):
+            if msg.startswith("LOG"):
+                yield json.dumps({
+                    "sender": "log",
+                    "text": msg,
+                    "time_stamp": int(datetime.now().timestamp() * 1000)
+                }) + "\n"
+            elif msg.startswith("DONE"):
+                end = datetime.now().timestamp()
+                yield json.dumps({
+                    "sender": "done",
+                    "text": f"Processing done in {end - start:.2f} seconds.",
+                    "time_stamp": int(datetime.now().timestamp() * 1000)
+                }) + "\n"
+            else:
+                yield json.dumps({
+                    "sender": "assistant",
+                    "text": msg,
+                    "time_stamp": int(datetime.now().timestamp() * 1000)
+                }) + "\n"
+
+            await asyncio.sleep(0)  # yield control back to loop
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 @app.get("/state/{user_id}/{chat_id}")
