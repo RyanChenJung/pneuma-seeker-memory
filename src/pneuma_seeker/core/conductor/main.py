@@ -97,11 +97,13 @@ class Conductor:
         if len(self.external_tables) > 0:
             self.__log("Utilizing external table data...")
             for doc in self.external_tables:
+                last_id = getattr(doc, "last_node_id", None)
+                if last_id is not None and self.prov_graph.get_node_by_id(last_id) is not None:
+                    continue
+
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
-                    python_code=self.toolkit.python_executor.generate_pandas_read_code(
-                        doc
-                    ),
+                    python_code=f"# User-uploaded table: {doc.doc_id}",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

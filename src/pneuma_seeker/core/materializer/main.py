@@ -204,6 +204,20 @@ class Materializer:
     ):
         all_tables = self.__gather_all_tables(external_data)
         self.__log(f"Executing {op_name}...")
+        def _create_or_get_read_node(doc: AbstractDocument, source: RetrieverType, python_code: str) -> str | None:
+            try:
+                last_id = getattr(doc, "last_node_id", None)
+                if last_id is not None:
+                    existing = self.prov_graph.get_node_by_id(last_id)
+                    if existing is not None:
+                        return last_id
+
+                read_node = ProvenanceNode(source_retriever=source, python_code=python_code)
+                self.prov_graph.add_node(read_node, True)
+                return read_node.id
+            except Exception:
+                # On any error, do not crash materializer; return None so caller can handle
+                return None
         match op_name:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
@@ -216,12 +230,12 @@ class Materializer:
 
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
-                        new_node = ProvenanceNode(
-                            source_retriever=RetrieverType.PNEUMA_RETRIEVER,
-                            python_code=self.toolkit.generate_pandas_read_code(doc),
+                        read_code = self.toolkit.generate_pandas_read_code(doc)
+                        node_id = _create_or_get_read_node(
+                            doc, RetrieverType.PNEUMA_RETRIEVER, read_code
                         )
-                        self.prov_graph.add_node(new_node, True)
-                        doc.last_node_id = new_node.id
+                        if node_id is not None:
+                            doc.last_node_id = node_id
             case "web_search":
                 if not self.config.ENABLE_WEB_SEARCH:
                     self.actions.append(
@@ -259,15 +273,25 @@ class Materializer:
                         f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "retrieved internal tables".'
                     )
 
+                    read_code = self.toolkit.generate_pandas_read_multi_doc_code(
+                        extra_tables
+                    )
+                    # Create a single node representing the multi-read. Reuse if any
+                    # of the extra tables already point to a node that contains the same code.
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.ENUMERATOR,
-                        python_code=self.toolkit.generate_pandas_read_multi_doc_code(
-                            extra_tables
-                        ),
+                        python_code=read_code,
                     )
                     self.prov_graph.add_node(new_node, True)
 
                     for extra_table in extra_tables:
+                        # If extra_table already has a last_node_id that exists in graph,
+                        # prefer reusing it; otherwise set to this multi-read node.
+                        last_id = getattr(extra_table, "last_node_id", None)
+                        if last_id is not None:
+                            existing_node = self.prov_graph.get_node_by_id(last_id)
+                            if existing_node is not None:
+                                continue
                         extra_table.last_node_id = new_node.id
 
                     existing_tables = self.state.retrieved_tables
@@ -332,22 +356,28 @@ class Materializer:
                             self.actions.append(error_msg)
                             return
 
-                        new_node_id: str | None = None
-                        if table_to_select_doc.path is not None:
-                            child_node = ProvenanceNode(
-                                source_retriever=RetrieverType.MATERIALIZER,
-                                python_code=self.toolkit.generate_table_select_code(
-                                    target_table_id,
-                                    table_to_select_doc.doc_id,
-                                    relevant_columns,
-                                ),
-                            )
-                            parent_node = self.prov_graph.get_node_by_id(
-                                table_to_select_doc.last_node_id or ""
-                            )
+                        # Always create a materializer node representing the select operation
+                        select_code = self.toolkit.generate_table_select_code(
+                            target_table_id,
+                            table_to_select_doc.doc_id,
+                            relevant_columns,
+                        )
 
-                            new_node_id = child_node.id
-                            self.prov_graph.add_node(child_node, True)
+                        # Try to create/get a read node for the source doc to connect from
+                        parent_node_id = _create_or_get_read_node(
+                            table_to_select_doc,
+                            table_to_select_doc.retriever_type,
+                            self.toolkit.generate_pandas_read_code(table_to_select_doc),
+                        )
+
+                        child_node = ProvenanceNode(
+                            source_retriever=RetrieverType.MATERIALIZER,
+                            python_code=select_code,
+                        )
+                        self.prov_graph.add_node(child_node, True)
+                        new_node_id = child_node.id
+                        if parent_node_id is not None:
+                            parent_node = self.prov_graph.get_node_by_id(parent_node_id)
                             if parent_node is not None:
                                 self.prov_graph.connect(parent_node, child_node)
 
@@ -414,24 +444,29 @@ class Materializer:
                     f"Successfully added a new column named {new_column_name} to table with ID {table_id}."
                 )
 
-                new_node = ProvenanceNode(
-                    source_retriever=RetrieverType.MATERIALIZER,
-                    python_code=self.toolkit.generate_semantic_col_generator_code(
-                        table_relevant_columns,
-                        conditioned_table_doc,
-                        new_column_name,
-                        os.path.join(
-                            self.__get_intermediate_table_dir_path(),
-                            f"{conditioned_table_doc.doc_id}.csv",
-                        ),
+                sem_col_code = self.toolkit.generate_semantic_col_generator_code(
+                    table_relevant_columns,
+                    conditioned_table_doc,
+                    new_column_name,
+                    os.path.join(
+                        self.__get_intermediate_table_dir_path(),
+                        f"{conditioned_table_doc.doc_id}.csv",
                     ),
                 )
-                self.prov_graph.add_node(new_node, True)
-                parent_node = self.prov_graph.get_node_by_id(
-                    conditioned_table_doc.last_node_id or ""
+                # Ensure we have a parent node for the conditioned table (read node)
+                parent_node_id = _create_or_get_read_node(
+                    conditioned_table_doc, conditioned_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(conditioned_table_doc)
                 )
-                if parent_node is not None:
-                    self.prov_graph.connect(parent_node, new_node)
+
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code=sem_col_code,
+                )
+                self.prov_graph.add_node(new_node, True)
+                if parent_node_id is not None:
+                    parent_node = self.prov_graph.get_node_by_id(parent_node_id)
+                    if parent_node is not None:
+                        self.prov_graph.connect(parent_node, new_node)
 
                 conditioned_table_doc.last_node_id = new_node.id
                 self.__save_new_or_updated_intermediate_table(
@@ -522,32 +557,37 @@ class Materializer:
                     top_k=self.config.SEMANTIC_JOIN_TOP_K,
                 )
 
-                new_node = ProvenanceNode(
-                    source_retriever=RetrieverType.MATERIALIZER,
-                    python_code=self.toolkit.generate_semantic_join_generator_code(
-                        left_table_doc,
-                        right_table_doc,
-                        relevant_left_cols,
-                        relevant_right_cols,
-                        self.config.SEMANTIC_JOIN_TOP_K,
-                        os.path.join(
-                            self.__get_intermediate_table_dir_path(),
-                            f"{joined_table_id}.csv",
-                        ),
+                join_code = self.toolkit.generate_semantic_join_generator_code(
+                    left_table_doc,
+                    right_table_doc,
+                    relevant_left_cols,
+                    relevant_right_cols,
+                    self.config.SEMANTIC_JOIN_TOP_K,
+                    os.path.join(
+                        self.__get_intermediate_table_dir_path(),
+                        f"{joined_table_id}.csv",
                     ),
                 )
-                parent_node_1 = self.prov_graph.get_node_by_id(
-                    left_table_doc.last_node_id or ""
+                parent_node_1_id = _create_or_get_read_node(
+                    left_table_doc, left_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(left_table_doc)
                 )
-                parent_node_2 = self.prov_graph.get_node_by_id(
-                    right_table_doc.last_node_id or ""
+                parent_node_2_id = _create_or_get_read_node(
+                    right_table_doc, right_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(right_table_doc)
                 )
 
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code=join_code,
+                )
                 self.prov_graph.add_node(new_node, True)
-                if parent_node_1 is not None:
-                    self.prov_graph.connect(parent_node_1, new_node)
-                if parent_node_2 is not None:
-                    self.prov_graph.connect(parent_node_2, new_node)
+                if parent_node_1_id is not None:
+                    parent_node_1 = self.prov_graph.get_node_by_id(parent_node_1_id)
+                    if parent_node_1 is not None:
+                        self.prov_graph.connect(parent_node_1, new_node)
+                if parent_node_2_id is not None:
+                    parent_node_2 = self.prov_graph.get_node_by_id(parent_node_2_id)
+                    if parent_node_2 is not None:
+                        self.prov_graph.connect(parent_node_2, new_node)
 
                 self.state.add_intermediate_table(
                     Table(
@@ -601,7 +641,19 @@ class Materializer:
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
-                        self.prov_graph.connect(parent_node, new_node)
+                        # parent_node is already a ProvenanceNode instance
+                        if parent_node is None:
+                            continue
+                        try:
+                            self.prov_graph.connect(parent_node, new_node)
+                        except Exception:
+                            # best-effort: try to resolve by id and connect if present
+                            fallback = self.prov_graph.get_node_by_id(parent_node.id)
+                            if fallback is not None:
+                                try:
+                                    self.prov_graph.connect(fallback, new_node)
+                                except Exception:
+                                    continue
 
                     self.state.add_intermediate_table(
                         Table(
@@ -669,10 +721,13 @@ class Materializer:
                     source_retrievers: list[RetrieverType] = []
                     parent_nodes: list[ProvenanceNode] = []
                     for used_table_id in used_table_ids:
-                        source_retrievers.append(id_docs[used_table_id].retriever_type)
-                        parent_node = self.prov_graph.get_node_by_id(used_table_id)
-                        if parent_node is not None:
-                            parent_nodes.append(parent_node)
+                        doc = id_docs[used_table_id]
+                        source_retrievers.append(doc.retriever_type)
+                        last_id = getattr(doc, "last_node_id", None)
+                        if last_id is not None:
+                            parent_node = self.prov_graph.get_node_by_id(last_id)
+                            if parent_node is not None:
+                                parent_nodes.append(parent_node)
 
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
@@ -687,7 +742,17 @@ class Materializer:
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
-                        self.prov_graph.connect(parent_node, new_node)
+                        if parent_node is None:
+                            continue
+                        try:
+                            self.prov_graph.connect(parent_node, new_node)
+                        except Exception:
+                            fallback = self.prov_graph.get_node_by_id(parent_node.id)
+                            if fallback is not None:
+                                try:
+                                    self.prov_graph.connect(fallback, new_node)
+                                except Exception:
+                                    continue
 
                     self.state.add_intermediate_table(
                         Table(

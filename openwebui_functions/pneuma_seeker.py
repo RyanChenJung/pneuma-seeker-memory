@@ -47,6 +47,7 @@ class Pipe:
         )
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            end_initialization = time.time()
             async with client.stream(
                 "POST",
                 "http://localhost:8000/chat",
@@ -89,12 +90,12 @@ class Pipe:
                             }
                         )
                     elif sender == "done":
-                        end = time.time()
+                        elapsed = end_initialization - start
                         await __event_emitter__(
                             {
                                 "type": "status",
                                 "data": {
-                                    "description": f"{text}",
+                                    "description": f"{text} (connection initialization: {elapsed:.2f} seconds)",
                                     "done": True,
                                     "hidden": False,
                                 },
