@@ -46,7 +46,7 @@ class Pipe:
             }
         )
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(900.0)) as client:
             end_initialization = time.time()
             async with client.stream(
                 "POST",
