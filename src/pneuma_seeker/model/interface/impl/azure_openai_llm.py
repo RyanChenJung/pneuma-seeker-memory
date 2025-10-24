@@ -50,15 +50,25 @@ class AzureOpenAILLM(AbstractModel):
 
         if stream:
             # Stream response as generator of chunks
-            response_stream = self.client.chat.completions.create(
-                messages=messages,  # type: ignore
-                model=self.model_name,
-                seed=42,
-                temperature=temperature,
-                max_completion_tokens=max_completion_tokens,
-                response_format={"type": "json_object"} if json_mode else Omit(),
-                stream=stream,
-            )  # type: ignore
+            if json_mode:
+                response_stream = self.client.chat.completions.create(
+                    messages=messages,  # type: ignore
+                    model=self.model_name,
+                    seed=42,
+                    temperature=temperature,
+                    max_completion_tokens=max_completion_tokens,
+                    response_format={"type": "json_object"},
+                    stream=stream,
+                )  # type: ignore
+            else:
+                response_stream = self.client.chat.completions.create(
+                    messages=messages,  # type: ignore
+                    model=self.model_name,
+                    seed=42,
+                    temperature=temperature,
+                    max_completion_tokens=max_completion_tokens,
+                    stream=stream,
+                )  # type: ignore
 
             for event in response_stream:
                 if not event.choices:  # skip keep-alives or DONE packets
@@ -71,18 +81,31 @@ class AzureOpenAILLM(AbstractModel):
 
         else:
             # Non-streaming version (current behavior)
-            gpt_output = (
-                self.client.chat.completions.create(
-                    messages=messages,  # type: ignore
-                    model=self.model_name,
-                    seed=42,
-                    temperature=temperature,
-                    max_completion_tokens=max_completion_tokens,
-                    response_format={"type": "json_object"} if json_mode else Omit(),
+            if json_mode:
+                gpt_output = (
+                    self.client.chat.completions.create(
+                        messages=messages,  # type: ignore
+                        model=self.model_name,
+                        seed=42,
+                        temperature=temperature,
+                        max_completion_tokens=max_completion_tokens,
+                        response_format={"type": "json_object"},
+                    )
+                    .choices[0]
+                    .message.content
                 )
-                .choices[0]
-                .message.content
-            )
+            else:
+                gpt_output = (
+                    self.client.chat.completions.create(
+                        messages=messages,  # type: ignore
+                        model=self.model_name,
+                        seed=42,
+                        temperature=temperature,
+                        max_completion_tokens=max_completion_tokens,
+                    )
+                    .choices[0]
+                    .message.content
+                )
 
             response = gpt_output or ""
             print(f"Model output: {response}")
