@@ -35,9 +35,18 @@ Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
 
     def get_current_state_instance(self):
         MAX_ROWS = 10
+
+        def serialize_dataframe(df):
+            # Convert DataFrame to a JSON-safe list of dicts
+            return (
+                df.head(MAX_ROWS)
+                .applymap(lambda x: x.isoformat() if hasattr(x, "isoformat") else x)
+                .to_dict(orient="records")
+            )
+
         return {
             "T": {
-                table_id: table_doc.content.head(MAX_ROWS).to_dict(orient="records")
+                table_id: serialize_dataframe(table_doc.content)
                 for table_id, table_doc in self.T.items()
             },
             "is_T_materialized": self.is_T_materialized,
