@@ -69,6 +69,11 @@ manager = Manager(
 templates = Jinja2Templates(directory="template")
 
 
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
+
 @app.get("/state/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_state_html(request: Request, user_id: str, chat_id: str):
     conductor = manager.get_chat_interface(user_id, chat_id).conductor
