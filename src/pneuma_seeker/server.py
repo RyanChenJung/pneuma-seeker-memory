@@ -98,7 +98,13 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
     prov_graph_html = conductor.prov_graph.get_graph_visualization()
     return templates.TemplateResponse(
         "index2.html",
-        {"request": request, "state": state, "prov_graph_html": prov_graph_html},
+        {
+            "request": request,
+            "state": state,
+            "prov_graph_html": prov_graph_html,
+            "user_id": user_id,
+            "chat_id": chat_id,
+        },
     )
 
 

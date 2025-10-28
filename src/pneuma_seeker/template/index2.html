@@ -54,7 +54,6 @@
       margin-bottom: 0.25rem;
     }
 
-    /* Script container styling */
     .script-wrapper {
       background: #ffffff;
       border: 1px solid #e9ecef;
@@ -73,6 +72,28 @@
       border: none;
       display: block;
     }
+
+    /* Download button styling for better cohesion */
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .download-btn i {
+      font-size: 1rem;
+    }
+
+    .download-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background-color: #f1f3f5 !important;
+      border-color: #dee2e6 !important;
+      color: #6c757d !important;
+    }
   </style>
 </head>
 
@@ -81,31 +102,43 @@
 
     <!-- Collapsible Pneuma's State Card -->
     <div class="card mb-4 shadow-sm">
-      <div class="card-header d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#pneumaCardBody"
-        aria-expanded="true" aria-controls="pneumaCardBody">
-        <i class="bi bi-database-fill me-2"></i> Pneuma's State
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#pneumaCardBody" aria-expanded="true" aria-controls="pneumaCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-database-fill me-2"></i>
+          Pneuma's State
+        </div>
+        <i class="bi bi-chevron-down small"></i>
       </div>
 
       <div id="pneumaCardBody" class="collapse show">
         <div class="card-body">
           <!-- Target Tables Section -->
-          <h5 class="mb-3 d-flex align-items-center">
-            <i class="bi bi-table"></i>
-            <span class="ms-2">T (Target Tables)
-              <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
-            </span>
-            <span class="badge ms-2 badge-materialized">Materialized: <span id="materialized-status">No</span></span>
-          </h5>
+          <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center">
+              <h5 class="mb-0 d-flex align-items-center">
+                <i class="bi bi-table"></i>
+                <span class="ms-2">T (Target Tables)
+                  <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
+                </span>
+                <span class="badge ms-2 badge-materialized">Materialized: <span id="materialized-status">No</span></span>
+              </h5>
+            </div>
+
+            <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
+              <i class="bi bi-download"></i> Download
+            </button>
+          </div>
+
           <div id="T" class="tables-flex mb-4"></div>
 
-          <!-- Python Script Section (single string) -->
+          <!-- Python Script Section -->
           <h5 class="mb-3 d-flex align-items-center">
             <i class="bi bi-file-earmark-code-fill"></i>
             <span class="ms-2">S (Python Script)</span>
             <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
           </h5>
 
-          <!-- Instead of an <ol>, use a scrollable pre/code block -->
           <div id="script-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
             <pre id="script-pre" class="mb-0"></pre>
           </div>
@@ -113,11 +146,15 @@
       </div>
     </div>
 
-    <!-- Pyvis Provenance Graph Card -->
+    <!-- Provenance Graph Card -->
     <div class="card mb-4 shadow-sm">
-      <div class="card-header d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#provCardBody"
-        aria-expanded="true" aria-controls="provCardBody">
-        <i class="bi bi-diagram-3-fill me-2"></i> Provenance Graph
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#provCardBody" aria-expanded="true" aria-controls="provCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-diagram-3-fill me-2"></i>
+          Provenance Graph
+        </div>
+        <i class="bi bi-chevron-down small"></i>
       </div>
 
       <div id="provCardBody" class="collapse show">
@@ -130,14 +167,30 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const state = {{ state | tojson }};
 
-    // Status badges
+  <script>
+    const state = {{ state | tojson | safe }};
+    const userId = "{{ user_id }}";
+    const chatId = "{{ chat_id }}";
+
+    // Update statuses
     document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
     document.getElementById("script-status").textContent = state.is_S_executed ? "Yes" : "No";
 
-    // Render target tables (unchanged)
+    // Download button logic
+    const downloadBtn = document.getElementById("download-tables-btn");
+    downloadBtn.addEventListener("click", () => {
+      const url = `/all_tables/${userId}/${chatId}`;
+      window.open(url, "_blank");
+    });
+
+    // Disable button if no tables are available
+    if (!state.is_T_materialized || !state.T || Object.keys(state.T).length === 0) {
+      downloadBtn.disabled = true;
+      downloadBtn.title = "No tables available to download yet";
+    }
+
+    // Render Target Tables
     const targetSchemasDiv = document.getElementById("T");
     for (const [tableName, rows] of Object.entries(state.T || {})) {
       const tableContainer = document.createElement("div");
@@ -184,18 +237,15 @@
       targetSchemasDiv.appendChild(tableContainer);
     }
 
-    // Activate tooltips
+    // Enable tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
 
-    // Render Python script as a single string inside a <pre>
+    // Render Python Script
     const scriptPre = document.getElementById("script-pre");
-    // state.S is expected to be a single string (possibly multiline). Fallback to empty string.
     scriptPre.textContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
 
-    // Insert Pyvis graph HTML
+    // Insert Provenance Graph
     const provIframe = document.getElementById("prov-iframe");
     const provGraphHtml = {{ prov_graph_html | tojson | safe }};
     provIframe.srcdoc = provGraphHtml;
