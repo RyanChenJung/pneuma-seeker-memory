@@ -181,8 +181,13 @@
     // Download button logic
     const downloadBtn = document.getElementById("download-tables-btn");
     downloadBtn.addEventListener("click", async () => {
-      const url = `/all_tables/${userId}/${chatId}`;
+      // Determine download base URL
+      const baseUrl =
+        window.location.hostname === "localhost" && window.location.port === "8080"
+          ? "http://localhost:8000"   // dev: point to FastAPI
+          : "";                        // prod: same origin
 
+      const url = `${baseUrl}/all_tables/${userId}/${chatId}`;
       try {
         // Fetch the ZIP file from the backend
         const response = await fetch(url);
