@@ -1,5 +1,5 @@
 # src/pneuma_seeker/core/materializer/state.py
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 
 
 class MaterializerState:
