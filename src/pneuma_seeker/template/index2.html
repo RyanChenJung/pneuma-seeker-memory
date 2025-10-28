@@ -121,12 +121,13 @@
                 <span class="ms-2">T (Target Tables)
                   <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
                 </span>
-                <span class="badge ms-2 badge-materialized">Materialized: <span id="materialized-status">No</span></span>
+                <span class="badge ms-2 badge-materialized">Materialized: <span
+                    id="materialized-status">No</span></span>
               </h5>
             </div>
 
             <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
-              <i class="bi bi-download"></i> Download
+              <i class="bi bi-download"></i>
             </button>
           </div>
 
@@ -179,10 +180,34 @@
 
     // Download button logic
     const downloadBtn = document.getElementById("download-tables-btn");
-    downloadBtn.addEventListener("click", () => {
+    downloadBtn.addEventListener("click", async () => {
       const url = `/all_tables/${userId}/${chatId}`;
-      window.open(url, "_blank");
+
+      try {
+        // Fetch the ZIP file from the backend
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+        // Convert response to a blob
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        // Create a temporary hidden <a> element to trigger download
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `${userId}_${chatId}_tables.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        // Revoke the object URL to free memory
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error("Download error:", err);
+        alert("Failed to download tables. Check console for details.");
+      }
     });
+
 
     // Disable button if no tables are available
     if (!state.is_T_materialized || !state.T || Object.keys(state.T).length === 0) {
