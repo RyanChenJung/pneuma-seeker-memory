@@ -13,6 +13,12 @@ cd src/pneuma_seeker
 nohup fastapi dev server.py >> server.out &
 ```
 
+## Extra: Run the ([UI](https://github.com/luthfibalaka/pneuma-seeker-ui/tree/stable-0.6.22))
+
+```bash
+nohup open-webui serve >> output.out &
+```
+
 ## Testing the system (ongoing)
 
 ```bash
