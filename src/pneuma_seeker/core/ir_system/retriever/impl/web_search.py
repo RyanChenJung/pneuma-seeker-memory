@@ -1,10 +1,16 @@
-from pneuma_seeker.core.ir_system.data_model import RetrieverType
+from openai import OpenAI
+from pneuma_seeker.core.ir_system.data_model import RetrieverType, Text
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 
 
 class WebSearch(AbstractRetriever):
-    """Represents a web searcher."""
+    """Represents a web search interface."""
+
+    def __init__(self, models, config):
+        # Note: For now, we assume OpenAI model
+        super().__init__(models, config)
+        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     @property
     def retriever_type(self) -> RetrieverType:
@@ -19,11 +25,16 @@ class WebSearch(AbstractRetriever):
         """
         pass
 
-    def retrieve(self, query: str, sources: list[str], k: int) -> list[AbstractDocument]:
+    def retrieve(
+        self, query: str, sources: list[str], k: int
+    ) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
         """
-        return []
+        response = self.client.responses.create(
+            model="o4-mini", tools=[{"type": "web_search"}], input=query
+        )
+        return [Text("web_search", RetrieverType.WEB_SEARCH, response.output_text, {})]
 
     def index(self, documents: list[AbstractDocument]):
         """

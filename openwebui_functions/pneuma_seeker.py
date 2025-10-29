@@ -1,8 +1,8 @@
+# frontend: OpenWebUI Pipe (Python side)
 import json
 import time
+import httpx
 from typing import Callable
-
-import websockets
 from fastapi import Request
 from pydantic import BaseModel
 
@@ -21,15 +21,6 @@ class Pipe:
             "allow_code_interpreter": False,
         }
 
-    async def get_connection(
-        self, user_id: str, chat_id: str
-    ):
-        uri = f"ws://localhost:8000/ws/{user_id}/{chat_id}"
-        conn = await websockets.connect(
-            uri, open_timeout=50, ping_interval=20, ping_timeout=20
-        )
-        return conn
-
     async def pipe(
         self,
         body: dict,
@@ -39,8 +30,8 @@ class Pipe:
         __event_emitter__: Callable,
     ):
         start = time.time()
-        user_id = __metadata__["user_id"]
-        chat_id = __metadata__["chat_id"]
+        user_id = __metadata__.get("user_id", "default_user")
+        chat_id = __metadata__.get("chat_id", "default_chat")
         chat_messages = [i for i in body["messages"] if i["role"] != "system"]
         files = [i["url"] for i in (__metadata__.get("files") or [])]
 
@@ -55,78 +46,59 @@ class Pipe:
             }
         )
 
-        websocket = await self.get_connection(user_id, chat_id)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(900.0)) as client:
+            end_initialization = time.time()
+            async with client.stream(
+                "POST",
+                "http://localhost:8000/chat",
+                json={
+                    "messages": chat_messages,
+                    "files": files,
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                },
+            ) as response:
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        message_data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-        try:
-            await websocket.send(
-                json.dumps(
-                    {
-                        "chat_messages": chat_messages,
-                        "files": files,
-                    }
-                )
-            )
+                    sender = message_data.get("sender")
+                    text = message_data.get("text", "")
 
-            await __event_emitter__(
-                {
-                    "type": "status",
-                    "data": {
-                        "description": "Processing input...",
-                        "done": False,
-                        "hidden": False,
-                    },
-                }
-            )
-
-            while True:
-                try:
-                    message = await websocket.recv()
-                    message_data = json.loads(message)
-
-                    if message_data["sender"] == "log":
+                    if sender == "log":
                         await __event_emitter__(
                             {
                                 "type": "status",
                                 "data": {
-                                    "description": message_data["text"][5:],
+                                    "description": (
+                                        text[5:] if text.startswith("LOG: ") else text
+                                    ),
                                     "done": False,
                                     "hidden": False,
                                 },
                             }
                         )
-                    elif message_data["sender"] == "assistant":
+                    elif sender == "assistant":
                         await __event_emitter__(
                             {
                                 "type": "chat:message:delta",
-                                "data": {
-                                    "content": message_data["text"].replace("~", "\\~")
-                                },
+                                "data": {"content": text.replace("~", "\\~")},
                             }
                         )
-                    elif message_data["sender"] == "done":
-                        end = time.time()
+                    elif sender == "done":
+                        elapsed = end_initialization - start
                         await __event_emitter__(
                             {
                                 "type": "status",
                                 "data": {
-                                    "description": f"Processing done in {end-start:.2f} seconds.",
+                                    "description": f"{text} (connection initialization: {elapsed:.2f} seconds)",
                                     "done": True,
                                     "hidden": False,
                                 },
                             }
                         )
                         break
-                except websockets.ConnectionClosed:
-                    await __event_emitter__(
-                        {
-                            "type": "status",
-                            "data": {
-                                "description": "Processing done (connection closed).",
-                                "done": True,
-                                "hidden": False,
-                            },
-                        }
-                    )
-                    break
-        finally:
-            await websocket.close()

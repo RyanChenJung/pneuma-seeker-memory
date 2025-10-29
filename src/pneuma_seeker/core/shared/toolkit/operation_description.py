@@ -1,12 +1,12 @@
-def get_operation_description():
+def get_operation_description(enable_web_search = False):
     return """
-- **Document Retriever**
-    - Retrieves relevant tabular or textual data from the internal database based on natural-language prompts.
-    - Does not affect user-provided external data. Internal data is replaced each time this tool is called.
+- **pneuma_retriever**
+    - Retrieves relevant tables from the internal database based on natural-language prompts.
+    - Does not affect user-provided external tables. However, previously retrieved internal tables are replaced each time this tool is called.
     - Args: {"prompt": "<retrieval query string, contextualized with columns of the target tables (T), not just using the target table IDs>"}
     - Example: {"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}
 
-- **Table Enumerator**
+- **table_enumerator**
     - **Precondition — MUST NOT be called unless there is at least one internal table already retrieved.**
     - The `pattern` argument **must be derived from the names of existing internal tables** (or obvious common tokens in them).
     - Lists other available internal tables in the database whose names match a given regex pattern.
@@ -15,16 +15,17 @@ def get_operation_description():
     - Args: {"pattern": "<regex pattern to match table names>"}
     - Example: {"pattern": "^sales_\\d{4}$"} will match all tables named like `sales_2020`, `sales_2021`, etc.
 
-- **Python Executor**
+- **python_executor**
     - Executes Python code to transform and/or combine data. Output can be a new table (Pandas DataFrame), string, or list of strings.
     - All tables — whether internal, external, or intermediate — are available via `tables["<ID>"]` (Pandas DataFrame).
     - Never use `pd.read_csv`; tables are already provided in memory.
+    - Pandas, NumPy, and SciPy are available for data manipulation (remember to add relevant import statements in the code if you need them).
     - Common libraries like pandas and numpy are available for data manipulation (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
     - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result to a variable named 'result'
     - Args: {"code": "<Python code string>"}
 
-- **Table Select**
+- **table_select**
     - Directly maps an existing table (internal, external, or intermediate) to a target table (or a subset of its columns).
     - Args: {"<target_table_id>": {
                     {
@@ -35,13 +36,13 @@ def get_operation_description():
             }
     - Example use case: If table A has columns that match some columns of target table B, you can select it directly instead of creating SQL queries or Python code.
 
-- **SQL Executor**
+- **sql_executor**
     - Executes SQL queries on available tables (internal, external, or intermediate).
     - Supports standard SQL syntax
     - Args: {"sql_query": "<SQL query string>"}
     - Example: {"sql_query": "SELECT * FROM table_1 WHERE date >= '2025-01-01'"}
 
-- **Semantic Join**
+- **semantic_join**
     - Joins two tables (internal, external, or intermediate) by computing semantic similarity between specified columns.
     - Similarity uses a weighted combination of embedding cosine similarity and normalized Damerau-Levenshtein edit similarity.
     - Produces a new joined table containing matched rows and a similarity_score column.
@@ -62,7 +63,7 @@ def get_operation_description():
         "joined_table_id": "company_client_matches"
       }
 
-- **Semantic Column Generator**
+- **semantic_column_generator**
     - Adds a new column to an *intermediate* table using an LLM.
     - The column is derived from specified `relevant_columns` only — no other columns are used.
     - External and internal tables should first be transformed into intermediate tables if new columns are needed, because retrieved internal tables can be replaced.
@@ -79,4 +80,13 @@ def get_operation_description():
         "relevant_columns": ["product_name", "description"],
         "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing'."
       }
-""".strip()
+""".strip() + (get_web_search_description() if enable_web_search else "")
+
+def get_web_search_description():
+    """Gets the optional web search description for the Materializer."""
+    return """\n- **web_search**
+    - Retrieves information from the web to assist in filling tables when internal and external data are insufficient.
+    - Args: {"prompt": "<query describing what data to retrieve or clarify>"}
+    - Usage notes:
+        - Use web_search only when no reliable internal/external source exists for the required column(s).
+        - Avoid repetitive or redundant queries."""

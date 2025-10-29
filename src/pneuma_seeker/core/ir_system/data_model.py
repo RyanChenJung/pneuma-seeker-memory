@@ -14,7 +14,7 @@ class RetrieverType(Enum):
     user-provided and Materializer-produced intermediate data.
     """
 
-    PNEUMA = "Pneuma"
+    PNEUMA_RETRIEVER = "Pneuma"
     CONDUCTOR = "Conductor"
     ENUMERATOR = "Enumerator"
     MATERIALIZER = "Materializer"

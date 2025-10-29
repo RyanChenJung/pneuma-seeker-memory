@@ -1,10 +1,8 @@
 from collections import defaultdict
-import ast
 from enum import Enum
 import gc
 from math import ceil
 import os
-import re
 from typing import Optional
 from bm25s.tokenization import convert_tokenized_to_string_list
 import time
@@ -36,10 +34,10 @@ from pneuma_seeker.utils.str_processor import clean_column_table_name
 class Pneuma(AbstractRetriever):
     """Represents a tabular data retriever."""
 
-    def __init__(self, models):
-        super().__init__(models)
-        self.llm = models["llm"]
-        self.embed_model = models["embed_model"]
+    def __init__(self, models, config):
+        super().__init__(models, config)
+        self.llm = self.models["llm"]
+        self.embed_model = self.models["embed_model"]
         self.EMBEDDING_MAX_TOKENS = 768
         self.hybrid_retriever = HybridRetriever(
             self.llm,
@@ -55,7 +53,7 @@ class Pneuma(AbstractRetriever):
         """
         Defines the type of the retriever.
         """
-        return RetrieverType.PNEUMA
+        return RetrieverType.PNEUMA_RETRIEVER
 
     def load(self):
         """
@@ -147,7 +145,7 @@ class Pneuma(AbstractRetriever):
                 retrieval_results.append(
                     Table(
                         doc_id=clean_column_table_name(table[:-4].split("/")[-1]),
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=actual_table,
                         metadata=table_metadata,
                         path=table,
@@ -410,7 +408,7 @@ class Pneuma(AbstractRetriever):
                 summaries.append(
                     Text(
                         doc_id=f"{table.metadata['table_name']}_schema_summary",
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=" | ".join(
                             col_narrations[table.metadata["table_name"]]
                         ),
@@ -560,7 +558,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                 sample_rows.append(
                     Text(
                         doc_id=f"{table.doc_id}_sample_row",
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=formatted_row,
                         metadata={"table_name": table.metadata["table_name"]},
                     )
@@ -600,7 +598,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                 processed_schema_summaries.append(
                     Text(
                         doc_id=f"{table}_schema_summaries_{col_idx}",
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=processed_summary,
                         metadata={"table_name": table},
                     )
@@ -637,7 +635,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                 processed_sample_rows.append(
                     Text(
                         doc_id=f"{table}_sample_row_{rows_idx}",
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=processed_sample_row,
                         metadata={"table_name": table},
                     )
@@ -679,7 +677,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                 processed_table_context.append(
                     Text(
                         doc_id=f"{table}_context_{context_idx}",
-                        retriever_type=RetrieverType.PNEUMA,
+                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=processed_context,
                         metadata={"table_name": table},
                     )

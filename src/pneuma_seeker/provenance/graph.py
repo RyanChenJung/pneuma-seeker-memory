@@ -1,44 +1,67 @@
+# src/pneuma_seeker/provenance/graph.py
 import html
-import uuid
-from logging import Logger
-from typing import Any
-
 from pyvis.network import Network
-
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
 
 
 class ProvenanceNode:
-    def __init__(
-        self,
-        source_retriever: RetrieverType,
-        python_code: str,
-    ):
-        self.id = str(uuid.uuid4())
+    _id_counter = 1
+
+    def __init__(self, source_retriever: RetrieverType, python_code: str):
+        self.id = f"Node {ProvenanceNode._id_counter}"
+        ProvenanceNode._id_counter += 1
+
         self.source_retriever = source_retriever
         self.python_code = python_code
-
-        self.children: list[ProvenanceNode] = []
-        self.parents: list[ProvenanceNode] = []
+        self.parents = []
+        self.children = []
 
     def add_child(self, child: "ProvenanceNode"):
-        self.children.append(child)
-        child.parents.append(self)
+        if child not in self.children:
+            self.children.append(child)
+        if self not in child.parents:
+            child.parents.append(self)
+
+    def __repr__(self):
+        return f"<ProvenanceNode {self.id} ({self.source_retriever.name})>"
 
 
 class ProvenanceGraph:
-    def __init__(self, logger: Logger):
-        self.nodes: dict[str, ProvenanceNode] = {}
-        self.logger = logger
+    def __init__(self, logger=None):
+        ProvenanceNode._id_counter = 1
 
-    def add_node(self, node: ProvenanceNode, overwrite=False):
+        self.nodes: dict[str, ProvenanceNode] = {}
+        self.logger = logger or self._noop_logger()
+
+    # ----------------------------------------------------------------------
+    # internal utilities
+    # ----------------------------------------------------------------------
+    def _noop_logger(self):
+        class _Noop:
+            def info(self, *_a, **_kw): ...
+            def debug(self, *_a, **_kw): ...
+        return _Noop()
+
+    # ----------------------------------------------------------------------
+    # core node ops
+    # ----------------------------------------------------------------------
+    def add_node(self, node: ProvenanceNode, overwrite: bool = False):
         if not isinstance(node, ProvenanceNode):
             raise ValueError(f"node must be a ProvenanceNode, got {type(node)}")
-        if node.id in self.nodes.keys() and not overwrite:
-            raise ValueError(
-                f"node {node.id} already exists; set overwrite = True to update"
-            )
+
+        existing = self.nodes.get(node.id)
+        if existing and not overwrite:
+            raise ValueError(f"node {node.id} already exists; set overwrite=True to update")
+
+        if existing and overwrite:
+            # update in place — preserve identity, parent/child relationships
+            existing.source_retriever = node.source_retriever
+            existing.python_code = node.python_code
+            self.logger.info(f"[PROV GRAPH] Node {node.id} updated (overwrite=True).")
+            return existing
+
         self.nodes[node.id] = node
+        self.logger.info(f"[PROV GRAPH] Node {node.id} added.")
         return node
 
     def connect(self, parent: ProvenanceNode, child: ProvenanceNode):
@@ -46,120 +69,126 @@ class ProvenanceGraph:
             raise ValueError(f"parent must be a ProvenanceNode, got {type(parent)}")
         if not isinstance(child, ProvenanceNode):
             raise ValueError(f"child must be a ProvenanceNode, got {type(child)}")
-        parent.add_child(child)
+
+        # always resolve canonical instances from self.nodes if present
+        parent_canon = self.nodes.get(parent.id, parent)
+        child_canon = self.nodes.get(child.id, child)
+
+        parent_canon.add_child(child_canon)
         self.logger.info(
-            f"[PROV GRAPH] Parent node {parent.id} and child node {child.id} connected successfully."
+            f"[PROV GRAPH] Parent node {parent_canon.id} and child node {child_canon.id} connected successfully."
         )
 
-    def reset_for_materialization(self):
-        new_nodes: dict[str, ProvenanceNode] = {
-            node_id: node
-            for node_id, node in self.nodes.items()
-            if node.source_retriever == RetrieverType.USER
-        }
-        self.nodes = new_nodes
-        self.logger.info(f"[PROV GRAPH] The graph has been reset successfully.")
-
+    # ----------------------------------------------------------------------
+    # node retrieval
+    # ----------------------------------------------------------------------
     def get_node_by_id(self, node_id: str):
         return self.nodes.get(node_id)
 
-    def get_node(self, filters: dict[str, Any]) -> ProvenanceNode | None:
+    def get_node(self, filters: dict):
         for node in self.nodes.values():
             if all(getattr(node, k, None) == v for k, v in filters.items()):
                 return node
         return None
 
-    def get_nodes(self, filters: dict[str, Any]) -> list[ProvenanceNode]:
+    def get_nodes(self, filters: dict):
         return [
-            node
-            for node in self.nodes.values()
-            if all(getattr(node, k, None) == v for k, v in filters.items())
+            n for n in self.nodes.values()
+            if all(getattr(n, k, None) == v for k, v in filters.items())
         ]
 
-    def trace_upstream(self, node: ProvenanceNode) -> list[ProvenanceNode]:
-        return self.__trace(node, "parents")
+    # ----------------------------------------------------------------------
+    # tracing
+    # ----------------------------------------------------------------------
+    def trace_upstream(self, node: ProvenanceNode):
+        visited = []
+        def dfs(n):
+            for p in n.parents:
+                if p not in visited:
+                    visited.append(p)
+                    dfs(p)
+        dfs(node)
+        return visited
 
-    def trace_downstream(self, node: ProvenanceNode) -> list[ProvenanceNode]:
-        return self.__trace(node, "children")
+    def trace_downstream(self, node: ProvenanceNode):
+        visited = []
+        def dfs(n):
+            for c in n.children:
+                if c not in visited:
+                    visited.append(c)
+                    dfs(c)
+        dfs(node)
+        return visited
 
-    def __trace(self, start: ProvenanceNode, relation: str) -> list[ProvenanceNode]:
-        visited, stack, result = set(), [start], []
-        while stack:
-            current = stack.pop()
-            for neighbor in getattr(current, relation):
-                if neighbor.id not in visited:
-                    visited.add(neighbor.id)
-                    result.append(neighbor)
-                    stack.append(neighbor)
-        return result
+    # ----------------------------------------------------------------------
+    # text output
+    # ----------------------------------------------------------------------
+    def to_text(self) -> str:
+        lines = []
+        # deterministic ordering: sort by numeric part of "Node <n>"
+        def _node_sort_key(item):
+            node_id = item[0]  # dict key is something like "Node 1"
+            try:
+                return int(node_id.split()[-1])
+            except Exception:
+                return node_id
 
+        for node_id, node in sorted(self.nodes.items(), key=_node_sort_key):
+            lines.append(f"{node.id}:")
+            lines.append(f"  Source Retriever: {node.source_retriever.value}")
+            lines.append(f"  Python Code: {node.python_code}")
+            lines.append(f"  Parents: {[p.id for p in node.parents]}")
+            lines.append(f"  Children: {[c.id for c in node.children]}")
+            lines.append("")
+        return "\n".join(lines)
+
+    # ----------------------------------------------------------------------
+    # visualization
+    # ----------------------------------------------------------------------
     def get_graph_visualization(self) -> str:
-        """
-        Generates HTML visualization of the graph.
-        """
         net = Network(notebook=True, directed=True, cdn_resources="in_line")
+        seen = set()
+
         for node in self.nodes.values():
-            if node.id not in net.get_nodes():
-                tooltip = f"""
-                Source Retriever: {html.escape(str(node.source_retriever.value))}
-                Python Code: {html.escape(node.python_code)}
-                # Children: {len(node.children)}
-                # Parents: {len(node.parents)}
-                """
-                net.add_node(
-                    node.id,
-                    label=node.id,
-                    title=tooltip,
+            if node.id not in seen:
+                tooltip = (
+                    f"Source Retriever: {html.escape(str(node.source_retriever.value))}\n"
+                    f"Python Code: {html.escape(node.python_code)}\n"
+                    f"# Children: {len(node.children)}\n"
+                    f"# Parents: {len(node.parents)}"
                 )
+                net.add_node(node.id, label=node.id, title=tooltip)
+                seen.add(node.id)
 
             for child in node.children:
-                if child.id not in net.get_nodes():
-                    tooltip = f"""
-                    Source Retriever: {html.escape(str(child.source_retriever.value))}
-                    Python Code: {html.escape(child.python_code)}
-                    # Children: {len(child.children)}
-                    # Parents: {len(child.parents)}
-                    """
-                    net.add_node(
-                        child.id,
-                        label=child.id,
-                        title=tooltip,
+                if child.id not in seen:
+                    tooltip = (
+                        f"Source Retriever: {html.escape(str(child.source_retriever.value))}\n"
+                        f"Python Code: {html.escape(child.python_code)}\n"
+                        f"# Children: {len(child.children)}\n"
+                        f"# Parents: {len(child.parents)}"
                     )
+                    net.add_node(child.id, label=child.id, title=tooltip)
+                    seen.add(child.id)
+
                 net.add_edge(node.id, child.id)
 
         return net.generate_html()
 
-    def to_text(self, node: ProvenanceNode | None = None, max_depth: int = 5) -> str:
-        id_map: dict[str, int] = {}
-        next_id = 1
-
-        def _get_int_id(node_id: str) -> int:
-            nonlocal next_id
-            if node_id not in id_map:
-                id_map[node_id] = next_id
-                next_id += 1
-            return id_map[node_id]
-
-        def _node_text(n: ProvenanceNode, depth: int, visited: set[str]) -> str:
-            if depth > max_depth or n.id in visited:
-                return ""
-            visited.add(n.id)
-            int_id = _get_int_id(n.id)
-            lines = [
-                f"{'  ' * depth}- Node {int_id}",
-                f"{'  ' * depth}  Source Retriever: {n.source_retriever.value}",
-                f"{'  ' * depth}  Python Code: {n.python_code}",
-                f"{'  ' * depth}  Children: {[ _get_int_id(c.id) for c in n.children ]}",
-                f"{'  ' * depth}  Parents: {[ _get_int_id(p.id) for p in n.parents ]}",
-            ]
-            for child in n.children:
-                lines.append(_node_text(child, depth + 1, visited))
-            return "\n".join([line for line in lines if line])
-
-        visited_nodes = set()
-        if node is not None:
-            return _node_text(node, 0, visited_nodes)
-        else:
-            roots = [n for n in self.nodes.values() if not n.parents]
-            all_texts = [_node_text(root, 0, visited_nodes) for root in roots]
-            return "\n\n".join(all_texts)
+    # ----------------------------------------------------------------------
+    # materialization reset
+    # ----------------------------------------------------------------------
+    def reset_for_materialization(self):
+        # keep USER nodes and their immediate parents/children to avoid orphaning
+        keep = {
+            node_id: node
+            for node_id, node in self.nodes.items()
+            if node.source_retriever == RetrieverType.USER
+        }
+        for n in list(keep.values()):
+            for p in n.parents:
+                keep[p.id] = p
+            for c in n.children:
+                keep[c.id] = c
+        self.nodes = keep
+        self.logger.info("[PROV GRAPH] The graph has been reset successfully.")

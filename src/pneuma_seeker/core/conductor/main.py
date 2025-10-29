@@ -2,7 +2,6 @@ import os
 from logging import Logger
 
 import pandas as pd
-import requests
 
 from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
@@ -18,10 +17,10 @@ from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.utils.str_processor import clean_column_table_name
 from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 from pneuma_seeker.utils.parser import parse_json
+from pneuma_seeker.utils.table_reader import TableReader
 
 
 class Conductor:
@@ -43,7 +42,7 @@ class Conductor:
         self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
 
         self.prov_graph = ProvenanceGraph(self.logger)
-        self.prompt_factory = ConductorPromptFactory()
+        self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(
             self.llm,
@@ -51,6 +50,7 @@ class Conductor:
             self.logger,
             self.data_sources,
             self.prov_graph,
+            self.config,
         )
         self.materializer = Materializer(
             self.llm,
@@ -61,11 +61,15 @@ class Conductor:
             self.toolkit,
             self.config,
         )
+        self.table_reader = TableReader(
+            self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
+        )
 
         self.info_need_state = InformationNeedState()
-        self.current_retrieval_results: dict[RetrieverType, list[AbstractDocument]] = {}
-        self.external_documents: list[AbstractDocument] = []
+        self.retrieved_tables: list[AbstractDocument] = []
+        self.external_tables: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
+        self.web_search_result: AbstractDocument | None = None
 
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -83,11 +87,26 @@ class Conductor:
         user_id: str,
         chat_id: str,
         interaction_history: list[HumanConductorInteraction],
-        external_data_paths: list[str],
+        external_table_paths: list[str],
     ):
         """Processes user input and yields responses."""
         self.__log(f"Processing human input: {user_input}")
-        self.__process_external_data(external_data_paths)
+        self.external_tables = self.table_reader.process_external_tables(
+            external_table_paths
+        )
+        if len(self.external_tables) > 0:
+            self.__log("Utilizing external table data...")
+            for doc in self.external_tables:
+                last_id = getattr(doc, "last_node_id", None)
+                if last_id is not None and self.prov_graph.get_node_by_id(last_id) is not None:
+                    continue
+
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.USER,
+                    python_code=f"# User-uploaded table: {doc.doc_id}",
+                )
+                self.prov_graph.add_node(new_node, True)
+                doc.last_node_id = new_node.id
 
         num_actions_taken = 0
         user_facing_response = ""
@@ -111,18 +130,17 @@ class Conductor:
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
-                        self.current_retrieval_results,
+                        self.retrieved_tables,
                         user_input,
                         self.enumerated_table_ids,
-                        self.external_documents,
+                        self.external_tables,
+                        self.web_search_result,
                     ),
                 )
             )
 
             full_response = "".join(
-                self.llm.chat(
-                    llm_messages, LLMOption(json_mode=True, stream=True)
-                )
+                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
             )
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
@@ -191,141 +209,12 @@ class Conductor:
 
         yield user_facing_response
 
-    def __process_external_data(self, external_data_paths):
-        """Processes external data files and integrates them into the provenance graph."""
-        if len(external_data_paths) > 0:
-            self.__log("Utilizing external data...")
-            self.external_documents = self.__unpack_external_data(external_data_paths)
-            for doc in self.external_documents:
-                new_node = ProvenanceNode(
-                    source_retriever=RetrieverType.USER,
-                    python_code=self.toolkit.python_executor.generate_pandas_read_code(
-                        doc
-                    ),
-                )
-                self.prov_graph.add_node(new_node, True)
-                doc.last_node_id = new_node.id
-
-    def __unpack_external_data(
-        self, external_data_paths: list[str]
-    ) -> list[AbstractDocument]:
-        """Unpacks external data files (CSV or Excel) and returns a list of Table documents."""
-        external_docs: list[AbstractDocument] = []
-        os.makedirs("temp", exist_ok=True)
-        for data_path in external_data_paths:
-            try:
-                if data_path.startswith("/api") or data_path.startswith("api"):
-                    if self.config.OPENWEBUI_BASE_URL.endswith(
-                        "/"
-                    ) and data_path.startswith("/"):
-                        data_path = data_path[1:]
-                    if data_path.endswith("/content"):
-                        data_path = data_path[: -len("/content")]
-                    data_url = self.config.OPENWEBUI_BASE_URL + data_path
-
-                    resp = requests.get(
-                        data_url,
-                        headers={
-                            "Authorization": f"Bearer {self.config.OPENWEBUI_API_KEY}"
-                        },
-                        timeout=(10, 40),
-                    )
-                    resp.raise_for_status()
-
-                    content_type = resp.headers.get("Content-Type", "").lower()
-
-                    if "csv" in content_type or "excel" in content_type:
-                        # direct file (csv/xlsx)
-                        ext = ".csv" if "csv" in content_type else ".xlsx"
-                        local_path = os.path.join("temp", f"downloaded{ext}")
-                        with open(local_path, "wb") as f:
-                            f.write(resp.content)
-                    elif "json" in content_type:
-                        # metadata wrapper
-                        meta = resp.json()
-                        file_path = meta.get("path")
-                        if not file_path or not os.path.exists(file_path):
-                            raise ValueError(
-                                f"Invalid API response, no usable file path: {meta}"
-                            )
-                        local_path = file_path
-                    else:
-                        raise ValueError(f"Unsupported content type: {content_type}")
-
-                    try:
-                        external_docs.extend(
-                            self.__read_external_data_content(local_path)
-                        )
-                    finally:
-                        if local_path.startswith("temp") and os.path.exists(local_path):
-                            try:
-                                os.remove(local_path)
-                            except OSError:
-                                pass
-                else:
-                    external_docs.extend(self.__read_external_data_content(data_path))
-            except Exception:
-                continue
-        return external_docs
-
-    def __read_external_data_content(self, path: str) -> list[AbstractDocument]:
-        """
-        Reads external data (CSV or Excel) and returns a list of Table documents.
-
-        Args:
-            path (str): Path to the input file.
-
-        Returns:
-            list[AbstractDocument]: A list of Table documents.
-        """
-        retriever_type = RetrieverType.USER
-        external_data_content: list[AbstractDocument] = []
-
-        def extract_file_stem(filepath: str) -> str:
-            """Extracts the filename without extension."""
-            return os.path.splitext(filepath)[0].split("/")[-1]
-
-        if path.endswith((".xls", ".xlsx")):
-            excel_name = extract_file_stem(path)
-
-            sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
-            for original_name, df in sheets.items():
-                standardized_name = f"{clean_column_table_name(excel_name)}_{clean_column_table_name(original_name)}"
-                standardized_df = df.rename(columns=clean_column_table_name)
-
-                external_data_content.append(
-                    Table(
-                        doc_id=standardized_name,
-                        retriever_type=retriever_type,
-                        content=standardized_df,
-                        metadata={"sheet_name": original_name},
-                        path=path,
-                    )
-                )
-        elif path.endswith(".csv"):
-            file_stem = extract_file_stem(path)
-            df = pd.read_csv(path).rename(columns=clean_column_table_name)
-
-            external_data_content.append(
-                Table(
-                    doc_id=clean_column_table_name(file_stem),
-                    retriever_type=retriever_type,
-                    content=df,
-                    metadata={},
-                    path=path,
-                )
-            )
-        else:
-            raise ValueError(f"Unsupported file format: {path}")
-
-        return external_data_content
-
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
     ) -> str:
         """Executes a specified tool with given arguments."""
-        if tool == "ir_system":
-            self.__log(f"IR System request with params: {args}")
+        if tool == "pneuma_retriever":
+            self.__log(f"Pneuma-Retriever request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "=> `args` must be an object with a `prompt` property"
@@ -336,12 +225,32 @@ class Conductor:
                 self.__log(f"=> {error_message}")
                 return error_message
 
-            self.current_retrieval_results = (
-                self.toolkit.retrieve_multi_retriever_documents(args["prompt"])
+            self.retrieved_tables = self.toolkit.retrieve_documents(
+                args["prompt"], RetrieverType.PNEUMA_RETRIEVER
             )
-            return "Successfully retrieved documents from the IR system. Notice that the `RETRIEVED DATA` has been updated."
+            return "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
+        if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:
+            self.__log(f"Web Search request with params: {args}")
+            if not isinstance(args, dict):
+                error_message = "=> `args` must be an object with a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+            if "prompt" not in args:
+                error_message = "=> `args` must have a `prompt` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+
+            retrieved_docs = self.toolkit.retrieve_documents(
+                args["prompt"], RetrieverType.WEB_SEARCH
+            )
+            self.web_search_result = (
+                retrieved_docs[0] if len(retrieved_docs) > 0 else None
+            )
+            if self.web_search_result is None:
+                return "No relevant information was found from Web Search."
+            return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
         if tool == "table_enumerator":
-            self.__log(f"Table Enumerater request with params: {args}")
+            self.__log(f"Table Enumerator request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "`args` must be an object with a `pattern` property"
@@ -434,8 +343,7 @@ class Conductor:
                 self.info_need_state.column_descriptions,
                 self.info_need_state.S,
                 note,
-                self.external_documents,
-                self.current_retrieval_results,
+                self.external_tables,
             )
             self.info_need_state.is_T_materialized = True
 
@@ -485,7 +393,7 @@ class Conductor:
                     self.__log(f"=> {error_message}")
                     return error_message
 
-                for document in self.current_retrieval_results[RetrieverType.PNEUMA]:
+                for document in self.retrieved_tables:
                     if document.doc_id == table_id:
                         cat_col_info = ""
                         table: pd.DataFrame = document.content
@@ -521,8 +429,7 @@ class Conductor:
         col_descriptions: dict[str, dict[str, str]],
         S: str,
         user_side_note: str,
-        external_data: list[AbstractDocument],
-        prefetched_ir_docs: dict[RetrieverType, list[AbstractDocument]],
+        external_tables: list[AbstractDocument],
     ):
         T_dfs: dict[str, pd.DataFrame] = {}
         for T_id, T_doc in T.items():
@@ -533,8 +440,8 @@ class Conductor:
             col_descriptions,
             S,
             user_side_note,
-            external_data,
-            prefetched_ir_docs,
+            external_tables,
+            self.retrieved_tables,
         )
 
         materialized_T: dict[str, AbstractDocument] = {}

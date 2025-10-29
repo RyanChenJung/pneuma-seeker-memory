@@ -13,6 +13,7 @@ from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import (
 from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
+from pneuma_seeker.utils.config import Config
 from pneuma_seeker.utils.logger import formatted_log
 
 
@@ -24,27 +25,19 @@ class Toolkit:
         logger: Logger,
         data_sources: list[str],
         prov_graph: ProvenanceGraph,
+        config: Config,
     ) -> None:
         self.llm = llm
         self.embed_model = embed_model
         self.logger = logger
         self.data_sources = data_sources
         self.prov_graph = prov_graph
+        self.config = config
 
-        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger)
+        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger, self.config)
         self.python_executor = PythonExecutor(self.logger, self.prov_graph)
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
-
-    def retrieve_multi_retriever_documents(
-        self, prompt: str, k=10, retriever_types: list[RetrieverType] | None = None
-    ):
-        return self.ir_system.retrieve_multisource_documents(
-            prompt,
-            self.data_sources,
-            k,
-            retriever_types,
-        )
 
     def retrieve_documents(self, prompt: str, retriever_type: RetrieverType, k=10):
         return self.ir_system.retrieve_documents(
