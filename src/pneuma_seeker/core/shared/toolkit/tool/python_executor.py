@@ -7,7 +7,6 @@ from logging import Logger
 
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.shared.toolkit.data_model import ExecutorOutput
-from pneuma_seeker.provenance.graph import ProvenanceGraph
 
 
 class PythonExecutor:
