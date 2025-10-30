@@ -15,7 +15,6 @@ from fastapi.templating import Jinja2Templates
 from torch.backends import cudnn
 
 from pneuma_seeker.core.chat_interface import ChatInterface
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.persistence import get_unique_user_chat_ids
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
