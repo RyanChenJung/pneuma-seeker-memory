@@ -143,7 +143,7 @@ async def chat_endpoint(request: Request):
         await asyncio.sleep(0.1)
 
         # Stream data from ChatInterface
-        for msg in chat_interface.process_user_input(messages, files):
+        for msg in chat_interface.process_user_input(messages, files): # type: ignore
             if msg.startswith("LOG"):
                 yield json.dumps(
                     {
@@ -173,25 +173,6 @@ async def chat_endpoint(request: Request):
             await asyncio.sleep(0)  # yield control back to loop
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
-
-
-@app.get("/state/{user_id}/{chat_id}")
-def get_state(user_id: str, chat_id: str):
-    """
-    Returns the current (T,Q) pairs, along with the current retrieval results.
-    """
-    conductor = manager.get_chat_interface(user_id, chat_id).conductor
-
-    state = conductor.info_need_state.get_current_state_instance()
-    curr_retrieval_results = conductor.current_retrieval_results
-    transformed_retrieval_results: dict[str, list[AbstractDocument]] = {}
-    for retriever_type in curr_retrieval_results.keys():
-        transformed_retrieval_results[retriever_type.value] = curr_retrieval_results[
-            retriever_type
-        ]
-
-    state["curr_retrieval_results"] = transformed_retrieval_results
-    return state
 
 
 @app.get("/all_tables/{user_id}/{chat_id}")
