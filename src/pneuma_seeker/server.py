@@ -43,7 +43,7 @@ class Manager:
         self.llm_path = llm_path
         self.embed_model_path = embed_model_path
         self.data_sources = data_sources
-        self.chat_interfaces = {}
+        self.chat_interfaces: dict[tuple[str, str], ChatInterface] = {}
 
     def get_chat_interface(self, user_id: str, chat_id: str):
         key = (user_id, chat_id)
@@ -95,13 +95,13 @@ async def read_graph_html(request: Request, user_id: str, chat_id: str):
 async def read_combined_html(request: Request, user_id: str, chat_id: str):
     conductor = manager.get_chat_interface(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
-    prov_graph_html = conductor.prov_graph.get_graph_visualization()
+    prov_code = conductor.prov_graph.get_graph_code_concatenation()
     return templates.TemplateResponse(
-        "index2.html",
+        "index3.html",
         {
             "request": request,
             "state": state,
-            "prov_graph_html": prov_graph_html,
+            "prov_code": prov_code,
             "user_id": user_id,
             "chat_id": chat_id,
         },

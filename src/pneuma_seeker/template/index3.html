@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Pneuma-Seeker's Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+  <style>
+    body {
+      background-color: #f6f6f6;
+      font-family: system-ui, sans-serif;
+    }
+
+    .card-header {
+      font-weight: 600;
+      background-color: #f8f9fa;
+      color: #1d1d1d;
+      cursor: pointer;
+    }
+
+    .badge-materialized {
+      background-color: #FFD580;
+      color: #1d1d1d;
+    }
+
+    .badge-executed {
+      background-color: #A9C1FF;
+      color: #1d1d1d;
+    }
+
+    table {
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .table-container {
+      flex: 0 0 auto;
+      max-width: 400px;
+      min-width: 200px;
+    }
+
+    .tables-flex {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: flex-start;
+    }
+
+    .table-title {
+      font-weight: 500;
+      font-size: 0.9rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .script-wrapper {
+      background: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 0.5rem;
+      max-height: 360px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+      font-size: 0.9rem;
+      white-space: pre;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .download-btn i {
+      font-size: 1rem;
+    }
+
+    .download-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background-color: #f1f3f5 !important;
+      border-color: #dee2e6 !important;
+      color: #6c757d !important;
+    }
+  </style>
+</head>
+
+<body class="p-4">
+  <div class="container">
+
+    <!-- Collapsible Pneuma's State Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#pneumaCardBody" aria-expanded="true" aria-controls="pneumaCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-database-fill me-2"></i>
+          Pneuma's State
+        </div>
+        <i class="bi bi-chevron-down small"></i>
+      </div>
+
+      <div id="pneumaCardBody" class="collapse show">
+        <div class="card-body">
+          <!-- Target Tables Section -->
+          <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center">
+              <h5 class="mb-0 d-flex align-items-center">
+                <i class="bi bi-table"></i>
+                <span class="ms-2">T (Target Tables)
+                  <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
+                </span>
+                <span class="badge ms-2 badge-materialized">Materialized: <span
+                    id="materialized-status">No</span></span>
+              </h5>
+            </div>
+
+            <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
+              <i class="bi bi-download"></i>
+            </button>
+          </div>
+
+          <div id="T" class="tables-flex mb-4"></div>
+
+          <!-- Python Script Section -->
+          <h5 class="mb-3 d-flex align-items-center">
+            <i class="bi bi-file-earmark-code-fill"></i>
+            <span class="ms-2">S (Python Script)</span>
+            <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
+          </h5>
+
+          <div id="script-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
+            <pre id="script-pre" class="mb-0"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Provenance Code Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#provCardBody" aria-expanded="true" aria-controls="provCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-code-slash me-2"></i>
+          Provenance Code
+        </div>
+        <i class="bi bi-chevron-down small"></i>
+      </div>
+
+      <div id="provCardBody" class="collapse show">
+        <div class="card-body">
+          <div id="prov-code-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
+            <pre id="prov-code-pre" class="mb-0"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const state = {{ state | tojson | safe }};
+    const userId = "{{ user_id }}";
+    const chatId = "{{ chat_id }}";
+
+    // Update statuses
+    document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
+    document.getElementById("script-status").textContent = state.is_S_executed ? "Yes" : "No";
+
+    // Download button logic
+    const downloadBtn = document.getElementById("download-tables-btn");
+    downloadBtn.addEventListener("click", async () => {
+      const baseUrl =
+        window.location.hostname === "localhost" && window.location.port === "8080"
+          ? "http://localhost:8000"
+          : "";
+
+      const url = `${baseUrl}/all_tables/${userId}/${chatId}`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `${userId}_${chatId}_tables.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error("Download error:", err);
+        alert("Failed to download tables. Check console for details.");
+      }
+    });
+
+    if (!state.is_T_materialized || !state.T || Object.keys(state.T).length === 0) {
+      downloadBtn.disabled = true;
+      downloadBtn.title = "No tables available to download yet";
+    }
+
+    // Render Target Tables
+    const targetSchemasDiv = document.getElementById("T");
+    for (const [tableName, rows] of Object.entries(state.T || {})) {
+      const tableContainer = document.createElement("div");
+      tableContainer.className = "table-container";
+
+      const tableTitle = document.createElement("div");
+      tableTitle.className = "table-title";
+      tableTitle.textContent = tableName;
+      tableContainer.appendChild(tableTitle);
+
+      const tableEl = document.createElement("table");
+      tableEl.className = "table table-striped table-hover table-bordered align-middle table-sm";
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      Object.keys(rows[0] || {}).forEach(col => {
+        const th = document.createElement("th");
+        th.textContent = col;
+        th.setAttribute("data-bs-toggle", "tooltip");
+        th.setAttribute("title", state.column_descriptions?.[tableName]?.[col] || "");
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      tableEl.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      (rows || []).forEach(row => {
+        const tr = document.createElement("tr");
+        Object.values(row).forEach(val => {
+          const td = document.createElement("td");
+          td.textContent = val;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tableEl.appendChild(tbody);
+
+      const scrollWrapper = document.createElement("div");
+      scrollWrapper.style.overflowX = "auto";
+      scrollWrapper.style.maxWidth = "100%";
+      scrollWrapper.appendChild(tableEl);
+
+      tableContainer.appendChild(scrollWrapper);
+      targetSchemasDiv.appendChild(tableContainer);
+    }
+
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
+
+    // Render Python Script
+    const scriptPre = document.getElementById("script-pre");
+    scriptPre.textContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
+
+    // Render Provenance Code
+    const provCodePre = document.getElementById("prov-code-pre");
+    const provCode = {{ prov_code | tojson | safe }};
+    provCodePre.textContent = (typeof provCode === "string") ? provCode : (provCode ? String(provCode) : "");
+  </script>
+</body>
+
+</html>
