@@ -22,8 +22,11 @@ DB_PATH = os.path.join(
 )
 
 
-def init_db():
-    con = duckdb.connect(DB_PATH)
+def init_db(db_path: str | None = None):
+    if db_path is not None:
+        con = duckdb.connect(db_path)
+    else:
+        con = duckdb.connect(DB_PATH)
     con.execute(
         """
     CREATE TABLE IF NOT EXISTS chat_state (
