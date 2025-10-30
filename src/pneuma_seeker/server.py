@@ -86,7 +86,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
     state = conductor.info_need_state.get_current_state_instance()
     prov_code = conductor.prov_graph.get_graph_code_concatenation()
     return templates.TemplateResponse(
-        "index3.html",
+        "state_view_prov_code.html",
         {
             "request": request,
             "state": state,
