@@ -40,7 +40,7 @@ Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
             # Convert DataFrame to a JSON-safe list of dicts
             return (
                 df.head(MAX_ROWS)
-                .applymap(lambda x: x.isoformat() if hasattr(x, "isoformat") else x)
+                .map(lambda x: x.isoformat() if hasattr(x, "isoformat") else x)
                 .to_dict(orient="records")
             )
 
