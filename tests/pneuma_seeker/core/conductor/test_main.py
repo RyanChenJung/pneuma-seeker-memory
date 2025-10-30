@@ -70,6 +70,9 @@ class ConductorTests(unittest.TestCase):
 
         from pneuma_seeker.core.conductor.main import Conductor
 
+        config = Config(".env.test")
+        config.ENABLE_WEB_SEARCH = True
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.logger = logging.getLogger("test_conductor")
         self.logger.setLevel(logging.ERROR)
@@ -78,7 +81,7 @@ class ConductorTests(unittest.TestCase):
             embed_model_path="unused",
             logger=self.logger,
             data_sources=[],
-            config=Config(".env.test"),
+            config=config,
         )
 
     def tearDown(self):
@@ -283,8 +286,12 @@ class ConductorTests(unittest.TestCase):
             "S should be marked as executed",
         )
         self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
-        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2])
-        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4])
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2]
+        )
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
+        )
 
     def test_categorical_column_info_produces_expected_string(self):
         df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "x", "y"]})
@@ -310,6 +317,7 @@ class ConductorTests(unittest.TestCase):
         )
         responses = list(gen)
         self.assertIn("info provided", responses[-1])  # Expected info: "B: x, y\n"
+
 
 if __name__ == "__main__":
     unittest.main()
