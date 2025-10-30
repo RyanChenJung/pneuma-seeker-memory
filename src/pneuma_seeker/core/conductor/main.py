@@ -98,12 +98,22 @@ class Conductor:
             self.__log("Utilizing external table data...")
             for index, doc in enumerate(self.external_tables):
                 last_id = getattr(doc, "last_node_id", None)
-                if last_id is not None and self.prov_graph.get_node_by_id(last_id) is not None:
+                if (
+                    last_id is not None
+                    and self.prov_graph.get_node_by_id(last_id) is not None
+                ):
                     continue
+
+                if doc.path is None:
+                    continue
+
+                read_document_code = pd.read_csv(r"{doc.path}")
+                if doc.path.endswith(".xlsx") or doc.path.endswith(".xls"):
+                    read_document_code = pd.read_excel(r"{doc.path}")
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
-                    python_code=f"""# User-uploaded table #{index + 1}\ntables["{doc.doc_id}"] = pd.read_csv(r'{doc.path}')""",
+                    python_code=f"""# User-uploaded table #{index + 1}\ntables["{doc.doc_id}"] = {read_document_code}""",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
