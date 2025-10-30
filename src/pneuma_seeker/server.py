@@ -3,10 +3,11 @@ import asyncio
 import io
 import json
 import os
+import zipfile
+
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-import zipfile
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
