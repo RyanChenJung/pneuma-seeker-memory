@@ -204,7 +204,10 @@ class Materializer:
     ):
         all_tables = self.__gather_all_tables(external_data)
         self.__log(f"Executing {op_name}...")
-        def _create_or_get_read_node(doc: AbstractDocument, source: RetrieverType, python_code: str) -> str | None:
+
+        def _create_or_get_read_node(
+            doc: AbstractDocument, source: RetrieverType, python_code: str
+        ) -> str | None:
             try:
                 last_id = getattr(doc, "last_node_id", None)
                 if last_id is not None:
@@ -212,12 +215,15 @@ class Materializer:
                     if existing is not None:
                         return last_id
 
-                read_node = ProvenanceNode(source_retriever=source, python_code=python_code)
+                read_node = ProvenanceNode(
+                    source_retriever=source, python_code=python_code
+                )
                 self.prov_graph.add_node(read_node, True)
                 return read_node.id
             except Exception:
                 # On any error, do not crash materializer; return None so caller can handle
                 return None
+
         match op_name:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
@@ -230,9 +236,10 @@ class Materializer:
 
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
-                        read_code = self.toolkit.generate_pandas_read_code(doc)
                         node_id = _create_or_get_read_node(
-                            doc, RetrieverType.PNEUMA_RETRIEVER, read_code
+                            doc,
+                            RetrieverType.PNEUMA_RETRIEVER,
+                            self.toolkit.generate_pandas_read_csv_code(doc),
                         )
                         if node_id is not None:
                             doc.last_node_id = node_id
@@ -367,7 +374,7 @@ class Materializer:
                         parent_node_id = _create_or_get_read_node(
                             table_to_select_doc,
                             table_to_select_doc.retriever_type,
-                            self.toolkit.generate_pandas_read_code(table_to_select_doc),
+                            self.toolkit.generate_pandas_read_csv_code(table_to_select_doc),
                         )
 
                         child_node = ProvenanceNode(
@@ -448,6 +455,7 @@ class Materializer:
                     table_relevant_columns,
                     conditioned_table_doc,
                     new_column_name,
+                    new_column_values,
                     os.path.join(
                         self.__get_intermediate_table_dir_path(),
                         f"{conditioned_table_doc.doc_id}.csv",
@@ -455,7 +463,9 @@ class Materializer:
                 )
                 # Ensure we have a parent node for the conditioned table (read node)
                 parent_node_id = _create_or_get_read_node(
-                    conditioned_table_doc, conditioned_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(conditioned_table_doc)
+                    conditioned_table_doc,
+                    conditioned_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(conditioned_table_doc),
                 )
 
                 new_node = ProvenanceNode(
@@ -569,10 +579,14 @@ class Materializer:
                     ),
                 )
                 parent_node_1_id = _create_or_get_read_node(
-                    left_table_doc, left_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(left_table_doc)
+                    left_table_doc,
+                    left_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(left_table_doc),
                 )
                 parent_node_2_id = _create_or_get_read_node(
-                    right_table_doc, right_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(right_table_doc)
+                    right_table_doc,
+                    right_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(right_table_doc),
                 )
 
                 new_node = ProvenanceNode(

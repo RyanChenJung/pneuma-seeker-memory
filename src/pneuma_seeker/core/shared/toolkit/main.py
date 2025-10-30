@@ -128,8 +128,8 @@ class Toolkit:
             source_table, new_column_name, instruction
         )
 
-    def generate_pandas_read_code(self, doc: AbstractDocument):
-        return self.python_executor.generate_pandas_read_code(doc)
+    def generate_pandas_read_csv_code(self, doc: AbstractDocument):
+        return self.python_executor.generate_pandas_read_csv_code(doc)
 
     def generate_view_textual_document_code(self, doc: AbstractDocument):
         return self.python_executor.generate_view_textual_document_code(doc)
@@ -149,10 +149,11 @@ class Toolkit:
         conditioned_cols: list[str],
         doc: AbstractDocument,
         new_col_name: str,
+        new_col_values: list[str],
         path: str,
     ):
         return self.python_executor.generate_semantic_col_generator_code(
-            conditioned_cols, doc, new_col_name, path
+            conditioned_cols, doc, new_col_name, new_col_values, path
         )
 
     def generate_semantic_join_generator_code(
