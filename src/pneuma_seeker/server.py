@@ -74,16 +74,6 @@ def root():
     return {"status": "ok"}
 
 
-@app.get("/state/html/{user_id}/{chat_id}", response_class=HTMLResponse)
-async def read_state_html(request: Request, user_id: str, chat_id: str):
-    conductor = manager.get_chat_interface(user_id, chat_id).conductor
-    state = conductor.info_need_state.get_current_state_instance()
-
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "state": state}
-    )
-
-
 @app.get("/graph/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_graph_html(request: Request, user_id: str, chat_id: str):
     conductor = manager.get_chat_interface(user_id, chat_id).conductor
