@@ -107,9 +107,9 @@ class Conductor:
                 if doc.path is None:
                     continue
 
-                read_document_code = pd.read_csv(r"{doc.path}")
+                read_document_code = f"""pd.read_csv(r"{doc.path}")"""
                 if doc.path.endswith(".xlsx") or doc.path.endswith(".xls"):
-                    read_document_code = pd.read_excel(r"{doc.path}")
+                    read_document_code = f"""pd.read_excel(r"{doc.path}")"""
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
