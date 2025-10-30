@@ -45,6 +45,7 @@ class ProvenanceGraph:
         """
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
+        self.ROOT_NODE_CODE = "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}"
 
         if create_default_root:
             # Initialize a default root node so the graph always starts with a
@@ -52,7 +53,7 @@ class ProvenanceGraph:
             # downstream steps.
             root_node = ProvenanceNode(
                 RetrieverType.USER,
-                "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}",
+                self.ROOT_NODE_CODE,
             )
             self.nodes[root_node.id] = root_node
             self.logger.info(f"[PROV GRAPH] Root node {root_node.id} initialized.")
