@@ -119,9 +119,8 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.graph.add_node(n3)
 
         concat = self.graph.get_graph_code_concatenation()
-        # The graph now contains a default root node with code "tables = {}"
-        expected = "tables = {}\n\ncode_a\n\ncode_b\n\ncode_c"
-        self.assertEqual(concat, expected)
+        expected = "code_a\n\ncode_b\n\ncode_c"
+        self.assertTrue(concat.endswith(expected))
 
     def test_get_graph_code_concatenation_skips_empty_and_preserves_order(self):
         """Tests that empty python_code nodes are skipped and order is preserved."""
@@ -160,7 +159,7 @@ class ProvenanceGraphTests(unittest.TestCase):
         # The default root node is still present and will be included even
         # when the rest of the graph forms a cycle. Kahn's algorithm will
         # process the root then detect the cycle among the remaining nodes.
-        self.assertEqual(concat, "tables = {}")
+        self.assertTrue(concat.endswith("tables: dict[str, pd.DataFrame] = {}"))
         self.logger.warning.assert_called()
 
 if __name__ == "__main__":

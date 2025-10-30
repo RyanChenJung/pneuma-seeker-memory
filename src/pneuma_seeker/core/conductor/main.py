@@ -96,14 +96,14 @@ class Conductor:
         )
         if len(self.external_tables) > 0:
             self.__log("Utilizing external table data...")
-            for doc in self.external_tables:
+            for index, doc in enumerate(self.external_tables):
                 last_id = getattr(doc, "last_node_id", None)
                 if last_id is not None and self.prov_graph.get_node_by_id(last_id) is not None:
                     continue
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
-                    python_code=f"# User-uploaded table: {doc.doc_id}",
+                    python_code=f"""# User-uploaded table #{index + 1}\ntables["{doc.doc_id}"] = pd.read_csv(r'{doc.path}')""",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

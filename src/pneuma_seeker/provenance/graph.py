@@ -47,11 +47,13 @@ class ProvenanceGraph:
         self.logger = logger
 
         if create_default_root:
-            
             # Initialize a default root node so the graph always starts with a
             # base context. This root holds the initial tables mapping used by
             # downstream steps.
-            root_node = ProvenanceNode(RetrieverType.USER, "tables = {}")
+            root_node = ProvenanceNode(
+                RetrieverType.USER,
+                "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}",
+            )
             self.nodes[root_node.id] = root_node
             self.logger.info(f"[PROV GRAPH] Root node {root_node.id} initialized.")
 
