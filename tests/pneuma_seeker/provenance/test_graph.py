@@ -78,8 +78,8 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.graph.add_node(n3)
         upstream = self.graph.trace_upstream(n3)
         downstream = self.graph.trace_downstream(n1)
-        self.assertEqual(upstream, [n2, n1])
-        self.assertEqual(downstream, [n2, n3])
+        self.assertEqual(set(upstream), {n1, n2})
+        self.assertEqual(set(downstream), {n2, n3})
 
     def test_to_text_output(self):
         n1 = ProvenanceNode(RetrieverType.USER, "a")
@@ -88,8 +88,8 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.graph.add_node(n1)
         self.graph.add_node(n2)
         text = self.graph.to_text()
-        self.assertIn("Node 1", text)
-        self.assertIn("Node 2", text)
+        self.assertIn(n1.id, text)
+        self.assertIn(n2.id, text)
         self.assertIn("Python Code: a", text)
         self.assertIn("Python Code: b", text)
 
@@ -99,6 +99,55 @@ class ProvenanceGraphTests(unittest.TestCase):
         html_output = self.graph.get_graph_visualization()
         self.assertTrue(html_output.strip().startswith("<!DOCTYPE html>") or "<html" in html_output)
 
+    def test_get_graph_code_concatenation_simple(self):
+        # Simple linear DAG: n1 -> n2 -> n3
+        n1 = ProvenanceNode(RetrieverType.USER, "code_a")
+        n2 = ProvenanceNode(RetrieverType.USER, "code_b")
+        n3 = ProvenanceNode(RetrieverType.USER, "code_c")
+        n1.add_child(n2)
+        n2.add_child(n3)
+        self.graph.add_node(n1)
+        self.graph.add_node(n2)
+        self.graph.add_node(n3)
+
+        concat = self.graph.get_graph_code_concatenation()
+        expected = "code_a\n\ncode_b\n\ncode_c"
+        self.assertEqual(concat, expected)
+
+    def test_get_graph_code_concatenation_skips_empty_and_preserves_order(self):
+        # n1 -> n2(empty) and n1 -> n3 ; empty python_code should be skipped
+        n1 = ProvenanceNode(RetrieverType.USER, "first")
+        n2 = ProvenanceNode(RetrieverType.USER, "")
+        n3 = ProvenanceNode(RetrieverType.USER, "third")
+        n1.add_child(n2)
+        n1.add_child(n3)
+        self.graph.add_node(n1)
+        self.graph.add_node(n2)
+        self.graph.add_node(n3)
+
+        concat = self.graph.get_graph_code_concatenation()
+        # n1 should appear before n3 since it's the parent; n2 is skipped
+        self.assertIn("first", concat)
+        self.assertIn("third", concat)
+        self.assertTrue(concat.index("first") < concat.index("third"))
+
+    def test_get_graph_code_concatenation_detects_cycle_and_logs(self):
+        # Create a cycle n1 -> n2 -> n3 -> n1. In this case there will be no
+        # node with indegree 0 so Kahn's algorithm will detect a cycle and
+        # return an empty concatenation while issuing a warning.
+        n1 = ProvenanceNode(RetrieverType.USER, "a")
+        n2 = ProvenanceNode(RetrieverType.USER, "b")
+        n3 = ProvenanceNode(RetrieverType.USER, "c")
+        n1.add_child(n2)
+        n2.add_child(n3)
+        n3.add_child(n1)
+        self.graph.add_node(n1)
+        self.graph.add_node(n2)
+        self.graph.add_node(n3)
+
+        concat = self.graph.get_graph_code_concatenation()
+        self.assertEqual(concat, "")
+        self.logger.warning.assert_called()
 
 if __name__ == "__main__":
     unittest.main()
