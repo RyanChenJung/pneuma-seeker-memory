@@ -1,8 +1,7 @@
 import os
-import shutil
 import sys
 import unittest
-
+from unittest.mock import MagicMock
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
@@ -23,23 +22,22 @@ from pneuma_seeker.core.persistence import (
     save_state,
 )
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.utils.logger import setup_logger
 
 
 class PersistenceTests(unittest.TestCase):
+    """Tests for persistence of info need state, retrieval results, and provenance graph."""
+
     def setUp(self):
-        # Initialize the database
         self.db_path = "pneuma_seeker_test.duckdb"
-        self.logger_path = "persistence_test.log"
-        self.logger = setup_logger("persistence_test_logger", log_path=self.logger_path)
+        self.logger = MagicMock()
 
     def tearDown(self):
-        if os.path.exists(self.logger_path):
-            shutil.rmtree(self.logger_path, ignore_errors=True)
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
 
     def test_init_db_creates_table(self):
+        """Tests that init_db creates the chat_state table."""
+
         # Should not raise and the table should exist (querying it should work)
         init_db(self.db_path)
         con = duckdb.connect(self.db_path)
@@ -49,6 +47,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertIsNotNone(rows)
 
     def test_save_and_load_provenance_graph_roundtrip(self):
+        """Tests saving and loading a provenance graph."""
         init_db(self.db_path)
 
         info_state = InformationNeedState()
@@ -88,6 +87,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertIn(c.id, [ch.id for ch in loaded_p.children])
 
     def test_save_and_load_retrieval_results_roundtrip(self):
+        """Tests saving and loading retrieval results with AbstractDocuments."""
         init_db(self.db_path)
 
         info_state = InformationNeedState()
@@ -124,6 +124,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(loaded_docs[0].metadata, {"k": "v"})
 
     def test_serialize_deserialize_provenance_graph_helpers(self):
+        """Tests the provenance graph serialization and deserialization helpers."""
         graph = ProvenanceGraph(logger=self.logger)
         n1 = ProvenanceNode(RetrieverType.USER, "x=1")
         n2 = ProvenanceNode(RetrieverType.WEB_SEARCH, "y=2")

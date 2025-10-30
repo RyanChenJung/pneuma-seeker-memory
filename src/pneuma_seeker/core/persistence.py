@@ -246,7 +246,11 @@ def _deserialize_provenance_graph(
     if not obj:
         return ProvenanceGraph(logger)
 
-    graph = ProvenanceGraph(logger)
+    # When deserializing we don't want the ProvenanceGraph constructor to
+    # create its own default root node (that would duplicate the serialized
+    # root). Create the graph without the automatic root and then populate
+    # nodes from the serialized data.
+    graph = ProvenanceGraph(logger, create_default_root=False)
     id_to_node: dict[str, ProvenanceNode] = {}
 
     # 1. create all nodes first
