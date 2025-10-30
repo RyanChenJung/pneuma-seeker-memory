@@ -33,9 +33,27 @@ class ProvenanceNode:
 class ProvenanceGraph:
     """Manages a graph of ProvenanceNodes representing data provenance."""
 
-    def __init__(self, logger: Logger):
+    def __init__(self, logger: Logger, create_default_root: bool = True):
+        """Create a provenance graph.
+
+        Args:
+            logger: Logger instance for messages.
+            create_default_root: When True (default) create a default root node
+                with python_code "tables = {}". When False, no default root is
+                created. This is useful for deserialization where the serialized
+                graph will supply its own nodes.
+        """
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
+
+        if create_default_root:
+            
+            # Initialize a default root node so the graph always starts with a
+            # base context. This root holds the initial tables mapping used by
+            # downstream steps.
+            root_node = ProvenanceNode(RetrieverType.USER, "tables = {}")
+            self.nodes[root_node.id] = root_node
+            self.logger.info(f"[PROV GRAPH] Root node {root_node.id} initialized.")
 
     def add_node(self, node: ProvenanceNode, overwrite: bool = False):
         """Adds a node to the graph."""
