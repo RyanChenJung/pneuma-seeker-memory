@@ -35,7 +35,7 @@ class Toolkit:
         self.config = config
 
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger, self.config)
-        self.python_executor = PythonExecutor(self.logger, self.prov_graph)
+        self.python_executor = PythonExecutor(self.logger)
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 

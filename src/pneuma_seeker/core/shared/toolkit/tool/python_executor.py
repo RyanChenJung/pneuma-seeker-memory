@@ -16,9 +16,8 @@ class PythonExecutor:
     tracking used tables and integrating with the provenance graph.
     """
 
-    def __init__(self, logger: Logger, prov_graph: ProvenanceGraph) -> None:
+    def __init__(self, logger: Logger) -> None:
         self.logger = logger
-        self.prov_graph = prov_graph
 
     def execute_code(
         self,
