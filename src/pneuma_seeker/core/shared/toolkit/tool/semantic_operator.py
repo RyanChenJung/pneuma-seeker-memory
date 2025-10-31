@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ class SemanticOperator:
         source_table: pd.DataFrame,
         new_column_name: str,
         instruction: str,  # Explanation includes the possible values, i.e., the domain
-    ) -> list[str]:
+    ) -> list[Any]:
         """
         Produces a new semantically-induced column using the values from
         `source_table` based on the specified instruction.

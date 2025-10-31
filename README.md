@@ -4,7 +4,7 @@
 
 A system that helps users identify and fulfill their latent information needs.
 
-## Running the system
+## How to Run the System
 
 ```bash
 conda create --name pneuma_seeker python=3.12.9
@@ -13,16 +13,15 @@ cd src/pneuma_seeker
 nohup fastapi dev server.py --host 0.0.0.0 --port 8000 >> server.out &
 ```
 
-## Extra: Run the ([UI](https://github.com/luthfibalaka/pneuma-seeker-ui/tree/stable-0.6.22))
+## Extra: How to Run the ([UI](https://github.com/luthfibalaka/pneuma-seeker-ui/tree/stable-0.6.22))
 
 ```bash
 nohup open-webui serve >> output.out &
 ```
 
-## Testing the system (ongoing)
+## How to Test the System
 
 ```bash
 cd ./tests/pneuma_seeker
-python -m coverage run -m unittest discover
-python -m coverage html
+python -m unittest discover
 ```

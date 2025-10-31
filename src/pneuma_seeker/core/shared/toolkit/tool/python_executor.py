@@ -1,5 +1,6 @@
 import ast
 import re
+from typing import Any
 import numpy as np
 import pandas as pd
 
@@ -7,24 +8,27 @@ from logging import Logger
 
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.shared.toolkit.data_model import ExecutorOutput
-from pneuma_seeker.provenance.graph import ProvenanceGraph
 
 
 class PythonExecutor:
-    def __init__(self, logger: Logger, prov_graph: ProvenanceGraph) -> None:
+    """
+    Executes Python code snippets within a controlled environment,
+    tracking used tables and integrating with the provenance graph.
+    """
+
+    def __init__(self, logger: Logger) -> None:
         self.logger = logger
-        self.prov_graph = prov_graph
 
     def execute_code(
         self,
         tables: dict[str, pd.DataFrame],
         code: str,
     ) -> ExecutorOutput:
+        """Executes the provided Python code in a controlled environment."""
         self.logger.info(f"Executing this Python code: {code}")
         try:
-            env = dict()
-            env["tables"] = tables
-            exec(code, {"pd": pd, "np": np, "re": re}, env)
+            env = {"pd": pd, "np": np, "re": re, "tables": tables}
+            exec(code, env)
         except Exception as e:
             return {"exec_res": e, "used_table_ids": []}
         return {
@@ -33,6 +37,7 @@ class PythonExecutor:
         }
 
     def __extract_table_ids(self, code: str):
+        """Extracts table IDs accessed in the code by parsing 'tables[...]' subscripts."""
         tree = ast.parse(code)
         ids = []
 
@@ -50,37 +55,56 @@ class PythonExecutor:
         TableVisitor().visit(tree)
         return ids
 
-    def generate_pandas_read_code(self, doc: AbstractDocument):
+    def generate_read_external_tables_code(
+        self, table_number: int, doc: AbstractDocument
+    ):
+        doc_path = doc.path or "<no_path_provided>"
+        read_document_code = f"""pd.read_csv(r"{doc_path}")"""
+        if doc_path.endswith(".xlsx") or doc_path.endswith(".xls"):
+            read_document_code = f"""pd.read_excel(r"{doc_path}")"""
+        return f"""# User-uploaded table #{table_number}\ntables["{doc.doc_id}"] = {read_document_code}"""
+
+    def generate_pandas_read_csv_code(self, doc: AbstractDocument):
+        """Generates Python code to read a CSV file into a pandas DataFrame."""
         doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
         doc_path = doc.path or "<no_path_provided>"
-        return f"""import pandas as pd
-{doc_var_name} = pd.read_csv(r"{doc_path}")"""
+        return f"""tables["{doc_var_name}"] = pd.read_csv(r"{doc_path}")"""
 
     def generate_view_textual_document_code(self, doc: AbstractDocument):
+        """Generates Python code to view a textual document."""
         doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
         return f"""{doc_var_name} = "{doc.content}" """.strip()
 
     def generate_pandas_read_multi_doc_code(self, docs: list[AbstractDocument]):
+        """Generates Python code to read multiple CSV files into pandas DataFrames."""
         python_code_lines = ["import pandas as pd"]
         for doc in docs:
             doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
             doc_path = doc.path or "<no_path_provided>"
-            python_code_lines.append(f"""{doc_var_name} = pd.read_csv(r"{doc_path}")""")
+            python_code_lines.append(
+                f"""tables["{doc_var_name}"] = pd.read_csv(r"{doc_path}")"""
+            )
         return "\n".join(python_code_lines)
 
     def generate_table_select_code(
         self, target_var_name: str, source_id: str, relevant_cols: list[str]
     ):
-        # source_var_name represents a DataFrame object
+        """Generates Python code to select specific columns from a table."""
         source_var_name = re.sub(r"\W|^(?=\d)", "_", source_id or "var")
-        return f"""{target_var_name} = {source_var_name}[{repr(relevant_cols)}]"""
+        return f"""{target_var_name} = tables["{source_var_name}"][{repr(relevant_cols)}]"""
 
     def generate_semantic_col_generator_code(
-        self, conditioned_cols: list[str], doc: AbstractDocument, new_col_name: str, path: str
+        self,
+        conditioned_cols: list[str],
+        doc: AbstractDocument,
+        new_col_name: str,
+        new_col_values: list[Any],
+        path: str,
     ):
+        """Generates Python code to semantically generate a new column for a table."""
         doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
         return f"""# Semantically generate new column `{new_col_name}` for the table {doc_var_name}, conditioned on these columns: {conditioned_cols}
-# => Table path: {path}
+tables["{doc_var_name}"]["{new_col_name}"] = {new_col_values}  # Path: {path}
 """
 
     def generate_semantic_join_generator_code(
@@ -92,21 +116,23 @@ class PythonExecutor:
         top_k: int,
         path: str,
     ):
+        """Generates Python code to semantically join two tables."""
         left_doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc_1.doc_id or "var")
         right_doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc_2.doc_id or "var")
 
         return f"""# Semantically join two tables, A ({left_doc_var_name}) and B ({right_doc_var_name}), and keep the top-{top_k} join candidates for each row in the smaller table
 # => Relevant columns in A: {relevant_left_cols}
 # => Relevant columns in B: {relevant_right_cols}
-# => Resulting table path: {path}
+# => Resulting join table path: {path}
 """
-    
+
     def generate_sql_executor_code(
         self,
         sql_query: str,
         id_dfs: dict[str, pd.DataFrame],
         path: str,
     ):
+        """Generates Python code to execute a SQL query using DuckDB."""
         dict_entries = []
         for key in id_dfs:
             dict_entries.append(f'"{key}": {key}')
@@ -222,6 +248,6 @@ sql_executor.execute_sql(
     {sql_query}, {dict_code}
 )  # Path: {path}
 """
-    
+
     def append_comment_to_existing_code(self, code: str, comment: str):
-        return f"{comment}\n{code}"
+        return f"# {comment}\n{code}"

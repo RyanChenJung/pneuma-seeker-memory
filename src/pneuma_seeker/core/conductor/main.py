@@ -31,6 +31,7 @@ class Conductor:
         logger: Logger,
         data_sources: list[str],
         config: Config,
+        prov_graph: ProvenanceGraph,
     ) -> None:
         self.config = config
         self.logger = logger
@@ -41,7 +42,7 @@ class Conductor:
         self.data_sources = data_sources
         self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
 
-        self.prov_graph = ProvenanceGraph(self.logger)
+        self.prov_graph = prov_graph
         self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(
@@ -96,14 +97,20 @@ class Conductor:
         )
         if len(self.external_tables) > 0:
             self.__log("Utilizing external table data...")
-            for doc in self.external_tables:
+            for index, doc in enumerate(self.external_tables):
                 last_id = getattr(doc, "last_node_id", None)
-                if last_id is not None and self.prov_graph.get_node_by_id(last_id) is not None:
+                if (
+                    last_id is not None
+                    and self.prov_graph.get_node_by_id(last_id) is not None
+                ):
                     continue
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
-                    python_code=f"# User-uploaded table: {doc.doc_id}",
+                    python_code=self.toolkit.generate_read_external_tables_code(
+                        index + 1, doc
+                    ),
+                    description="Reads a user-uploaded table.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

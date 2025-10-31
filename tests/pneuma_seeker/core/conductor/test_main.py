@@ -2,16 +2,11 @@
 import logging
 import os
 import sys
-from typing import Optional
-
-from numpy import ndarray
-
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
 
-import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -21,33 +16,12 @@ from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
+    Text,
 )
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Text
-from pneuma_seeker.model.llm_message import LLMMessage
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.model.interface.impl.mock_embed_model import MockEmbedModel
+from pneuma_seeker.model.interface.impl.mock_llm import MockLLM
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.config import Config
-
-
-class MockLLM:
-    """Simple deterministic LLM mock that returns queued JSON strings."""
-
-    def __init__(self, responses=None):
-        self._responses = list(responses or [])
-
-    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None):
-        # return a list (chat API returns iterable); use last queued response or default
-        if not self._responses:
-            yield '{"action":"communicate_with_user","message":"default"}'
-        yield self._responses.pop(0)
-
-
-class MockEmbedModel:
-    def encode(
-        self,
-        texts: str | list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
-    ) -> ndarray:
-        return ndarray([])
 
 
 class ConductorTests(unittest.TestCase):
@@ -70,7 +44,9 @@ class ConductorTests(unittest.TestCase):
 
         from pneuma_seeker.core.conductor.main import Conductor
 
-        self.temp_dir = tempfile.TemporaryDirectory()
+        config = Config(".env.test")
+        config.ENABLE_WEB_SEARCH = True
+
         self.logger = logging.getLogger("test_conductor")
         self.logger.setLevel(logging.ERROR)
         self.conductor = Conductor(
@@ -78,11 +54,11 @@ class ConductorTests(unittest.TestCase):
             embed_model_path="unused",
             logger=self.logger,
             data_sources=[],
-            config=Config(".env.test"),
+            config=config,
+            prov_graph=ProvenanceGraph(self.logger),
         )
 
     def tearDown(self):
-        self.temp_dir.cleanup()
         patch.stopall()
 
     def test_pneuma_retriever_updates_retrieved_tables(self):
@@ -283,8 +259,12 @@ class ConductorTests(unittest.TestCase):
             "S should be marked as executed",
         )
         self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
-        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2])
-        self.assertEqual(list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4])
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2]
+        )
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
+        )
 
     def test_categorical_column_info_produces_expected_string(self):
         df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "x", "y"]})
@@ -310,6 +290,54 @@ class ConductorTests(unittest.TestCase):
         )
         responses = list(gen)
         self.assertIn("info provided", responses[-1])  # Expected info: "B: x, y\n"
+
+    def test_external_table_upload_creates_provenance_node(self):
+        """Tests that uploading an external table results in a new provenance node."""
+        import tempfile
+
+        df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+        tmp_path = tmp.name
+        tmp.close()
+        df.to_csv(tmp_path, index=False)
+
+        uploaded_table = Table(
+            doc_id="uploaded_table_1",
+            retriever_type=RetrieverType.USER,
+            content=pd.DataFrame(),
+            metadata={},
+            path=tmp_path,
+        )
+        self.conductor.table_reader.process_external_tables = MagicMock(
+            return_value=[uploaded_table]
+        )
+
+        self.mock_llm._responses = [
+            '{"action":"communicate_with_user","message":"External data read successfuly."}'
+        ]
+
+        gen = self.conductor.process_input(
+            user_input="upload",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[tmp_path],
+        )
+        list(gen)
+
+        self.assertTrue(len(self.conductor.prov_graph.nodes) == 2)
+        prov_graph_code_lines = [
+            self.conductor.prov_graph.ROOT_NODE_CODE,
+            self.conductor.toolkit.generate_read_external_tables_code(
+                1, uploaded_table
+            ),
+        ]
+        expected_prov_graph_code_concat = "\n\n".join(prov_graph_code_lines)
+        self.assertEqual(
+            expected_prov_graph_code_concat,
+            self.conductor.prov_graph.get_graph_code(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

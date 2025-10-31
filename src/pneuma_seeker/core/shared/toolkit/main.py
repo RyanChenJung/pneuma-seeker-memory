@@ -1,4 +1,5 @@
 from logging import Logger
+from typing import Any
 
 import duckdb
 from pandas import DataFrame
@@ -35,7 +36,7 @@ class Toolkit:
         self.config = config
 
         self.ir_system = IRSystem(self.llm, self.embed_model, self.logger, self.config)
-        self.python_executor = PythonExecutor(self.logger, self.prov_graph)
+        self.python_executor = PythonExecutor(self.logger)
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 
@@ -123,13 +124,20 @@ class Toolkit:
         source_table: DataFrame,
         new_column_name: str,
         instruction: str,  # Explanation includes the possible values, i.e., the domain
-    ) -> list[str]:
+    ) -> list[Any]:
         return self.semantic_operator.generate_semantic_column(
             source_table, new_column_name, instruction
         )
 
-    def generate_pandas_read_code(self, doc: AbstractDocument):
-        return self.python_executor.generate_pandas_read_code(doc)
+    def generate_read_external_tables_code(
+        self, table_number: int, doc: AbstractDocument
+    ):
+        return self.python_executor.generate_read_external_tables_code(
+            table_number, doc
+        )
+
+    def generate_pandas_read_csv_code(self, doc: AbstractDocument):
+        return self.python_executor.generate_pandas_read_csv_code(doc)
 
     def generate_view_textual_document_code(self, doc: AbstractDocument):
         return self.python_executor.generate_view_textual_document_code(doc)
@@ -149,10 +157,11 @@ class Toolkit:
         conditioned_cols: list[str],
         doc: AbstractDocument,
         new_col_name: str,
+        new_col_values: list[Any],
         path: str,
     ):
         return self.python_executor.generate_semantic_col_generator_code(
-            conditioned_cols, doc, new_col_name, path
+            conditioned_cols, doc, new_col_name, new_col_values, path
         )
 
     def generate_semantic_join_generator_code(

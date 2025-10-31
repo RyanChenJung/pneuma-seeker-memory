@@ -204,7 +204,13 @@ class Materializer:
     ):
         all_tables = self.__gather_all_tables(external_data)
         self.__log(f"Executing {op_name}...")
-        def _create_or_get_read_node(doc: AbstractDocument, source: RetrieverType, python_code: str) -> str | None:
+
+        def _create_or_get_read_node(
+            doc: AbstractDocument,
+            source: RetrieverType,
+            python_code: str,
+            description: str,
+        ) -> str | None:
             try:
                 last_id = getattr(doc, "last_node_id", None)
                 if last_id is not None:
@@ -212,12 +218,17 @@ class Materializer:
                     if existing is not None:
                         return last_id
 
-                read_node = ProvenanceNode(source_retriever=source, python_code=python_code)
+                read_node = ProvenanceNode(
+                    source_retriever=source,
+                    python_code=python_code,
+                    description=description,
+                )
                 self.prov_graph.add_node(read_node, True)
                 return read_node.id
             except Exception:
                 # On any error, do not crash materializer; return None so caller can handle
                 return None
+
         match op_name:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
@@ -230,9 +241,11 @@ class Materializer:
 
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
-                        read_code = self.toolkit.generate_pandas_read_code(doc)
                         node_id = _create_or_get_read_node(
-                            doc, RetrieverType.PNEUMA_RETRIEVER, read_code
+                            doc,
+                            RetrieverType.PNEUMA_RETRIEVER,
+                            self.toolkit.generate_pandas_read_csv_code(doc),
+                            "Retrieves an internal table from Pneuma-Retriever.",
                         )
                         if node_id is not None:
                             doc.last_node_id = node_id
@@ -258,7 +271,10 @@ class Materializer:
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_SEARCH,
-                    python_code=f'result = "{self.state.web_search_result.content}"',
+                    python_code=self.toolkit.generate_view_textual_document_code(
+                        self.state.web_search_result
+                    ),
+                    description=f"Searches the web using this query: {prompt}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
@@ -276,11 +292,10 @@ class Materializer:
                     read_code = self.toolkit.generate_pandas_read_multi_doc_code(
                         extra_tables
                     )
-                    # Create a single node representing the multi-read. Reuse if any
-                    # of the extra tables already point to a node that contains the same code.
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.ENUMERATOR,
                         python_code=read_code,
+                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern: {pattern}.",
                     )
                     self.prov_graph.add_node(new_node, True)
 
@@ -367,13 +382,24 @@ class Materializer:
                         parent_node_id = _create_or_get_read_node(
                             table_to_select_doc,
                             table_to_select_doc.retriever_type,
-                            self.toolkit.generate_pandas_read_code(table_to_select_doc),
+                            self.toolkit.generate_pandas_read_csv_code(
+                                table_to_select_doc
+                            ),
+                            "",
                         )
+
+                        child_node_desc = f"Directly selects a table (ID: `{table_id_to_select}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
+                        if set(relevant_columns) != set(T[target_table_id].columns):
+                            child_node_desc += " (partially)."
+                        else:
+                            child_node_desc += "."
 
                         child_node = ProvenanceNode(
                             source_retriever=RetrieverType.MATERIALIZER,
                             python_code=select_code,
+                            description=child_node_desc,
                         )
+
                         self.prov_graph.add_node(child_node, True)
                         new_node_id = child_node.id
                         if parent_node_id is not None:
@@ -448,19 +474,24 @@ class Materializer:
                     table_relevant_columns,
                     conditioned_table_doc,
                     new_column_name,
+                    new_column_values,
                     os.path.join(
-                        self.__get_intermediate_table_dir_path(),
+                        self._get_intermediate_table_dir_path(),
                         f"{conditioned_table_doc.doc_id}.csv",
                     ),
                 )
                 # Ensure we have a parent node for the conditioned table (read node)
                 parent_node_id = _create_or_get_read_node(
-                    conditioned_table_doc, conditioned_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(conditioned_table_doc)
+                    conditioned_table_doc,
+                    conditioned_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(conditioned_table_doc),
+                    "",
                 )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=sem_col_code,
+                    description=f"Semantically generates a column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: `{table_relevant_columns}`.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_id is not None:
@@ -564,20 +595,27 @@ class Materializer:
                     relevant_right_cols,
                     self.config.SEMANTIC_JOIN_TOP_K,
                     os.path.join(
-                        self.__get_intermediate_table_dir_path(),
+                        self._get_intermediate_table_dir_path(),
                         f"{joined_table_id}.csv",
                     ),
                 )
                 parent_node_1_id = _create_or_get_read_node(
-                    left_table_doc, left_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(left_table_doc)
+                    left_table_doc,
+                    left_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(left_table_doc),
+                    "",
                 )
                 parent_node_2_id = _create_or_get_read_node(
-                    right_table_doc, right_table_doc.retriever_type, self.toolkit.generate_pandas_read_code(right_table_doc)
+                    right_table_doc,
+                    right_table_doc.retriever_type,
+                    self.toolkit.generate_pandas_read_csv_code(right_table_doc),
+                    "",
                 )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=join_code,
+                    description=f"Semantically joins tables `{left_table_id}` and `{right_table_id}` with `top-k = {self.config.SEMANTIC_JOIN_TOP_K}`.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_1_id is not None:
@@ -634,10 +672,11 @@ class Materializer:
                         python_code=self.toolkit.append_comment_to_existing_code(
                             python_code,
                             f"Result path: {os.path.join(
-                                self.__get_intermediate_table_dir_path(),
+                                self._get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
                             )}",
                         ),
+                        description=f"Executes Python code.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -735,10 +774,11 @@ class Materializer:
                             sql_query,
                             id_dfs,
                             os.path.join(
-                                self.__get_intermediate_table_dir_path(),
+                                self._get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
                             ),
                         ),
+                        description="Executes a SQL query.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -864,7 +904,7 @@ class Materializer:
 
     def __clear_csv_files(self):
         """Delete all .csv files in the module directory."""
-        pattern = os.path.join(self.__get_intermediate_table_dir_path(), "*.csv")
+        pattern = os.path.join(self._get_intermediate_table_dir_path(), "*.csv")
         for csv_file in glob.glob(pattern):
             try:
                 os.remove(csv_file)
@@ -876,7 +916,7 @@ class Materializer:
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):
         """Save a new or updated intermediate table to a CSV file."""
-        intermediate_table_dir_path = self.__get_intermediate_table_dir_path()
+        intermediate_table_dir_path = self._get_intermediate_table_dir_path()
         os.makedirs(intermediate_table_dir_path, exist_ok=True)
         csv_path = os.path.join(intermediate_table_dir_path, f"{table_id}.csv")
         intermediate_table: DataFrame | None = None
@@ -888,6 +928,6 @@ class Materializer:
         if isinstance(intermediate_table, DataFrame):
             intermediate_table.to_csv(csv_path, index=False)
 
-    def __get_intermediate_table_dir_path(self):
+    def _get_intermediate_table_dir_path(self):
         """Get the directory path for storing intermediate table CSV files."""
         return os.path.join(self.module_dir, "intermediate_data")
