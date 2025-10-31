@@ -104,16 +104,11 @@ class Conductor:
                 ):
                     continue
 
-                if doc.path is None:
-                    continue
-
-                read_document_code = f"""pd.read_csv(r"{doc.path}")"""
-                if doc.path.endswith(".xlsx") or doc.path.endswith(".xls"):
-                    read_document_code = f"""pd.read_excel(r"{doc.path}")"""
-
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.USER,
-                    python_code=f"""# User-uploaded table #{index + 1}\ntables["{doc.doc_id}"] = {read_document_code}""",
+                    python_code=self.toolkit.generate_read_external_tables_code(
+                        index + 1, doc
+                    ),
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

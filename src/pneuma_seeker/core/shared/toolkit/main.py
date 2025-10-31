@@ -128,6 +128,13 @@ class Toolkit:
             source_table, new_column_name, instruction
         )
 
+    def generate_read_external_tables_code(
+        self, table_number: int, doc: AbstractDocument
+    ):
+        return self.python_executor.generate_read_external_tables_code(
+            table_number, doc
+        )
+
     def generate_pandas_read_csv_code(self, doc: AbstractDocument):
         return self.python_executor.generate_pandas_read_csv_code(doc)
 

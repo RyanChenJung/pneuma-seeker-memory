@@ -55,6 +55,13 @@ class PythonExecutor:
         TableVisitor().visit(tree)
         return ids
 
+    def generate_read_external_tables_code(self, table_number: int, doc: AbstractDocument):
+        doc_path = doc.path or "<no_path_provided>"
+        read_document_code = f"""pd.read_csv(r"{doc_path}")"""
+        if doc_path.endswith(".xlsx") or doc_path.endswith(".xls"):
+            read_document_code = f"""pd.read_excel(r"{doc_path}")"""
+        return f"""# User-uploaded table #{table_number}\ntables["{doc.doc_id}"] = {read_document_code}"""
+
     def generate_pandas_read_csv_code(self, doc: AbstractDocument):
         """Generates Python code to read a CSV file into a pandas DataFrame."""
         doc_var_name = re.sub(r"\W|^(?=\d)", "_", doc.doc_id or "var")
