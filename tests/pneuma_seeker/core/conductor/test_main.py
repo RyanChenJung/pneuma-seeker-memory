@@ -323,18 +323,18 @@ class ConductorTests(unittest.TestCase):
         )
         list(gen)
 
-        nodes = list(self.conductor.prov_graph.nodes.values())
-        self.assertTrue(
-            len(nodes) == 2,
-            "Expected a provenance node to be added for the uploaded table (in addition to the root node).",
+        self.assertTrue(len(self.conductor.prov_graph.nodes) == 2)
+        prov_graph_code_lines = [
+            self.conductor.prov_graph.ROOT_NODE_CODE,
+            self.conductor.toolkit.generate_read_external_tables_code(
+                1, uploaded_table
+            ),
+        ]
+        expected_prov_graph_code_concat = "\n\n".join(prov_graph_code_lines)
+        self.assertEqual(
+            expected_prov_graph_code_concat,
+            self.conductor.prov_graph.get_graph_code_concatenation(),
         )
-        matched = [n for n in nodes if "uploaded_table_1" in (n.python_code or "")]
-        self.assertTrue(
-            len(matched) == 1,
-            "Expected a provenance node containing the uploaded table id in python_code",
-        )
-        code_representation = self.conductor.prov_graph.get_graph_code_concatenation()
-        self.assertTrue("# User-uploaded table #1" in code_representation)
 
 
 if __name__ == "__main__":
