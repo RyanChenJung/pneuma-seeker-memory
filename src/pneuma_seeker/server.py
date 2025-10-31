@@ -9,10 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+import markdown
 from torch.backends import cudnn
 
 from pneuma_seeker.core.chat_interface import ChatInterface
@@ -77,13 +78,23 @@ def root():
 async def read_combined_html(request: Request, user_id: str, chat_id: str):
     conductor = manager.get_chat_interface(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
-    prov_code = conductor.prov_graph.get_graph_code_concatenation()
+
+    base_url = str(request.base_url).rstrip("/")
+    script_download_link = f"{base_url}/materializer_code/{user_id}/{chat_id}"
+
+    prov_explanation_markdown = conductor.materializer.prov_graph.get_graph_explanation(
+        script_download_link=script_download_link
+    )
+    prov_explanation = markdown.markdown(
+        prov_explanation_markdown, extensions=["fenced_code"]
+    )
+
     return templates.TemplateResponse(
-        "state_view_prov_code.html",
+        "state_view_prov_comprehensive.html",
         {
             "request": request,
             "state": state,
-            "prov_code": prov_code,
+            "prov_explanation": prov_explanation,
             "user_id": user_id,
             "chat_id": chat_id,
         },
@@ -199,4 +210,26 @@ def download_all_tables(user_id: str, chat_id: str):
         zip_buffer,
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={zip_filename}"},
+    )
+
+
+@app.get("/materializer_code/{user_id}/{chat_id}")
+def download_materializer_code(user_id: str, chat_id: str):
+    """
+    Downloads Materializer code (.py) generated for a given user and chat.
+    """
+    chat_interface = manager.get_chat_interface(user_id, chat_id)
+    materializer_code = (
+        chat_interface.conductor.materializer.prov_graph.get_graph_code()
+    )
+
+    file_stream = io.BytesIO()
+    file_stream.write(materializer_code.encode("utf-8"))
+    file_stream.seek(0)
+
+    filename = f"materializer_{user_id}_{chat_id}.py"
+    return StreamingResponse(
+        file_stream,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
