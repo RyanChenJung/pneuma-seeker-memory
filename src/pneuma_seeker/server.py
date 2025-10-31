@@ -9,11 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import markdown
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-import markdown
 from torch.backends import cudnn
 
 from pneuma_seeker.core.chat_interface import ChatInterface
@@ -117,12 +117,16 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
     base_url = str(request.base_url).rstrip("/")
     script_download_link = f"{base_url}/materializer_code/{user_id}/{chat_id}"
 
-    prov_explanation_markdown = conductor.materializer.prov_graph.get_graph_explanation(
-        script_download_link=script_download_link
-    )
-    prov_explanation = markdown.markdown(
-        prov_explanation_markdown, extensions=["fenced_code"]
-    )
+    prov_explanation = "<strong>T</strong> is not materialized yet."
+    if conductor.info_need_state.is_T_materialized:
+        prov_explanation_markdown = (
+            conductor.materializer.prov_graph.get_graph_explanation(
+                script_download_link=script_download_link
+            )
+        )
+        prov_explanation = markdown.markdown(
+            prov_explanation_markdown, extensions=["fenced_code"]
+        )
 
     return templates.TemplateResponse(
         "state_view_prov_comprehensive.html",
