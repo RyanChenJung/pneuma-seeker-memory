@@ -20,6 +20,7 @@ from pneuma_seeker.core.ir_system.data_model import (
 )
 from pneuma_seeker.model.interface.impl.mock_embed_model import MockEmbedModel
 from pneuma_seeker.model.interface.impl.mock_llm import MockLLM
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.config import Config
 
 
@@ -54,6 +55,7 @@ class ConductorTests(unittest.TestCase):
             logger=self.logger,
             data_sources=[],
             config=config,
+            prov_graph=ProvenanceGraph(self.logger),
         )
 
     def tearDown(self):
