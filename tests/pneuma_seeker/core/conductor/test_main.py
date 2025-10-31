@@ -2,10 +2,6 @@
 import logging
 import os
 import sys
-from typing import Optional
-
-from numpy import ndarray
-
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
@@ -20,33 +16,11 @@ from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
+    Text,
 )
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Text
-from pneuma_seeker.model.llm_message import LLMMessage
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.model.interface.impl.mock_embed_model import MockEmbedModel
+from pneuma_seeker.model.interface.impl.mock_llm import MockLLM
 from pneuma_seeker.utils.config import Config
-
-
-class MockLLM:
-    """Simple deterministic LLM mock that returns queued JSON strings."""
-
-    def __init__(self, responses=None):
-        self._responses = list(responses or [])
-
-    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None):
-        # return a list (chat API returns iterable); use last queued response or default
-        if not self._responses:
-            yield '{"action":"communicate_with_user","message":"default"}'
-        yield self._responses.pop(0)
-
-
-class MockEmbedModel:
-    def encode(
-        self,
-        texts: str | list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
-    ) -> ndarray:
-        return ndarray([])
 
 
 class ConductorTests(unittest.TestCase):
