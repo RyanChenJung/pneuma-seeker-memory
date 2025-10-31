@@ -87,7 +87,7 @@ class MaterializerTests(unittest.TestCase):
         ]
         self.assertEqual(
             "\n\n".join(prov_graph_code_lines),
-            self.materializer.prov_graph.get_graph_code_concatenation(),
+            self.materializer.prov_graph.get_graph_code(),
         )
 
     def test_web_search_sets_web_search_result(self):
@@ -150,7 +150,7 @@ class MaterializerTests(unittest.TestCase):
             self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         self.assertIn(
-            self.materializer.prov_graph.get_graph_code_concatenation(),
+            self.materializer.prov_graph.get_graph_code(),
             (
                 "\n\n".join(prov_graph_code_lines_1),
                 "\n\n".join(prov_graph_code_lines_2),
@@ -205,7 +205,7 @@ class MaterializerTests(unittest.TestCase):
             ),
         ]
         self.assertEqual(
-            self.materializer.prov_graph.get_graph_code_concatenation(),
+            self.materializer.prov_graph.get_graph_code(),
             "\n\n".join(prov_graph_code_lines_1),
         )
 

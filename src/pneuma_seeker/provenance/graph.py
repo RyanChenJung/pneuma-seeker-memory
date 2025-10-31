@@ -11,10 +11,13 @@ from pneuma_seeker.core.ir_system.data_model import RetrieverType
 class ProvenanceNode:
     """Represents a node in the provenance graph."""
 
-    def __init__(self, source_retriever: RetrieverType, python_code: str):
+    def __init__(
+        self, source_retriever: RetrieverType, python_code: str, description: str
+    ):
         self.id = str(uuid.uuid4())
         self.source_retriever = source_retriever
         self.python_code = python_code
+        self.description = description
         self.parents = []
         self.children = []
 
@@ -45,15 +48,18 @@ class ProvenanceGraph:
         """
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
-        self.ROOT_NODE_CODE = "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}"
+        self.ROOT_NODE_CODE = (
+            "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}"
+        )
+        self.ROOT_NODE_DESCRIPTION = (
+            "Imports packages and defines a data structure to hold tables."
+        )
 
         if create_default_root:
-            # Initialize a default root node so the graph always starts with a
-            # base context. This root holds the initial tables mapping used by
-            # downstream steps.
             root_node = ProvenanceNode(
                 RetrieverType.USER,
                 self.ROOT_NODE_CODE,
+                self.ROOT_NODE_DESCRIPTION,
             )
             self.nodes[root_node.id] = root_node
             self.logger.info(f"[PROV GRAPH] Root node {root_node.id} initialized.")
@@ -173,7 +179,7 @@ class ProvenanceGraph:
 
         return "\n".join(lines)
 
-    def get_graph_code_concatenation(self) -> str:
+    def get_graph_code(self) -> str:
         """
         Return a single Python code string that is the concatenation of all
         node.python_code values in topologically sorted order (parents before children).
@@ -207,6 +213,9 @@ class ProvenanceGraph:
 
         code_sections = [node.python_code for node in ordered_nodes if node.python_code]
         return "\n\n".join(code_sections)
+
+    def get_graph_explanation(self) -> str:
+        return ""
 
     def get_graph_visualization(self) -> str:
         net = Network(notebook=True, directed=True, cdn_resources="in_line")

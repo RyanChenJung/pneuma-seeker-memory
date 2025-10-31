@@ -56,8 +56,8 @@ class PersistenceTests(unittest.TestCase):
 
         # build a small provenance graph with parent->child
         graph = ProvenanceGraph(logger=self.logger)
-        p = ProvenanceNode(RetrieverType.USER, "pcode")
-        c = ProvenanceNode(RetrieverType.USER, "ccode")
+        p = ProvenanceNode(RetrieverType.USER, "pcode", "")
+        c = ProvenanceNode(RetrieverType.USER, "ccode", "")
         p.add_child(c)
         graph.add_node(p)
         graph.add_node(c)
@@ -126,8 +126,8 @@ class PersistenceTests(unittest.TestCase):
     def test_serialize_deserialize_provenance_graph_helpers(self):
         """Tests the provenance graph serialization and deserialization helpers."""
         graph = ProvenanceGraph(logger=self.logger)
-        n1 = ProvenanceNode(RetrieverType.USER, "x=1")
-        n2 = ProvenanceNode(RetrieverType.WEB_SEARCH, "y=2")
+        n1 = ProvenanceNode(RetrieverType.USER, "x=1", "")
+        n2 = ProvenanceNode(RetrieverType.WEB_SEARCH, "y=2", "")
         n1.add_child(n2)
         graph.add_node(n1)
         graph.add_node(n2)

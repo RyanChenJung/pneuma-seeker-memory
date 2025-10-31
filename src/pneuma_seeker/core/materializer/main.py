@@ -206,7 +206,10 @@ class Materializer:
         self.__log(f"Executing {op_name}...")
 
         def _create_or_get_read_node(
-            doc: AbstractDocument, source: RetrieverType, python_code: str
+            doc: AbstractDocument,
+            source: RetrieverType,
+            python_code: str,
+            description: str,
         ) -> str | None:
             try:
                 last_id = getattr(doc, "last_node_id", None)
@@ -216,7 +219,9 @@ class Materializer:
                         return last_id
 
                 read_node = ProvenanceNode(
-                    source_retriever=source, python_code=python_code
+                    source_retriever=source,
+                    python_code=python_code,
+                    description=description,
                 )
                 self.prov_graph.add_node(read_node, True)
                 return read_node.id
@@ -240,6 +245,7 @@ class Materializer:
                             doc,
                             RetrieverType.PNEUMA_RETRIEVER,
                             self.toolkit.generate_pandas_read_csv_code(doc),
+                            "Retrieves an internal table from Pneuma-Retriever.",
                         )
                         if node_id is not None:
                             doc.last_node_id = node_id
@@ -268,6 +274,7 @@ class Materializer:
                     python_code=self.toolkit.generate_view_textual_document_code(
                         self.state.web_search_result
                     ),
+                    description=f"Searches the web using this query: {prompt}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
@@ -285,11 +292,10 @@ class Materializer:
                     read_code = self.toolkit.generate_pandas_read_multi_doc_code(
                         extra_tables
                     )
-                    # Create a single node representing the multi-read. Reuse if any
-                    # of the extra tables already point to a node that contains the same code.
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.ENUMERATOR,
                         python_code=read_code,
+                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern: {pattern}.",
                     )
                     self.prov_graph.add_node(new_node, True)
 
@@ -379,12 +385,21 @@ class Materializer:
                             self.toolkit.generate_pandas_read_csv_code(
                                 table_to_select_doc
                             ),
+                            "",
                         )
+
+                        child_node_desc = f"Directly selects a table (ID: `{table_id_to_select}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
+                        if set(relevant_columns) != set(T[target_table_id].columns):
+                            child_node_desc += " (partially)."
+                        else:
+                            child_node_desc += "."
 
                         child_node = ProvenanceNode(
                             source_retriever=RetrieverType.MATERIALIZER,
                             python_code=select_code,
+                            description=child_node_desc,
                         )
+
                         self.prov_graph.add_node(child_node, True)
                         new_node_id = child_node.id
                         if parent_node_id is not None:
@@ -470,11 +485,13 @@ class Materializer:
                     conditioned_table_doc,
                     conditioned_table_doc.retriever_type,
                     self.toolkit.generate_pandas_read_csv_code(conditioned_table_doc),
+                    "",
                 )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=sem_col_code,
+                    description=f"Semantically generates a column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: `{table_relevant_columns}`.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_id is not None:
@@ -586,16 +603,19 @@ class Materializer:
                     left_table_doc,
                     left_table_doc.retriever_type,
                     self.toolkit.generate_pandas_read_csv_code(left_table_doc),
+                    "",
                 )
                 parent_node_2_id = _create_or_get_read_node(
                     right_table_doc,
                     right_table_doc.retriever_type,
                     self.toolkit.generate_pandas_read_csv_code(right_table_doc),
+                    "",
                 )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=join_code,
+                    description=f"Semantically joins tables `{left_table_id}` and `{right_table_id}` with `top-k = {self.config.SEMANTIC_JOIN_TOP_K}`.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_1_id is not None:
@@ -656,6 +676,7 @@ class Materializer:
                                 f"{assign_to}.csv",
                             )}",
                         ),
+                        description=f"Executes Python code.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -757,6 +778,7 @@ class Materializer:
                                 f"{assign_to}.csv",
                             ),
                         ),
+                        description="Executes a SQL query.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:

@@ -232,6 +232,7 @@ def _serialize_provenance_graph(graph: ProvenanceGraph) -> dict[str, Any]:
                 "id": node.id,
                 "source_retriever": node.source_retriever.value,
                 "python_code": node.python_code,
+                "description": node.description,
                 "children": [child.id for child in node.children],
                 "parents": [parent.id for parent in node.parents],
             }
@@ -257,7 +258,8 @@ def _deserialize_provenance_graph(
     for n in obj.get("nodes", []):
         node = ProvenanceNode(
             source_retriever=RetrieverType(n["source_retriever"]),
-            python_code=n["python_code"]
+            python_code=n["python_code"],
+            description=n["description"],
         )
         node.id = n["id"]
         graph.add_node(node)

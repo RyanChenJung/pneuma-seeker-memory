@@ -109,6 +109,7 @@ class Conductor:
                     python_code=self.toolkit.generate_read_external_tables_code(
                         index + 1, doc
                     ),
+                    description="Reads a user-uploaded table.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id

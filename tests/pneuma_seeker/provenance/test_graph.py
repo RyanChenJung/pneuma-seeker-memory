@@ -19,15 +19,15 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_node_creation_and_add_child(self):
         """Tests ProvenanceNode creation and adding child nodes."""
-        parent = ProvenanceNode(RetrieverType.USER, "x=1")
-        child = ProvenanceNode(RetrieverType.USER, "y=2")
+        parent = ProvenanceNode(RetrieverType.USER, "x=1", "")
+        child = ProvenanceNode(RetrieverType.USER, "y=2", "")
         parent.add_child(child)
         self.assertIn(child, parent.children)
         self.assertIn(parent, child.parents)
 
     def test_add_node_and_overwrite(self):
         """Tests adding nodes to the ProvenanceGraph and overwriting existing nodes."""
-        node = ProvenanceNode(RetrieverType.USER, "code")
+        node = ProvenanceNode(RetrieverType.USER, "code", "")
         added = self.graph.add_node(node)
         self.assertEqual(added, node)
         self.assertIn(node.id, self.graph.nodes)
@@ -41,8 +41,8 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_connect_nodes(self):
         """Tests connecting two nodes in the ProvenanceGraph."""
-        parent = ProvenanceNode(RetrieverType.USER, "p")
-        child = ProvenanceNode(RetrieverType.USER, "c")
+        parent = ProvenanceNode(RetrieverType.USER, "p", "")
+        child = ProvenanceNode(RetrieverType.USER, "c", "")
         self.graph.add_node(parent)
         self.graph.add_node(child)
         self.graph.connect(parent, child)
@@ -52,8 +52,8 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_reset_for_materialization(self):
         """Tests resetting the graph for materialization."""
-        node_user = ProvenanceNode(RetrieverType.USER, "u")
-        node_web = ProvenanceNode(RetrieverType.WEB_SEARCH, "w")
+        node_user = ProvenanceNode(RetrieverType.USER, "u", "")
+        node_web = ProvenanceNode(RetrieverType.WEB_SEARCH, "w", "")
         self.graph.add_node(node_user)
         self.graph.add_node(node_web)
         self.graph.reset_for_materialization()
@@ -63,7 +63,7 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_get_node_by_id_and_filters(self):
         """Tests retrieving nodes by ID and filters."""
-        node = ProvenanceNode(RetrieverType.USER, "x")
+        node = ProvenanceNode(RetrieverType.USER, "x", "")
         self.graph.add_node(node)
         self.assertEqual(self.graph.get_node_by_id(node.id), node)
         self.assertEqual(self.graph.get_node({"python_code": "x"}), node)
@@ -73,9 +73,9 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_trace_upstream_downstream(self):
         """Tests tracing upstream and downstream nodes."""
-        n1 = ProvenanceNode(RetrieverType.USER, "a")
-        n2 = ProvenanceNode(RetrieverType.USER, "b")
-        n3 = ProvenanceNode(RetrieverType.USER, "c")
+        n1 = ProvenanceNode(RetrieverType.USER, "a", "")
+        n2 = ProvenanceNode(RetrieverType.USER, "b", "")
+        n3 = ProvenanceNode(RetrieverType.USER, "c", "")
         n1.add_child(n2)
         n2.add_child(n3)
         self.graph.add_node(n1)
@@ -88,8 +88,8 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_to_text_output(self):
         """Tests the textual representation of the ProvenanceGraph."""
-        n1 = ProvenanceNode(RetrieverType.USER, "a")
-        n2 = ProvenanceNode(RetrieverType.USER, "b")
+        n1 = ProvenanceNode(RetrieverType.USER, "a", "")
+        n2 = ProvenanceNode(RetrieverType.USER, "b", "")
         n1.add_child(n2)
         self.graph.add_node(n1)
         self.graph.add_node(n2)
@@ -101,7 +101,7 @@ class ProvenanceGraphTests(unittest.TestCase):
 
     def test_get_graph_visualization_returns_html(self):
         """Tests that get_graph_visualization returns valid HTML output."""
-        node = ProvenanceNode(RetrieverType.USER, "x=1")
+        node = ProvenanceNode(RetrieverType.USER, "x=1", "")
         self.graph.add_node(node)
         html_output = self.graph.get_graph_visualization()
         self.assertTrue(html_output.strip().startswith("<!DOCTYPE html>") or "<html" in html_output)
@@ -109,32 +109,32 @@ class ProvenanceGraphTests(unittest.TestCase):
     def test_get_graph_code_concatenation_simple(self):
         """Tests simple linear graph code concatenation."""
         # Simple linear DAG: n1 -> n2 -> n3
-        n1 = ProvenanceNode(RetrieverType.USER, "code_a")
-        n2 = ProvenanceNode(RetrieverType.USER, "code_b")
-        n3 = ProvenanceNode(RetrieverType.USER, "code_c")
+        n1 = ProvenanceNode(RetrieverType.USER, "code_a", "")
+        n2 = ProvenanceNode(RetrieverType.USER, "code_b", "")
+        n3 = ProvenanceNode(RetrieverType.USER, "code_c", "")
         n1.add_child(n2)
         n2.add_child(n3)
         self.graph.add_node(n1)
         self.graph.add_node(n2)
         self.graph.add_node(n3)
 
-        concat = self.graph.get_graph_code_concatenation()
+        concat = self.graph.get_graph_code()
         expected = "code_a\n\ncode_b\n\ncode_c"
         self.assertTrue(concat.endswith(expected))
 
     def test_get_graph_code_concatenation_skips_empty_and_preserves_order(self):
         """Tests that empty python_code nodes are skipped and order is preserved."""
         # n1 -> n2(empty) and n1 -> n3 ; empty python_code should be skipped
-        n1 = ProvenanceNode(RetrieverType.USER, "first")
-        n2 = ProvenanceNode(RetrieverType.USER, "")
-        n3 = ProvenanceNode(RetrieverType.USER, "third")
+        n1 = ProvenanceNode(RetrieverType.USER, "first", "")
+        n2 = ProvenanceNode(RetrieverType.USER, "", "")
+        n3 = ProvenanceNode(RetrieverType.USER, "third", "")
         n1.add_child(n2)
         n1.add_child(n3)
         self.graph.add_node(n1)
         self.graph.add_node(n2)
         self.graph.add_node(n3)
 
-        concat = self.graph.get_graph_code_concatenation()
+        concat = self.graph.get_graph_code()
         # n1 should appear before n3 since it's the parent; n2 is skipped
         self.assertIn("first", concat)
         self.assertIn("third", concat)
@@ -145,9 +145,9 @@ class ProvenanceGraphTests(unittest.TestCase):
         # Create a cycle n1 -> n2 -> n3 -> n1. In this case there will be no
         # node with indegree 0 so Kahn's algorithm will detect a cycle and
         # return an empty concatenation while issuing a warning.
-        n1 = ProvenanceNode(RetrieverType.USER, "a")
-        n2 = ProvenanceNode(RetrieverType.USER, "b")
-        n3 = ProvenanceNode(RetrieverType.USER, "c")
+        n1 = ProvenanceNode(RetrieverType.USER, "a", "")
+        n2 = ProvenanceNode(RetrieverType.USER, "b", "")
+        n3 = ProvenanceNode(RetrieverType.USER, "c", "")
         n1.add_child(n2)
         n2.add_child(n3)
         n3.add_child(n1)
@@ -155,7 +155,7 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.graph.add_node(n2)
         self.graph.add_node(n3)
 
-        concat = self.graph.get_graph_code_concatenation()
+        concat = self.graph.get_graph_code()
         # The default root node is still present and will be included even
         # when the rest of the graph forms a cycle. Kahn's algorithm will
         # process the root then detect the cycle among the remaining nodes.

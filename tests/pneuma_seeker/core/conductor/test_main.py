@@ -333,7 +333,7 @@ class ConductorTests(unittest.TestCase):
         expected_prov_graph_code_concat = "\n\n".join(prov_graph_code_lines)
         self.assertEqual(
             expected_prov_graph_code_concat,
-            self.conductor.prov_graph.get_graph_code_concatenation(),
+            self.conductor.prov_graph.get_graph_code(),
         )
 
 
