@@ -265,7 +265,9 @@ class Materializer:
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_SEARCH,
-                    python_code=f'result = "{self.state.web_search_result.content}"',
+                    python_code=self.toolkit.generate_view_textual_document_code(
+                        self.state.web_search_result
+                    ),
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
@@ -374,7 +376,9 @@ class Materializer:
                         parent_node_id = _create_or_get_read_node(
                             table_to_select_doc,
                             table_to_select_doc.retriever_type,
-                            self.toolkit.generate_pandas_read_csv_code(table_to_select_doc),
+                            self.toolkit.generate_pandas_read_csv_code(
+                                table_to_select_doc
+                            ),
                         )
 
                         child_node = ProvenanceNode(
@@ -457,7 +461,7 @@ class Materializer:
                     new_column_name,
                     new_column_values,
                     os.path.join(
-                        self.__get_intermediate_table_dir_path(),
+                        self._get_intermediate_table_dir_path(),
                         f"{conditioned_table_doc.doc_id}.csv",
                     ),
                 )
@@ -574,7 +578,7 @@ class Materializer:
                     relevant_right_cols,
                     self.config.SEMANTIC_JOIN_TOP_K,
                     os.path.join(
-                        self.__get_intermediate_table_dir_path(),
+                        self._get_intermediate_table_dir_path(),
                         f"{joined_table_id}.csv",
                     ),
                 )
@@ -648,7 +652,7 @@ class Materializer:
                         python_code=self.toolkit.append_comment_to_existing_code(
                             python_code,
                             f"Result path: {os.path.join(
-                                self.__get_intermediate_table_dir_path(),
+                                self._get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
                             )}",
                         ),
@@ -749,7 +753,7 @@ class Materializer:
                             sql_query,
                             id_dfs,
                             os.path.join(
-                                self.__get_intermediate_table_dir_path(),
+                                self._get_intermediate_table_dir_path(),
                                 f"{assign_to}.csv",
                             ),
                         ),
@@ -878,7 +882,7 @@ class Materializer:
 
     def __clear_csv_files(self):
         """Delete all .csv files in the module directory."""
-        pattern = os.path.join(self.__get_intermediate_table_dir_path(), "*.csv")
+        pattern = os.path.join(self._get_intermediate_table_dir_path(), "*.csv")
         for csv_file in glob.glob(pattern):
             try:
                 os.remove(csv_file)
@@ -890,7 +894,7 @@ class Materializer:
 
     def __save_new_or_updated_intermediate_table(self, table_id: str):
         """Save a new or updated intermediate table to a CSV file."""
-        intermediate_table_dir_path = self.__get_intermediate_table_dir_path()
+        intermediate_table_dir_path = self._get_intermediate_table_dir_path()
         os.makedirs(intermediate_table_dir_path, exist_ok=True)
         csv_path = os.path.join(intermediate_table_dir_path, f"{table_id}.csv")
         intermediate_table: DataFrame | None = None
@@ -902,6 +906,6 @@ class Materializer:
         if isinstance(intermediate_table, DataFrame):
             intermediate_table.to_csv(csv_path, index=False)
 
-    def __get_intermediate_table_dir_path(self):
+    def _get_intermediate_table_dir_path(self):
         """Get the directory path for storing intermediate table CSV files."""
         return os.path.join(self.module_dir, "intermediate_data")

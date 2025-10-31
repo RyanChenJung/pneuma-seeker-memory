@@ -1,5 +1,6 @@
 import ast
 import re
+from typing import Any
 import numpy as np
 import pandas as pd
 
@@ -55,7 +56,9 @@ class PythonExecutor:
         TableVisitor().visit(tree)
         return ids
 
-    def generate_read_external_tables_code(self, table_number: int, doc: AbstractDocument):
+    def generate_read_external_tables_code(
+        self, table_number: int, doc: AbstractDocument
+    ):
         doc_path = doc.path or "<no_path_provided>"
         read_document_code = f"""pd.read_csv(r"{doc_path}")"""
         if doc_path.endswith(".xlsx") or doc_path.endswith(".xls"):
@@ -96,7 +99,7 @@ class PythonExecutor:
         conditioned_cols: list[str],
         doc: AbstractDocument,
         new_col_name: str,
-        new_col_values: list[str],
+        new_col_values: list[Any],
         path: str,
     ):
         """Generates Python code to semantically generate a new column for a table."""

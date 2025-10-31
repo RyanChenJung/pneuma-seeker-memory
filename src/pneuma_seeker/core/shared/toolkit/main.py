@@ -1,4 +1,5 @@
 from logging import Logger
+from typing import Any
 
 import duckdb
 from pandas import DataFrame
@@ -123,7 +124,7 @@ class Toolkit:
         source_table: DataFrame,
         new_column_name: str,
         instruction: str,  # Explanation includes the possible values, i.e., the domain
-    ) -> list[str]:
+    ) -> list[Any]:
         return self.semantic_operator.generate_semantic_column(
             source_table, new_column_name, instruction
         )
@@ -156,7 +157,7 @@ class Toolkit:
         conditioned_cols: list[str],
         doc: AbstractDocument,
         new_col_name: str,
-        new_col_values: list[str],
+        new_col_values: list[Any],
         path: str,
     ):
         return self.python_executor.generate_semantic_col_generator_code(

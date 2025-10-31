@@ -2,100 +2,74 @@
 import logging
 import os
 import sys
-from typing import Optional
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
 
-import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from pneuma_seeker.core.ir_system.data_model import (
-    RetrieverType,
-    Table,
-    Text,
-)
+from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table, Text
 from pneuma_seeker.core.materializer.main import Materializer
-from pneuma_seeker.model.llm_message import LLMMessage
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.config import Config
-
-
-class MockLLM:
-    """Simple deterministic LLM mock that returns queued JSON strings."""
-
-    def __init__(self, responses=None):
-        self._responses = list(responses or [])
-
-    def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None):
-        # return a list (chat API returns iterable); use last queued response or default
-        if not self._responses:
-            yield '{"step_type":"operation","name":"noop","args":{}}'
-            return
-        yield self._responses.pop(0)
-
-
-class MockEmbedModel:
-    def encode(
-        self,
-        texts: str | list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
-    ):
-        import numpy as _np
-
-        return _np.ndarray(0)
+from pneuma_seeker.core.shared.toolkit.main import Toolkit
+from pneuma_seeker.model.interface.impl.mock_embed_model import MockEmbedModel
+from pneuma_seeker.model.interface.impl.mock_llm import MockLLM
 
 
 class MaterializerTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
         self.logger = logging.getLogger("test_materializer")
         self.logger.setLevel(logging.ERROR)
+        self.config = Config(".env.test")
+        self.prov_graph = ProvenanceGraph(self.logger)
 
-        # Create mocks
+        self.config.ENABLE_WEB_SEARCH = True
+
         self.mock_llm = MockLLM()
         self.mock_embed_model = MockEmbedModel()
-        self.mock_toolkit = MagicMock()
-        self.mock_prov_graph = MagicMock()
+        self.toolkit = Toolkit(
+            self.mock_llm,
+            self.mock_embed_model,
+            self.logger,
+            [],
+            self.prov_graph,
+            self.config,
+        )
 
-        # Provide a config similar to other tests
-        self.config = Config(".env.test")
-
-        # Instantiate materializer with mocks
         self.materializer = Materializer(
-            llm=self.mock_llm,  # type: ignore
-            embed_model=self.mock_embed_model,  # type: ignore
+            llm=self.mock_llm,
+            embed_model=self.mock_embed_model,
             logger=self.logger,
             data_sources=[],
-            prov_graph=self.mock_prov_graph,
-            toolkit=self.mock_toolkit,
+            prov_graph=self.prov_graph,
+            toolkit=self.toolkit,
             config=self.config,
         )
 
     def tearDown(self):
-        self.temp_dir.cleanup()
         patch.stopall()
 
     def test_pneuma_retriever_and_table_select_materializes_T(self):
         # LLM will ask to call pneuma_retriever then table_select to materialize t1
         plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table1","columns":["a","b"]}}}'
+        plan2 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
         self.mock_llm._responses = [plan1, plan2]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
-            doc_id="table1",
+            doc_id="table_1",
             retriever_type=RetrieverType.PNEUMA_RETRIEVER,
             content=table_df,
             metadata={},
         )
 
         # First call to retrieve_documents returns the table for pneuma_retriever
-        self.mock_toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
+        self.toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
 
         # Define target T (schema only) so materializer knows it needs t1
         T = {"t1": pd.DataFrame(columns=["a", "b"])}
@@ -105,20 +79,31 @@ class MaterializerTests(unittest.TestCase):
         self.assertIn("t1", result)
         pd.testing.assert_frame_equal(result["t1"].reset_index(drop=True), table_df)
 
+        self.assertTrue(len(self.materializer.prov_graph.nodes) == 3)
+        prov_graph_code_lines = [
+            self.materializer.prov_graph.ROOT_NODE_CODE,
+            self.toolkit.generate_pandas_read_csv_code(table_doc),
+            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+        ]
+        self.assertEqual(
+            "\n\n".join(prov_graph_code_lines),
+            self.materializer.prov_graph.get_graph_code_concatenation(),
+        )
+
     def test_web_search_sets_web_search_result(self):
         # LLM will call pneuma_retriever, web_search, then table_select to finish
         plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
         plan2 = (
             '{"step_type":"operation","name":"web_search","args":{"prompt":"query"}}'
         )
-        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table1","columns":["a","b"]}}}'
+        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
         self.mock_llm._responses = [plan1, plan2, plan3]
 
         self.materializer.config.ENABLE_WEB_SEARCH = True
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
-            doc_id="table1",
+            doc_id="table_1",
             retriever_type=RetrieverType.PNEUMA_RETRIEVER,
             content=table_df,
             metadata={},
@@ -132,7 +117,7 @@ class MaterializerTests(unittest.TestCase):
         )
 
         # First call returns the table, second call returns the web result
-        self.mock_toolkit.retrieve_documents = MagicMock(
+        self.toolkit.retrieve_documents = MagicMock(
             side_effect=[[table_doc], [web_text]]
         )
 
@@ -151,25 +136,46 @@ class MaterializerTests(unittest.TestCase):
         # Ensure final materialized result still contains t1
         self.assertIn("t1", result)
 
+        self.assertTrue(len(self.materializer.prov_graph.nodes) == 4)
+        prov_graph_code_lines_1 = [
+            self.materializer.prov_graph.ROOT_NODE_CODE,
+            self.toolkit.generate_pandas_read_csv_code(table_doc),
+            self.toolkit.generate_view_textual_document_code(web_text),
+            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+        ]
+        prov_graph_code_lines_2 = [
+            self.materializer.prov_graph.ROOT_NODE_CODE,
+            self.toolkit.generate_view_textual_document_code(web_text),
+            self.toolkit.generate_pandas_read_csv_code(table_doc),
+            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+        ]
+        self.assertIn(
+            self.materializer.prov_graph.get_graph_code_concatenation(),
+            (
+                "\n\n".join(prov_graph_code_lines_1),
+                "\n\n".join(prov_graph_code_lines_2),
+            ),
+        )
+
     def test_semantic_column_generator_adds_column(self):
         # LLM will call pneuma_retriever, semantic_column_generator, then table_select
         plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"step_type":"operation","name":"semantic_column_generator","args":{"table_id":"table1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
-        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table1","columns":["a","b","newcol"]}}}'
+        plan2 = '{"step_type":"operation","name":"semantic_column_generator","args":{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
+        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b","newcol"]}}}'
         self.mock_llm._responses = [plan1, plan2, plan3]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [10, 20]})
         table_doc = Table(
-            doc_id="table1",
+            doc_id="table_1",
             retriever_type=RetrieverType.PNEUMA_RETRIEVER,
             content=table_df.copy(),
             metadata={},
         )
 
-        self.mock_toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
+        self.toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
 
         # Mock generation of semantic column
-        self.mock_toolkit.generate_semantic_column = MagicMock(return_value=[100, 200])
+        self.toolkit.generate_semantic_column = MagicMock(return_value=[100, 200])
 
         T = {"t1": pd.DataFrame(columns=["a", "b", "newcol"])}
 
@@ -179,6 +185,29 @@ class MaterializerTests(unittest.TestCase):
         res_df = result["t1"].reset_index(drop=True)
         self.assertIn("newcol", res_df.columns)
         self.assertEqual(list(res_df["newcol"]), [100, 200])
+
+        self.assertTrue(len(self.materializer.prov_graph.nodes) == 4)
+        prov_graph_code_lines_1 = [
+            self.materializer.prov_graph.ROOT_NODE_CODE,
+            self.toolkit.generate_pandas_read_csv_code(table_doc),
+            self.toolkit.generate_semantic_col_generator_code(
+                ["b"],
+                table_doc,
+                "newcol",
+                [100, 200],
+                os.path.join(
+                    self.materializer._get_intermediate_table_dir_path(),
+                    f"{table_doc.doc_id}.csv",
+                ),
+            ),
+            self.toolkit.generate_table_select_code(
+                "t1", "table_1", ["a", "b", "newcol"]
+            ),
+        ]
+        self.assertEqual(
+            self.materializer.prov_graph.get_graph_code_concatenation(),
+            "\n\n".join(prov_graph_code_lines_1),
+        )
 
 
 if __name__ == "__main__":
