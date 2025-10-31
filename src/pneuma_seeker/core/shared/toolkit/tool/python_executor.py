@@ -251,4 +251,4 @@ sql_executor.execute_sql(
 """
 
     def append_comment_to_existing_code(self, code: str, comment: str):
-        return f"{comment}\n{code}"
+        return f"# {comment}\n{code}"

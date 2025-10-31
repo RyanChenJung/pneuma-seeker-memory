@@ -9,9 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 import markdown
 from torch.backends import cudnn
@@ -72,6 +72,41 @@ templates = Jinja2Templates(directory="template")
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+
+@app.get("/provenance/nodes/{user_id}/{chat_id}", response_class=JSONResponse)
+async def get_provenance_nodes(request: Request, user_id: str, chat_id: str):
+    """
+    Return all nodes of the provenance graph for a given user and chat.
+    """
+    # Get the provenance graph instance
+    chat_interface = manager.get_chat_interface(user_id, chat_id)
+    prov_graph = chat_interface.conductor.materializer.prov_graph
+
+    # Convert all nodes to JSON-serializable format
+    nodes_json = []
+    for node in prov_graph.nodes.values():
+        nodes_json.append(
+            {
+                "id": node.id,
+                "source_retriever": getattr(
+                    node.source_retriever, "value", str(node.source_retriever)
+                ),
+                "python_code": node.python_code,
+                "description": node.description,
+                "parents": [p.id for p in node.parents],
+                "children": [c.id for c in node.children],
+            }
+        )
+
+    return JSONResponse(
+        content={
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "node_count": len(nodes_json),
+            "nodes": nodes_json,
+        }
+    )
 
 
 @app.get("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
@@ -168,6 +203,7 @@ async def chat_endpoint(request: Request):
                 ) + "\n"
 
             await asyncio.sleep(0)  # yield control back to loop
+        chat_interface.persist_state()
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 

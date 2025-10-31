@@ -31,6 +31,7 @@ class Conductor:
         logger: Logger,
         data_sources: list[str],
         config: Config,
+        prov_graph: ProvenanceGraph,
     ) -> None:
         self.config = config
         self.logger = logger
@@ -41,7 +42,7 @@ class Conductor:
         self.data_sources = data_sources
         self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
 
-        self.prov_graph = ProvenanceGraph(self.logger)
+        self.prov_graph = prov_graph
         self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(

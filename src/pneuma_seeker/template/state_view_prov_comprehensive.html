@@ -99,6 +99,48 @@
       font-family: monospace;
       font-size: 0.95em;
     }
+
+    /* --- Provenance section fixes --- */
+    #prov-code-container {
+      background-color: #ffffff;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #212529;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    #prov-code-container h1,
+    #prov-code-container h2,
+    #prov-code-container h3 {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 0.25rem;
+    }
+
+    #prov-code-container p {
+      margin-bottom: 0.5rem;
+    }
+
+    #prov-code-container a {
+      color: #0d6efd;
+      text-decoration: none;
+    }
+
+    #prov-code-container a:hover {
+      text-decoration: underline;
+    }
+
+    #prov-code-container hr {
+      margin: 0.75rem 0;
+      border-top: 1px solid #e9ecef;
+    }
   </style>
 </head>
 
@@ -165,8 +207,8 @@
 
       <div id="provCardBody" class="collapse show">
         <div class="card-body">
-          <div id="prov-code-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
-            <pre id="prov-code-pre" class="mb-0"></pre>
+          <div id="prov-code-container" aria-live="polite" aria-atomic="true">
+            <div id="prov-code-pre" class="prov-html"></div>
           </div>
         </div>
       </div>
@@ -272,10 +314,10 @@
     const scriptPre = document.getElementById("script-pre");
     scriptPre.textContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
 
-    // Render Provenance Code
+    // Render Provenance Code (now properly formatted as HTML)
     const provCodePre = document.getElementById("prov-code-pre");
     const provCode = {{ prov_explanation | tojson | safe }};
-    provCodePre.textContent = (typeof provCode === "string") ? provCode : (provCode ? String(provCode) : "");
+    provCodePre.innerHTML = typeof provCode === "string" ? provCode : (provCode ? String(provCode) : "");
   </script>
 </body>
 

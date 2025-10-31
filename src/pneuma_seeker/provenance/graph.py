@@ -233,7 +233,7 @@ The following source data was used:"""
         )
         for step_number, processing_step_node in enumerate(processing_steps_nodes):
             textual_explanations.append(
-                f"### Step {step_number + 1}:\n```python\n{processing_step_node.python_code}\n```"
+                f"### Step {step_number + 1}: {processing_step_node.description}\n```python\n{processing_step_node.python_code}\n```"
             )
 
         return "\n".join(textual_explanations)

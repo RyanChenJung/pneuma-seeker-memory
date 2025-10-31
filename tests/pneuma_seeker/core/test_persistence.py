@@ -1,3 +1,4 @@
+# tests/unit/core/test_persistence.py
 import os
 import sys
 import unittest
@@ -8,12 +9,10 @@ sys.path.insert(
 )
 
 import duckdb
+import pandas as pd
 
-from pneuma_seeker.core.conductor.main import (
-    AbstractDocument,
-    InformationNeedState,
-    RetrieverType,
-)
+from pneuma_seeker.core.conductor.state import InformationNeedState
+from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.persistence import (
     _deserialize_provenance_graph,
     _serialize_provenance_graph,
@@ -25,7 +24,7 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 
 
 class PersistenceTests(unittest.TestCase):
-    """Tests for persistence of info need state, retrieval results, and provenance graph."""
+    """Tests for persistence of InformationNeedState, retrieval results, and provenance graph."""
 
     def setUp(self):
         self.db_path = "pneuma_seeker_test.duckdb"
@@ -37,110 +36,117 @@ class PersistenceTests(unittest.TestCase):
 
     def test_init_db_creates_table(self):
         """Tests that init_db creates the chat_state table."""
-
-        # Should not raise and the table should exist (querying it should work)
         init_db(self.db_path)
         con = duckdb.connect(self.db_path)
-        # Table exists, selecting should return zero rows
-        rows = con.execute("SELECT count(*) FROM chat_state").fetchone()
+        # Table should exist
+        tables = con.execute("SHOW TABLES").fetchdf()
         con.close()
-        self.assertIsNotNone(rows)
+        self.assertIn("chat_state", tables["name"].tolist())
 
     def test_save_and_load_provenance_graph_roundtrip(self):
         """Tests saving and loading a provenance graph."""
         init_db(self.db_path)
 
         info_state = InformationNeedState()
-        retrieval_results = {}
+        retrieved_tables = []
         enumerated_table_ids = ["tbl_1"]
 
-        # build a small provenance graph with parent->child
-        graph = ProvenanceGraph(logger=self.logger)
-        p = ProvenanceNode(RetrieverType.USER, "pcode", "")
-        c = ProvenanceNode(RetrieverType.USER, "ccode", "")
-        p.add_child(c)
-        graph.add_node(p)
-        graph.add_node(c)
+        # Build a simple provenance graph
+        graph = ProvenanceGraph(logger=self.logger, create_default_root=False)
+        parent = ProvenanceNode(RetrieverType.USER, "print('parent')", "Parent node")
+        child = ProvenanceNode(RetrieverType.USER, "print('child')", "Child node")
+        parent.add_child(child)
+        graph.add_node(parent)
+        graph.add_node(child)
 
+        # Save state
         save_state(
             user_id="u1",
             chat_id="c1",
             info_need_state=info_state,
-            retrieval_results=retrieval_results,
+            retrieved_tables=retrieved_tables,
             enumerated_table_ids=enumerated_table_ids,
             provenance_graph=graph,
+            db_path=self.db_path,
         )
 
+        # Load state
         loaded_info_state, loaded_retrievals, loaded_enumerated, loaded_graph = (
-            load_state("u1", "c1", self.logger)
+            load_state("u1", "c1", self.logger, db_path=self.db_path)
         )
 
-        # enumerated_table_ids round-trip
+        # Enumerated table IDs round-trip
         self.assertEqual(loaded_enumerated, enumerated_table_ids)
 
-        # provenance graph nodes preserved
+        # Graph node structure preserved
         self.assertEqual(set(loaded_graph.nodes.keys()), set(graph.nodes.keys()))
-        # edges preserved: child of p should be c
-        loaded_p = loaded_graph.get_node_by_id(p.id)
-        self.assertIsNotNone(loaded_p)
-        if loaded_p is not None:
-            self.assertIn(c.id, [ch.id for ch in loaded_p.children])
 
-    def test_save_and_load_retrieval_results_roundtrip(self):
-        """Tests saving and loading retrieval results with AbstractDocuments."""
+        loaded_parent = loaded_graph.get_node_by_id(parent.id)
+        self.assertIsNotNone(loaded_parent)
+        if loaded_parent is not None:
+            self.assertIn(child.id, [c.id for c in loaded_parent.children])
+
+    def test_save_and_load_retrieved_tables_roundtrip(self):
+        """Tests saving and loading retrieved tables with inline AbstractDocuments."""
         init_db(self.db_path)
 
         info_state = InformationNeedState()
 
-        # Create a simple AbstractDocument with inline content (no path)
+        # Create inline AbstractDocument (no file path)
         doc = AbstractDocument(
-            doc_id="doc1",
+            doc_id="doc_inline",
             retriever_type=RetrieverType.USER,
-            content="inline content",
-            metadata={"k": "v"},
+            content=pd.DataFrame({"a": [1, 2], "b": [3, 4]}),
+            metadata={"source": "unit-test"},
             path=None,
             last_node_id=None,
         )
 
-        retrieval_results = {RetrieverType.USER: [doc]}
-
-        graph = ProvenanceGraph(logger=self.logger)
+        retrieved_tables = [doc]
+        graph = ProvenanceGraph(logger=self.logger, create_default_root=False)
 
         save_state(
             user_id="u2",
             chat_id="c2",
             info_need_state=info_state,
-            retrieval_results=retrieval_results,
+            retrieved_tables=retrieved_tables,
             enumerated_table_ids=[],
             provenance_graph=graph,
+            db_path=self.db_path,
         )
 
-        _, loaded_retrievals, _, _ = load_state("u2", "c2", self.logger)
+        _, loaded_retrievals, _, _ = load_state(
+            "u2", "c2", self.logger, db_path=self.db_path
+        )
 
-        self.assertIn(RetrieverType.USER, loaded_retrievals)
-        loaded_docs = loaded_retrievals[RetrieverType.USER]
-        self.assertEqual(len(loaded_docs), 1)
-        self.assertEqual(loaded_docs[0].doc_id, "doc1")
-        self.assertEqual(loaded_docs[0].metadata, {"k": "v"})
+        # There should be one retrieved AbstractDocument
+        self.assertEqual(len(loaded_retrievals), 1)
+        loaded_doc = loaded_retrievals[0]
+        self.assertEqual(loaded_doc.doc_id, "doc_inline")
+        self.assertEqual(loaded_doc.retriever_type, RetrieverType.USER)
+        self.assertEqual(loaded_doc.metadata, {"source": "unit-test"})
+
+        # Ensure DataFrame content preserved
+        self.assertIsInstance(loaded_doc.content, pd.DataFrame)
+        self.assertListEqual(list(loaded_doc.content.columns), ["a", "b"])
+        self.assertEqual(len(loaded_doc.content), 2)
 
     def test_serialize_deserialize_provenance_graph_helpers(self):
-        """Tests the provenance graph serialization and deserialization helpers."""
-        graph = ProvenanceGraph(logger=self.logger)
-        n1 = ProvenanceNode(RetrieverType.USER, "x=1", "")
-        n2 = ProvenanceNode(RetrieverType.WEB_SEARCH, "y=2", "")
+        """Tests provenance graph (de)serialization helpers directly."""
+        graph = ProvenanceGraph(logger=self.logger, create_default_root=False)
+        n1 = ProvenanceNode(RetrieverType.USER, "x=1", "desc1")
+        n2 = ProvenanceNode(RetrieverType.WEB_SEARCH, "y=2", "desc2")
         n1.add_child(n2)
         graph.add_node(n1)
         graph.add_node(n2)
 
-        obj = _serialize_provenance_graph(graph)
-        self.assertIn("nodes", obj)
-        des = _deserialize_provenance_graph(obj, self.logger)
-        self.assertEqual(set(des.nodes.keys()), set(graph.nodes.keys()))
-        dn1 = des.get_node_by_id(n1.id)
-        self.assertIsNotNone(dn1)
-        if dn1 is not None:
-            self.assertIn(n2.id, [c.id for c in dn1.children])
+        serialized = _serialize_provenance_graph(graph)
+        self.assertIn("nodes", serialized)
 
+        deserialized = _deserialize_provenance_graph(serialized, self.logger)
+        self.assertEqual(set(deserialized.nodes.keys()), set(graph.nodes.keys()))
 
-if __name__ == "__main__":
-    unittest.main()
+        d_n1 = deserialized.get_node_by_id(n1.id)
+        self.assertIsNotNone(d_n1)
+        if d_n1 is not None:
+            self.assertIn(n2.id, [c.id for c in d_n1.children])
