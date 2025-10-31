@@ -27,9 +27,8 @@ class PythonExecutor:
         """Executes the provided Python code in a controlled environment."""
         self.logger.info(f"Executing this Python code: {code}")
         try:
-            env = dict()
-            env["tables"] = tables
-            exec(code, {"pd": pd, "np": np, "re": re}, env)
+            env = {"pd": pd, "np": np, "re": re, "tables": tables}
+            exec(code, env)
         except Exception as e:
             return {"exec_res": e, "used_table_ids": []}
         return {
