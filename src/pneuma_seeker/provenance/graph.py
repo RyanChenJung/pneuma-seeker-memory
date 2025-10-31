@@ -155,6 +155,89 @@ class ProvenanceGraph:
 
         return list(visited)
 
+    def topological_sort(self) -> list[ProvenanceNode]:
+        """
+        Performs a topological sort (Kahn's algorithm) on the provenance graph.
+        """
+        # Compute in-degree of each node
+        indegree = {node.id: 0 for node in self.nodes.values()}
+        for node in self.nodes.values():
+            for child in node.children:
+                indegree[child.id] = indegree.get(child.id, 0) + 1
+
+        # Kahn's algorithm (iterative topological sort)
+        queue = [n for n in self.nodes.values() if indegree.get(n.id, 0) == 0]
+        ordered_nodes: list[ProvenanceNode] = []
+        visited_count = 0
+
+        while queue:
+            node = queue.pop(0)
+            ordered_nodes.append(node)
+            visited_count += 1
+
+            for child in node.children:
+                indegree[child.id] -= 1
+                if indegree[child.id] == 0:
+                    queue.append(child)
+
+        # Detect cycles (non-DAG)
+        if visited_count != len(self.nodes):
+            self.logger.warning("[PROV GRAPH] Cycle detected during topological ordering!")
+
+        return ordered_nodes
+
+    def get_graph_code(self) -> str:
+        """
+        Returns a single Python code string that is the concatenation of all
+        node.python_code values in topologically sorted order (parents before children).
+        """
+        ordered_nodes = self.topological_sort()
+        code_sections = [node.python_code for node in ordered_nodes if node.python_code]
+        return "\n\n".join(code_sections)
+
+    def get_graph_explanation(self, script_download_link: str) -> str:
+        """Returns a textual explanation of the provenance graph."""
+        ordered_nodes = self.topological_sort()
+        used_data_nodes: list[ProvenanceNode] = []
+        processing_steps_nodes: list[ProvenanceNode] = []
+        for node in ordered_nodes:
+            if node.source_retriever in [
+                RetrieverType.PNEUMA_RETRIEVER,
+                RetrieverType.USER,
+                RetrieverType.ENUMERATOR,
+                RetrieverType.DOCUMENT_DB,
+                RetrieverType.WEB_SEARCH,
+            ]:
+                if node.source_retriever == RetrieverType.USER and node.python_code == self.ROOT_NODE_CODE:
+                    continue  # Skip the root node
+                if node.children:  # Only include if it has downstream usage
+                    used_data_nodes.append(node)
+            if node.source_retriever == RetrieverType.MATERIALIZER:
+                processing_steps_nodes.append(node)
+
+        textual_explanations: list[str] = []
+        textual_explanations.append(
+            f"""This document describes how **T** was generated, including all source data and processing steps. You can download the script [here]({script_download_link}).
+
+---
+
+## Used Data
+
+The following source data was used:"""
+        )
+        for used_data_node in used_data_nodes:
+            textual_explanations.append(f"```python\n{used_data_node.python_code}\n```")
+        
+        textual_explanations.append(
+            """## Data Processing Steps\nThe following processing steps were applied to the source data to generate **T**:"""
+        )
+        for step_number, processing_step_node in enumerate(processing_steps_nodes):
+            textual_explanations.append(
+                f"### Step {step_number + 1}:\n```python\n{processing_step_node.python_code}\n```"
+            )
+
+        return "\n".join(textual_explanations)
+
     def to_text(self) -> str:
         """Returns a textual representation of the graph."""
         lines = []
@@ -178,44 +261,6 @@ class ProvenanceGraph:
             lines.append("")
 
         return "\n".join(lines)
-
-    def get_graph_code(self) -> str:
-        """
-        Return a single Python code string that is the concatenation of all
-        node.python_code values in topologically sorted order (parents before children).
-        """
-        # Compute in-degree of each node
-        indegree = {node.id: 0 for node in self.nodes.values()}
-        for node in self.nodes.values():
-            for child in node.children:
-                indegree[child.id] = indegree.get(child.id, 0) + 1
-
-        # Kahn's algorithm (iterative topological sort)
-        queue = [n for n in self.nodes.values() if indegree.get(n.id, 0) == 0]
-        ordered_nodes = []
-        visited_count = 0
-
-        while queue:
-            node = queue.pop(0)
-            ordered_nodes.append(node)
-            visited_count += 1
-
-            for child in node.children:
-                indegree[child.id] -= 1
-                if indegree[child.id] == 0:
-                    queue.append(child)
-
-        # Detect cycles (non-DAG)
-        if visited_count != len(self.nodes):
-            self.logger.warning(
-                "[PROV GRAPH] Cycle detected during topological ordering!"
-            )
-
-        code_sections = [node.python_code for node in ordered_nodes if node.python_code]
-        return "\n\n".join(code_sections)
-
-    def get_graph_explanation(self) -> str:
-        return ""
 
     def get_graph_visualization(self) -> str:
         net = Network(notebook=True, directed=True, cdn_resources="in_line")

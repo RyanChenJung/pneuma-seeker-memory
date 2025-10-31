@@ -106,6 +106,33 @@ class ProvenanceGraphTests(unittest.TestCase):
         html_output = self.graph.get_graph_visualization()
         self.assertTrue(html_output.strip().startswith("<!DOCTYPE html>") or "<html" in html_output)
 
+    def test_get_graph_explanation(self):
+        """Tests the textual explanation returned by get_graph_explanation."""
+        # Create a used data node and a processing (materializer) node
+        used_node = ProvenanceNode(RetrieverType.WEB_SEARCH, "df = load_data()", "")
+        materializer_node = ProvenanceNode(RetrieverType.MATERIALIZER, "result = process(df)", "")
+
+        # Add nodes and connect them so the used node has downstream usage
+        self.graph.add_node(used_node)
+        self.graph.add_node(materializer_node)
+        self.graph.connect(used_node, materializer_node)
+
+        link = "http://example.com/script.py"
+        explanation = self.graph.get_graph_explanation(link)
+
+        # The script download link should be present
+        self.assertIn(link, explanation)
+
+        # The used data python code should appear in a code block
+        self.assertIn(f"```python\n{used_node.python_code}\n```", explanation)
+
+        # The materializer node should be listed as a processing step
+        self.assertIn("Step 1", explanation)
+        self.assertIn(materializer_node.python_code, explanation)
+
+        # The default root node code should not be listed under used data
+        self.assertNotIn(self.graph.ROOT_NODE_CODE, explanation)
+
     def test_get_graph_code_concatenation_simple(self):
         """Tests simple linear graph code concatenation."""
         # Simple linear DAG: n1 -> n2 -> n3
