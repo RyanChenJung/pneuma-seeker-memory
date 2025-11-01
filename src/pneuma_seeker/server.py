@@ -3,20 +3,26 @@ import asyncio
 import io
 import json
 import os
+import tempfile
 import zipfile
-
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import markdown
+import markdown2
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    StreamingResponse,
+)
 from fastapi.templating import Jinja2Templates
-from torch.backends import cudnn
-
 from pneuma_seeker.core.chat_interface import ChatInterface
+from torch.backends import cudnn
+from weasyprint import HTML
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -109,8 +115,55 @@ async def get_provenance_nodes(request: Request, user_id: str, chat_id: str):
     )
 
 
-@app.get("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
-async def read_combined_html(request: Request, user_id: str, chat_id: str):
+@app.post("/download_chat_pdf")
+async def download_chat_pdf(data: dict):
+    model = data["model"]
+    messages = data["messages"]
+    chat_id = data["chat_id"]
+
+    html_messages = ""
+    for msg in messages:
+        role = "User" if msg["role"] == "user" else model.capitalize()
+        color = "#f2f2f2" if msg["role"] == "user" else "#e8f0fe"
+        content_html = markdown2.markdown(msg["content"])
+        html_messages += f"""
+            <div style="margin-bottom: 16px; padding: 10px; border-radius: 10px; background-color: {color}">
+                <strong>{role}:</strong><br>{content_html}
+            </div>
+        """
+
+    full_html = f"""
+    <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: sans-serif;
+                    margin: 40px;
+                    background-color: #ffffff;
+                }}
+                h1 {{
+                    text-align: center;
+                }}
+            </style>
+        </head>
+        <body>
+            <h2>Chat Transcript</h2>
+            <h3>Chat ID: {chat_id}</h3>
+            {html_messages}
+        </body>
+    </html>
+    """
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        HTML(string=full_html).write_pdf(tmp_file.name)
+        return FileResponse(
+            tmp_file.name, filename=f"chat_{chat_id}.pdf", media_type="application/pdf"
+        )
+
+
+@app.post("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
+async def read_combined_html(request: Request, user_id: str, chat_id: str, data: dict):
     conductor = manager.get_chat_interface(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
 
@@ -128,6 +181,9 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
             prov_explanation_markdown, extensions=["fenced_code"]
         )
 
+    messages = data.get("messages", [])
+    model = data.get("model", "assistant")
+
     return templates.TemplateResponse(
         "state_view_prov_comprehensive.html",
         {
@@ -136,6 +192,8 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str):
             "prov_explanation": prov_explanation,
             "user_id": user_id,
             "chat_id": chat_id,
+            "model": model,
+            "messages": messages,
         },
     )
 

@@ -147,6 +147,10 @@
 <body class="p-4">
   <div class="container">
 
+    <button id="export-chat-pdf-btn" class="btn btn-outline-danger btn-sm download-btn">
+      <i class="bi bi-file-earmark-pdf"></i> Export Chat as PDF
+    </button>
+
     <!-- Collapsible Pneuma's State Card -->
     <div class="card mb-4 shadow-sm">
       <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
@@ -318,6 +322,46 @@
     const provCodePre = document.getElementById("prov-code-pre");
     const provCode = {{ prov_explanation | tojson | safe }};
     provCodePre.innerHTML = typeof provCode === "string" ? provCode : (provCode ? String(provCode) : "");
+
+    const exportPdfBtn = document.getElementById("export-chat-pdf-btn");
+    exportPdfBtn.addEventListener("click", async () => {
+      const baseUrl =
+        window.location.hostname === "localhost" && window.location.port === "8080"
+          ? "http://localhost:8000"
+          : "";
+
+      const url = `${baseUrl}/download_chat_pdf`;
+
+      try {
+        const payload = {
+          model: "{{ model }}",
+          chat_id: "{{ chat_id }}",
+          messages: {{ messages | tojson | safe }},
+        };
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `chat_{{ chat_id }}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error("Export PDF error:", err);
+        alert("Failed to export chat as PDF. Check console for details.");
+      }
+    });
+
   </script>
 </body>
 

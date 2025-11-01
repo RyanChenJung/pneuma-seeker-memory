@@ -41,14 +41,13 @@ class Action:
             content = re.sub(r"\n{3,}", "\n\n", content).strip()
             msg["content"] = content
 
-    async def _fetch_launcher_html(self, user_id: str, chat_id: str) -> str:
+    async def _fetch_launcher_html(self, user_id: str, chat_id: str, body: dict) -> str:
         url = f"http://127.0.0.1:8000/combined/html/{user_id}/{chat_id}"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-                resp = await client.get(url)
+                resp = await client.post(url, json=body)
                 resp.raise_for_status()
                 html = resp.text
-                # Inject a taller height wrapper to reduce scrolling
                 html = html.replace("<body", '<body style="min-height:800px;"')
                 return html
         except httpx.ReadTimeout:
@@ -102,7 +101,7 @@ class Action:
                 # Toggle ON → fetch HTML and insert WITH the markers inside the code fence
                 user_id = (__user__ or {}).get("id", "anonymous")
                 launcher_html = await self._fetch_launcher_html(
-                    user_id, body["chat_id"]
+                    user_id, body["chat_id"], body
                 )
 
                 # Escape triple backticks in the fetched HTML so the fence doesn't break
