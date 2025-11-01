@@ -22,7 +22,6 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 from pneuma_seeker.core.chat_interface import ChatInterface
 from torch.backends import cudnn
-from weasyprint import HTML
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -117,6 +116,8 @@ async def get_provenance_nodes(request: Request, user_id: str, chat_id: str):
 
 @app.post("/download_chat_pdf")
 async def download_chat_pdf(data: dict):
+    from weasyprint import HTML
+
     model = data["model"]
     messages = data["messages"]
     chat_id = data["chat_id"]

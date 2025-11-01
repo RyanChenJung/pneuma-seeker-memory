@@ -1,10 +1,19 @@
+import io
 import os
+import shutil
 import sys
+import tempfile
 import types
 import unittest
+import zipfile
+from pathlib import Path
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src")))
+from fastapi.responses import HTMLResponse
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
+)
 
 from fastapi.testclient import TestClient
 
@@ -111,6 +120,110 @@ class ServerEndpointTests(unittest.TestCase):
             )
         finally:
             server.manager.get_chat_interface = original_get
+
+    # def test_download_chat_pdf_returns_pdf(self):
+    #     # Patch server.HTML to avoid heavy weasyprint dependency and write a dummy PDF
+    #     original_HTML = server.HTML
+
+    #     class DummyHTML:
+    #         def __init__(self, string=None):
+    #             self.string = string
+
+    #         def write_pdf(self, path):
+    #             with open(path, "wb") as f:
+    #                 f.write(b"%PDF-1.4\n%dummy pdf\n")
+
+    #     server.HTML = DummyHTML
+    #     try:
+    #         body = {
+    #             "model": "assistant",
+    #             "messages": [{"role": "user", "content": "hello"}],
+    #             "chat_id": "c_pdf",
+    #         }
+    #         r = self.client.post("/download_chat_pdf", json=body)
+    #         self.assertEqual(r.status_code, 200)
+    #         self.assertEqual(r.headers.get("content-type"), "application/pdf")
+    #         # PDF signature should be present
+    #         self.assertTrue(r.content.startswith(b"%PDF"))
+    #         self.assertIn("attachment; filename=", r.headers.get("content-disposition", ""))
+    #     finally:
+    #         server.HTML = original_HTML
+
+    def test_combined_html_calls_prov_explanation_and_renders(self):
+        # Prepare a chat_interface mock where T is materialized and prov_graph returns markdown
+        prov_graph = MagicMock()
+        prov_graph.get_graph_explanation.return_value = "**md** code"
+
+        materializer = MagicMock()
+        materializer.prov_graph = prov_graph
+
+        info_need_state = MagicMock()
+        info_need_state.get_current_state_instance.return_value = {"state": "ok"}
+        info_need_state.is_T_materialized = True
+
+        conductor = MagicMock()
+        conductor.materializer = materializer
+        conductor.info_need_state = info_need_state
+
+        chat_interface = MagicMock()
+        chat_interface.conductor = conductor
+
+        original_get = server.manager.get_chat_interface
+        server.manager.get_chat_interface = lambda user_id, chat_id: chat_interface
+
+        # Replace templates.TemplateResponse so we can inspect the context passed to it
+        original_templates = server.templates
+
+        def fake_template_response(template_name, context):
+            # Ensure prov_explanation was computed from prov_graph markdown
+            self.assertIn("prov_explanation", context)
+            # It should include HTML converted from markdown (bold -> <strong>) or at least the markdown content
+            self.assertTrue("md" in context["prov_explanation"])
+            return HTMLResponse(content=context["prov_explanation"], status_code=200)
+
+        # Replace the templates object with a minimal object exposing TemplateResponse
+        server.templates = types.SimpleNamespace(
+            TemplateResponse=fake_template_response
+        )
+
+        try:
+            payload = {
+                "messages": [{"role": "user", "content": "hi"}],
+                "model": "assistant",
+            }
+            r = self.client.post("/combined/html/u1/c1", json=payload)
+            self.assertEqual(r.status_code, 200)
+            # Body should contain the prov_explanation we returned
+            self.assertIn("md", r.text)
+            # ensure the prov_graph method was called
+            prov_graph.get_graph_explanation.assert_called()
+        finally:
+            server.manager.get_chat_interface = original_get
+            server.templates = original_templates
+
+    def test_all_tables_downloads_zip(self):
+        # Create a temp TABLES_DIR structure with user/chat and a csv file
+        tmp_dir = tempfile.mkdtemp()
+        original_tables_dir = server.TABLES_DIR
+        server.TABLES_DIR = Path(tmp_dir)
+        try:
+            user_dir = server.TABLES_DIR / "u_test"
+            chat_dir = user_dir / "c_test"
+            chat_dir.mkdir(parents=True)
+            csv_path = chat_dir / "table1.csv"
+            csv_path.write_text("col1,col2\n1,2\n")
+
+            r = self.client.get(f"/all_tables/u_test/c_test")
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("application/zip", r.headers.get("content-type", ""))
+            # Verify returned bytes form a valid zip with the csv inside
+            zip_bytes = r.content
+            z = zipfile.ZipFile(io.BytesIO(zip_bytes))
+            names = z.namelist()
+            self.assertIn("table1.csv", names)
+        finally:
+            server.TABLES_DIR = original_tables_dir
+            shutil.rmtree(tmp_dir)
 
     def test_chat_endpoint_streams_messages_and_calls_persist(self):
         messages = [{"role": "user", "content": "hi"}]
