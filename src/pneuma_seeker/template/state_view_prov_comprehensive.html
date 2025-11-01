@@ -36,8 +36,7 @@
     }
 
     .table-container {
-      flex: 0 0 auto;
-      max-width: 400px;
+      flex: 1 1 auto;
       min-width: 200px;
     }
 
@@ -147,9 +146,28 @@
 <body class="p-4">
   <div class="container">
 
-    <button id="export-chat-pdf-btn" class="btn btn-outline-danger btn-sm download-btn">
-      <i class="bi bi-file-earmark-pdf"></i> Export Chat as PDF
-    </button>
+    <!-- Collapsible Export Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#exportCardBody" aria-expanded="false" aria-controls="exportCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-box-arrow-up-right me-2"></i>
+          Export
+        </div>
+        <i class="bi bi-chevron-down small"></i>
+      </div>
+
+      <div id="exportCardBody" class="collapse">
+        <div class="card-body d-flex gap-2 flex-wrap">
+          <button id="export-chat-pdf-btn" class="btn btn-outline-danger btn-sm download-btn">
+            <i class="bi bi-file-earmark-pdf"></i> Export Chat as PDF
+          </button>
+          <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
+            <i class="bi bi-download"></i> Download Target Tables
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Collapsible Pneuma's State Card -->
     <div class="card mb-4 shadow-sm">
@@ -159,7 +177,6 @@
           <i class="bi bi-database-fill me-2"></i>
           Pneuma's State
         </div>
-        <i class="bi bi-chevron-down small"></i>
       </div>
 
       <div id="pneumaCardBody" class="collapse show">
@@ -176,10 +193,6 @@
                     id="materialized-status">No</span></span>
               </h5>
             </div>
-
-            <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
-              <i class="bi bi-download"></i>
-            </button>
           </div>
 
           <div id="T" class="tables-flex mb-4"></div>
@@ -231,7 +244,7 @@
     document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
     document.getElementById("script-status").textContent = state.is_S_executed ? "Yes" : "No";
 
-    // Download button logic
+    // Download Target Tables
     const downloadBtn = document.getElementById("download-tables-btn");
     downloadBtn.addEventListener("click", async () => {
       const baseUrl =
@@ -264,6 +277,47 @@
       downloadBtn.title = "No tables available to download yet";
     }
 
+    // Export Chat as PDF
+    const exportPdfBtn = document.getElementById("export-chat-pdf-btn");
+    exportPdfBtn.addEventListener("click", async () => {
+      const baseUrl =
+        window.location.hostname === "localhost" && window.location.port === "8080"
+          ? "http://localhost:8000"
+          : "";
+
+      const url = `${baseUrl}/download_chat_pdf`;
+
+      try {
+        const payload = {
+          model: "{{ model }}",
+          chat_id: "{{ chat_id }}",
+          messages: {{ messages | tojson | safe
+      }},
+        };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `chat_{{ chat_id }}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+      console.error("Export PDF error:", err);
+      alert("Failed to export chat as PDF. Check console for details.");
+    }
+    });
+
     // Render Target Tables
     const targetSchemasDiv = document.getElementById("T");
     for (const [tableName, rows] of Object.entries(state.T || {})) {
@@ -274,6 +328,9 @@
       tableTitle.className = "table-title";
       tableTitle.textContent = tableName;
       tableContainer.appendChild(tableTitle);
+
+      const scrollWrapper = document.createElement("div");
+      scrollWrapper.className = "table-responsive";
 
       const tableEl = document.createElement("table");
       tableEl.className = "table table-striped table-hover table-bordered align-middle table-sm";
@@ -302,11 +359,7 @@
       });
       tableEl.appendChild(tbody);
 
-      const scrollWrapper = document.createElement("div");
-      scrollWrapper.style.overflowX = "auto";
-      scrollWrapper.style.maxWidth = "100%";
       scrollWrapper.appendChild(tableEl);
-
       tableContainer.appendChild(scrollWrapper);
       targetSchemasDiv.appendChild(tableContainer);
     }
@@ -322,46 +375,6 @@
     const provCodePre = document.getElementById("prov-code-pre");
     const provCode = {{ prov_explanation | tojson | safe }};
     provCodePre.innerHTML = typeof provCode === "string" ? provCode : (provCode ? String(provCode) : "");
-
-    const exportPdfBtn = document.getElementById("export-chat-pdf-btn");
-    exportPdfBtn.addEventListener("click", async () => {
-      const baseUrl =
-        window.location.hostname === "localhost" && window.location.port === "8080"
-          ? "http://localhost:8000"
-          : "";
-
-      const url = `${baseUrl}/download_chat_pdf`;
-
-      try {
-        const payload = {
-          model: "{{ model }}",
-          chat_id: "{{ chat_id }}",
-          messages: {{ messages | tojson | safe }},
-        };
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
-
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = `chat_{{ chat_id }}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(blobUrl);
-      } catch (err) {
-        console.error("Export PDF error:", err);
-        alert("Failed to export chat as PDF. Check console for details.");
-      }
-    });
-
   </script>
 </body>
 
