@@ -340,7 +340,7 @@ class Materializer:
                     all_table_doc_ids = [i.doc_id for i in all_tables]
                     if table_id_to_select not in all_table_doc_ids:
                         error_msg = (
-                            f"Invalid table ID to select. Ensure the table exists."
+                            "Invalid table ID to select. Ensure the table exists."
                         )
                         self.__log(error_msg)
                         self.actions.append(error_msg)
@@ -676,7 +676,7 @@ class Materializer:
                                 f"{assign_to}.csv",
                             )}",
                         ),
-                        description=f"Executes Python code.",
+                        description="Executes Python code.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
