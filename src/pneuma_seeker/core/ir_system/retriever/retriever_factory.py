@@ -3,6 +3,7 @@ from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRe
 from pneuma_seeker.core.ir_system.retriever.impl.enumerator import Enumerator
 from pneuma_seeker.core.ir_system.retriever.impl.pneuma import Pneuma
 from pneuma_seeker.core.ir_system.retriever.impl.document_db import DocumentDB
+from pneuma_seeker.core.ir_system.retriever.impl.web_crawler import WebCrawler
 from pneuma_seeker.core.ir_system.retriever.impl.web_search import WebSearch
 from pneuma_seeker.utils.config import Config
 
@@ -17,6 +18,7 @@ class RetrieverFactory:
             RetrieverType.DOCUMENT_DB: DocumentDB(models, config),
             RetrieverType.WEB_SEARCH: WebSearch(models, config),
             RetrieverType.ENUMERATOR: Enumerator(models, config),
+            RetrieverType.WEB_CRAWL: WebCrawler(models, config),
         }
 
     def get_retriever(self, retriever_type: RetrieverType) -> AbstractRetriever:

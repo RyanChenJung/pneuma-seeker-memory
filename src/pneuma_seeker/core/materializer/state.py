@@ -7,6 +7,7 @@ class MaterializerState:
         self.retrieved_tables: list[AbstractDocument] = []
         self.intermediate_tables: set[AbstractDocument] = set()
         self.web_search_result: AbstractDocument | None = None
+        self.web_crawl_result: AbstractDocument | None = None
 
     def add_intermediate_table(self, table: AbstractDocument):
         if table in self.intermediate_tables:
@@ -17,3 +18,4 @@ class MaterializerState:
         self.retrieved_tables = []
         self.intermediate_tables = set()
         self.web_search_result = None
+        self.web_crawl_result = None

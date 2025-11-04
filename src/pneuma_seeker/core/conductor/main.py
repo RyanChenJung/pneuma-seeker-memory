@@ -71,6 +71,7 @@ class Conductor:
         self.external_tables: list[AbstractDocument] = []
         self.enumerated_table_ids: list[str] = []
         self.web_search_result: AbstractDocument | None = None
+        self.web_crawl_result: AbstractDocument | None = None
 
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -142,6 +143,7 @@ class Conductor:
                         self.enumerated_table_ids,
                         self.external_tables,
                         self.web_search_result,
+                        self.web_crawl_result,
                     ),
                 )
             )
@@ -256,6 +258,26 @@ class Conductor:
             if self.web_search_result is None:
                 return "No relevant information was found from Web Search."
             return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
+        if tool == "web_crawl" and self.config.ENABLE_WEB_CRAWL:
+            self.__log(f"Web Crawl request with params: {args}")
+            if not isinstance(args, dict):
+                error_message = "=> `args` must be an object with a `url` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+            if "url" not in args:
+                error_message = "=> `args` must have a `url` property"
+                self.__log(f"=> {error_message}")
+                return error_message
+
+            retrieved_docs = self.toolkit.retrieve_documents(
+                args["url"], RetrieverType.WEB_CRAWL
+            )
+            self.web_crawl_result = (
+                retrieved_docs[0] if len(retrieved_docs) > 0 else None
+            )
+            if self.web_crawl_result is None:
+                return "No relevant information was found from Web Crawl."
+            return "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated."
         if tool == "table_enumerator":
             self.__log(f"Table Enumerator request with params: {args}")
 
@@ -449,6 +471,8 @@ class Conductor:
             user_side_note,
             external_tables,
             self.retrieved_tables,
+            self.web_search_result,
+            self.web_crawl_result,
         )
 
         materialized_T: dict[str, AbstractDocument] = {}

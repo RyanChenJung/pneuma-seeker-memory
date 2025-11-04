@@ -65,6 +65,8 @@ class Materializer:
         user_side_note="",
         external_tables: list[AbstractDocument] = [],
         prefetched_tables: list[AbstractDocument] = [],
+        prefetched_web_search_result: AbstractDocument | None = None,
+        prefetched_web_crawl_result: AbstractDocument | None = None,
     ) -> dict[str, DataFrame]:
         """Materialize target tables T based on the provided script S and external tables."""
         self.__log(f"Materializing {len(T)} target tables")
@@ -72,6 +74,11 @@ class Materializer:
 
         if len(prefetched_tables) > 0:
             self.state.retrieved_tables = prefetched_tables
+
+        if prefetched_web_search_result is not None:
+            self.state.web_search_result = prefetched_web_search_result
+        if prefetched_web_crawl_result is not None:
+            self.state.web_crawl_result = prefetched_web_crawl_result
 
         prev_response = ""
         repetitive_response_count = 0
@@ -106,6 +113,7 @@ class Materializer:
                         user_side_note,
                         external_tables,
                         self.state.web_search_result,
+                        self.state.web_crawl_result,
                     ),
                 )
             )
@@ -231,12 +239,12 @@ class Materializer:
 
         match op_name:
             case "pneuma_retriever":
-                prompt = op_args.get("prompt", "")
+                url = op_args.get("prompt", "")
                 self.state.retrieved_tables = self.toolkit.retrieve_documents(
-                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10
+                    url, RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 self.actions.append(
-                    f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "retrieved internal tables" have been filled.'
+                    f'Successfully retrieved tables using this prompt: ```{url}```. Notice that the "retrieved internal tables" have been filled.'
                 )
 
                 for doc in self.state.retrieved_tables:
@@ -255,9 +263,9 @@ class Materializer:
                         "Web search is not enabled in the configuration."
                     )
                     return
-                prompt = op_args.get("prompt", "")
+                url = op_args.get("prompt", "")
                 web_search_results = self.toolkit.retrieve_documents(
-                    prompt, RetrieverType.WEB_SEARCH
+                    url, RetrieverType.WEB_SEARCH
                 )
                 if len(web_search_results) == 0:
                     self.actions.append(
@@ -266,7 +274,7 @@ class Materializer:
                     return
                 self.state.web_search_result = web_search_results[0]
                 self.actions.append(
-                    f'Successfully retrieved information from Web Search using this prompt: ```{prompt}```. Notice that the "Retrieved internal tables" have been filled.'
+                    f'Successfully retrieved information from Web Search using this prompt: ```{url}```. Notice that the "Web search result" have been filled.'
                 )
 
                 new_node = ProvenanceNode(
@@ -274,10 +282,39 @@ class Materializer:
                     python_code=self.toolkit.generate_view_textual_document_code(
                         self.state.web_search_result
                     ),
-                    description=f"Searches the web using this query: {prompt}.",
+                    description=f"Searches the web using this query: {url}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
+            case "web_crawl":
+                if not self.config.ENABLE_WEB_CRAWL:
+                    self.actions.append(
+                        "Web crawl is not enabled in the configuration."
+                    )
+                    return
+                url = op_args.get("url", "")
+                web_crawl_results = self.toolkit.retrieve_documents(
+                    url, RetrieverType.WEB_CRAWL
+                )
+                if len(web_crawl_results) == 0:
+                    self.actions.append(
+                        "No relevant information was found from web crawl."
+                    )
+                    return
+                self.state.web_crawl_result = web_crawl_results[0]
+                self.actions.append(
+                    f'Successfully retrieved information from Web Crawl using this URL: ```{url}```. Notice that the "Web crawl result" have been filled.'
+                )
+
+                new_node = ProvenanceNode(
+                    source_retriever=RetrieverType.WEB_CRAWL,
+                    python_code=self.toolkit.generate_view_textual_document_code(
+                        self.state.web_crawl_result
+                    ),
+                    description=f"Crawls the web page with this URL: {url}.",
+                )
+                self.prov_graph.add_node(new_node, True)
+                self.state.web_crawl_result.last_node_id = new_node.id
             case "table_enumerator":
                 pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
@@ -340,7 +377,7 @@ class Materializer:
                     all_table_doc_ids = [i.doc_id for i in all_tables]
                     if table_id_to_select not in all_table_doc_ids:
                         error_msg = (
-                            f"Invalid table ID to select. Ensure the table exists."
+                            "Invalid table ID to select. Ensure the table exists."
                         )
                         self.__log(error_msg)
                         self.actions.append(error_msg)
@@ -676,7 +713,7 @@ class Materializer:
                                 f"{assign_to}.csv",
                             )}",
                         ),
-                        description=f"Executes Python code.",
+                        description="Executes Python code.",
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:

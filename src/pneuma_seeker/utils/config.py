@@ -27,6 +27,9 @@ class Config:
         self.MATERIALIZER_HARD_ITERATION_LIMIT = 100
         self.ENABLE_WEB_SEARCH = self.__get_enable_web_search()
 
+        self.ENABLE_WEB_CRAWL = os.getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
+        self.WEB_CRAWL_MAX_CHARS = int(os.getenv("WEB_CRAWL_MAX_CHARS", "5000"))
+
     def __get_use_azure(self):
         """Determines whether to use Azure OpenAI based on environment variable."""
         use_azure = os.getenv("USE_AZURE", "false").lower()

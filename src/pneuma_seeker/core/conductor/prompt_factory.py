@@ -123,6 +123,7 @@ If you find that a computation requires matching data from different tables, fir
     - E.g., if `pneuma_retriever` retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
 
 {self.get_web_search_description() + "\n" if self.config.ENABLE_WEB_SEARCH else ""}
+{self.get_web_crawl_description() + "\n" if self.config.ENABLE_WEB_CRAWL else ""}
 ## Tool Dependencies
   - `T` and `S` must already be defined before calling `materializer`.
   - `T` must be materialized before executing `S` via `executor`.
@@ -144,7 +145,7 @@ Return **only one** JSON object describing your next action in one of the format
 OR
 {{
     "action": "tool_call",
-    "tool": "<one_of: pneuma_retriever, table_enumerator, state_manipulation, materializer, executor, categorical_column_info{", web_search" if self.config.ENABLE_WEB_SEARCH else ""}>",
+    "tool": "<one_of: pneuma_retriever, table_enumerator, state_manipulation, materializer, executor, categorical_column_info{", web_search" if self.config.ENABLE_WEB_SEARCH else ""}{", web_crawl" if self.config.ENABLE_WEB_CRAWL else ""}>",
     "args": {{ ... }}
 }}
 OR
@@ -165,6 +166,18 @@ Finds a piece of information from the web.
   - However, for different topics or aspects of an information need, feel free to call multiple times.
 """
 
+    def get_web_crawl_description(self):
+        """Gets the web crawl tool description for Conductor."""
+        return """- **web_crawl**:
+Finds/raw-crawls a specific web page (URL) and returns the extracted text content.
+- **Args**: {{"url": "<page_url>"}}
+- **Returns**: The textual content (possibly truncated) of the requested page.
+- **Notes**:
+  - The crawler respects robots.txt and will not fetch disallowed paths.
+  - Returned content is raw extracted text from the page (no summarization).
+  - Use this when the user specifically requests information from a particular URL.
+"""
+
     def get_env_state_prompt(
         self,
         curr_iteration: int,
@@ -177,6 +190,7 @@ Finds a piece of information from the web.
         enumerated_table_ids: list[str],
         external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None = None,
+        web_crawl_result: AbstractDocument | None = None,
     ) -> str:
         """Gets the environment state prompt for Conductor."""
         return f"""
@@ -201,6 +215,7 @@ EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
 {convert_retrieval_results_to_str(external_tables)}
 
 {f"WEB SEARCH RESULT (IF ANY):\n {convert_retrieval_results_to_str([web_search_result] if web_search_result else [])}" if self.config.ENABLE_WEB_SEARCH else ""}
+{f"WEB CRAWL RESULT (IF ANY):\n {convert_retrieval_results_to_str([web_crawl_result] if web_crawl_result else [])}" if self.config.ENABLE_WEB_CRAWL else ""}
 
 CURRENT USER INPUT:
 {human_input}
