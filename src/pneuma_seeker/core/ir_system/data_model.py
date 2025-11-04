@@ -21,6 +21,7 @@ class RetrieverType(Enum):
     DOCUMENT_DB = "Document DB"
     WEB_SEARCH = "Web Search"
     USER = "User"
+    WEB_CRAWL = "Web Crawl"
 
 
 class RetrieverModel(TypedDict):
