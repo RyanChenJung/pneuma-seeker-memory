@@ -1,5 +1,6 @@
-def get_operation_description(enable_web_search = False):
-    return """
+def get_operation_description(enable_web_search=False, enable_web_crawl=False) -> str:
+    return (
+        """
 - **pneuma_retriever**
     - Retrieves relevant tables from the internal database based on natural-language prompts.
     - Does not affect user-provided external tables. However, previously retrieved internal tables are replaced each time this tool is called.
@@ -46,7 +47,7 @@ def get_operation_description(enable_web_search = False):
     - Joins two tables (internal, external, or intermediate) by computing semantic similarity between specified columns.
     - Similarity uses a weighted combination of embedding cosine similarity and normalized Damerau-Levenshtein edit similarity.
     - Produces a new joined table containing matched rows and a similarity_score column.
-    - Use case: when the user explicitly asks for it, or when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM").  
+    - Use case: when the user explicitly asks for it, or when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM").
       Even if both tables share a key column (e.g., "product_id"), the user may prefer semantic matching — for instance, comparing product descriptions between catalogs from different years to detect essentially identical products that were renumbered but now sold at different prices.
     - Args: {
         "left_table_id": "<ID of left table (must exist in retrieved or intermediate tables)>",
@@ -80,7 +81,11 @@ def get_operation_description(enable_web_search = False):
         "relevant_columns": ["product_name", "description"],
         "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing'."
       }
-""".strip() + (get_web_search_description() if enable_web_search else "")
+""".strip()
+        + (get_web_search_description() if enable_web_search else "")
+        + (get_web_crawl_description() if enable_web_crawl else "")
+    )
+
 
 def get_web_search_description():
     """Gets the optional web search description for the Materializer."""
@@ -90,3 +95,14 @@ def get_web_search_description():
     - Usage notes:
         - Use web_search only when no reliable internal/external source exists for the required column(s).
         - Avoid repetitive or redundant queries."""
+
+
+def get_web_crawl_description():
+    """Gets the optional web crawl description for the Materializer."""
+    return """\n- **web_crawl**
+    - Crawls a specified web page to extract textual content for table materialization.
+    - Args: {"url": "<URL of the web page to crawl>"}
+    - Usage notes:
+        - Use this when the user specifically requests information from a particular URL.
+        - The crawler respects robots.txt and will not fetch disallowed paths.
+        - Returned content is raw extracted text from the page (no summarization)."""
