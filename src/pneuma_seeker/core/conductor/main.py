@@ -471,6 +471,8 @@ class Conductor:
             user_side_note,
             external_tables,
             self.retrieved_tables,
+            self.web_search_result,
+            self.web_crawl_result,
         )
 
         materialized_T: dict[str, AbstractDocument] = {}
