@@ -46,6 +46,7 @@ class ConductorTests(unittest.TestCase):
 
         config = Config(".env.test")
         config.ENABLE_WEB_SEARCH = True
+        config.ENABLE_WEB_CRAWL = True
 
         self.logger = logging.getLogger("test_conductor")
         self.logger.setLevel(logging.ERROR)
@@ -123,6 +124,36 @@ class ConductorTests(unittest.TestCase):
         self.assertIsNotNone(
             self.conductor.web_search_result,
             "web_search_result should be set after web_search call",
+        )
+
+    def test_web_crawl_sets_web_crawl_result(self):
+        plan1 = '{"action":"tool_call","tool":"web_crawl","args":{"url":"http://example.com"}}'
+        plan2 = '{"action":"communicate_with_user","message":"web crawl done"}'
+        self.mock_llm._responses = [plan1, plan2]
+
+        self.conductor.toolkit.retrieve_documents = MagicMock(
+            return_value=[
+                Text(
+                    doc_id="web_result_1",
+                    retriever_type=RetrieverType.WEB_CRAWL,
+                    content="This is a web crawl result.",
+                    metadata={},
+                )
+            ]
+        )
+
+        gen = self.conductor.process_input(
+            user_input="Look up this URL: http://example.com",
+            user_id="u1",
+            chat_id="c1",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        responses = list(gen)
+        self.assertIn("web crawl done", responses[-1], "Expected web crawl done in final response")
+        self.assertIsNotNone(
+            self.conductor.web_crawl_result,
+            "web_crawl_result should be set after web_crawl call",
         )
 
     def test_table_enumerator_updates_enumerated_ids(self):
