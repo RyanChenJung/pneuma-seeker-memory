@@ -253,8 +253,8 @@ Please output your decision in the following format:
 
     def get_direct_response_anyway_prompt(self) -> str:
         """Gets the direct response anyway prompt for Conductor."""
-        return """You have reached the iteration limit for this step. Please summarize the actions that you have done.
-You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the summary."""
+        return """You have reached the iteration limit for this step. Please summarize the actions that you have done and answer the current user input.
+You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the summary and answer the current user input."""
 
     def __convert_interactions_to_str(
         self, interactions: list[HumanConductorInteraction]
