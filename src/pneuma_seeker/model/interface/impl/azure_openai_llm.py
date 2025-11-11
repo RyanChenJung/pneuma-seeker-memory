@@ -38,7 +38,6 @@ class AzureOpenAILLM(AbstractModel):
         self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None
     ) -> Generator[str, None, None]:
         max_completion_tokens = None
-        top_p = None
         json_mode = False
         stream = False
         temperature = 1
@@ -48,8 +47,6 @@ class AzureOpenAILLM(AbstractModel):
             stream = llm_option.stream
             if llm_option.temperature:
                 temperature = llm_option.temperature
-            if llm_option.top_p:
-                top_p = llm_option.top_p
 
         if stream:
             # Stream response as generator of chunks
@@ -62,7 +59,6 @@ class AzureOpenAILLM(AbstractModel):
                     max_completion_tokens=max_completion_tokens,
                     response_format={"type": "json_object"},
                     stream=stream,
-                    top_p=top_p,
                 )  # type: ignore
             else:
                 response_stream = self.client.chat.completions.create(
@@ -72,7 +68,6 @@ class AzureOpenAILLM(AbstractModel):
                     temperature=temperature,
                     max_completion_tokens=max_completion_tokens,
                     stream=stream,
-                    top_p=top_p,
                 )  # type: ignore
 
             for event in response_stream:
@@ -95,7 +90,6 @@ class AzureOpenAILLM(AbstractModel):
                         temperature=temperature,
                         max_completion_tokens=max_completion_tokens,
                         response_format={"type": "json_object"},
-                        top_p=top_p,
                     )
                     .choices[0]
                     .message.content
@@ -108,7 +102,6 @@ class AzureOpenAILLM(AbstractModel):
                         seed=42,
                         temperature=temperature,
                         max_completion_tokens=max_completion_tokens,
-                        top_p=top_p,
                     )
                     .choices[0]
                     .message.content
