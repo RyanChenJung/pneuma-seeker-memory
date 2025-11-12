@@ -1,9 +1,13 @@
 import os
 from logging import Logger
+from typing import Any
 
 import pandas as pd
 
-from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
+from pneuma_seeker.core.conductor.data_model import (
+    HumanConductorInteraction,
+    ToolExecutionStatus,
+)
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.shared.toolkit.main import Toolkit
@@ -128,12 +132,10 @@ class Conductor:
         ]
 
         while not is_user_facing_response and num_actions_taken < self.iteration_limit:
-            num_actions_taken += 1
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
-                        num_actions_taken,
                         self.iteration_limit,
                         self.info_need_state,
                         interaction_history,
@@ -142,6 +144,7 @@ class Conductor:
                         user_input,
                         self.enumerated_table_ids,
                         self.external_tables,
+                        self.iteration_limit - num_actions_taken,
                         self.web_search_result,
                         self.web_crawl_result,
                     ),
@@ -156,10 +159,12 @@ class Conductor:
             )
 
             try:
-                action_plan = parse_json(full_response)
+                plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
+                for action_plan in plan:
+                    if action_plan.get("action") is None:
+                        raise ValueError("Action specified is not valid.")
             except ValueError as exc:
                 self.__log(f"Failed to parse LLM response as JSON: {exc}")
-                num_actions_taken -= 1
                 llm_messages.append(
                     LLMMessage(
                         role=Role.USER.value,
@@ -168,41 +173,53 @@ class Conductor:
                 )
                 continue
 
-            action: str = action_plan.get("action", "")
-            actions_taken.append(action)
-            action_message: None | str = action_plan.get("message")
-            tool: None | str = action_plan.get("tool")
-            args: None | dict = action_plan.get("args")
+            for action_plan in plan:
+                actions_taken.append(str(action_plan))
+                action_type: str = action_plan.get("action")
+                action_message: None | str = action_plan.get("message")
+                tool: None | str = action_plan.get("tool")
+                args: None | dict = action_plan.get("args")
 
-            if action == "communicate_with_user" and isinstance(action_message, str):
-                user_facing_response = action_message
-                is_user_facing_response = True
-            elif action == "internal_reasoning" and isinstance(action_message, str):
-                self.logger.debug(f"num_actions_taken: {num_actions_taken}")
-                self.logger.debug(f"actions_taken[-1]: {actions_taken[-1]}")
-                yield "LOG: Reasoning internally..."
-                if num_actions_taken > 1 and actions_taken[-1] == "internal_reasoning":
-                    llm_messages.append(
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content="You cannot select `internal_reasoning` consecutively. Please select a different action!",
+                if action_type == "communicate_with_user" and isinstance(
+                    action_message, str
+                ):
+                    user_facing_response = action_message
+                    is_user_facing_response = True
+                    num_actions_taken += 1
+                elif action_type == "internal_reasoning" and isinstance(
+                    action_message, str
+                ):
+                    yield "LOG: Reasoning internally..."
+                    if (
+                        num_actions_taken > 1
+                        and actions_taken[-1] == "internal_reasoning"
+                    ):
+                        llm_messages.append(
+                            LLMMessage(
+                                role=Role.USER.value,
+                                content="You cannot select `internal_reasoning` consecutively. Please select a different action!",
+                            )
                         )
-                    )
-                else:
-                    llm_messages.append(
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content=f"You did some internal reasoning: {action_message}",
+                    else:
+                        llm_messages.append(
+                            LLMMessage(
+                                role=Role.USER.value,
+                                content=f"You did some internal reasoning: {action_message}",
+                            )
                         )
+                        num_actions_taken += 1
+                elif args is not None:
+                    if tool is None:
+                        tool = action_type
+                    yield f"LOG: Calling tool: {tool}..."
+                    tool_outcome, tool_execution_status = self.__execute_tool(
+                        tool, args, user_id, chat_id
                     )
-            elif args is not None:
-                if tool is None:
-                    tool = action
-                yield f"LOG: Calling tool: {tool}..."
-                tool_outcome = self.__execute_tool(tool, args, user_id, chat_id)
-                llm_messages.append(
-                    LLMMessage(role=Role.USER.value, content=tool_outcome)
-                )
+                    llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=tool_outcome)
+                    )
+                    if tool_execution_status == ToolExecutionStatus.SUCCESS:
+                        num_actions_taken += 1
 
         if not is_user_facing_response:
             self.__log("Force produce user-facing response")
@@ -220,7 +237,7 @@ class Conductor:
 
     def __execute_tool(
         self, tool: str, args: str | dict, user_id: str, chat_id: str
-    ) -> str:
+    ) -> tuple[str, ToolExecutionStatus]:
         """Executes a specified tool with given arguments."""
         if tool == "pneuma_retriever":
             self.__log(f"Pneuma-Retriever request with params: {args}")
@@ -228,26 +245,29 @@ class Conductor:
             if not isinstance(args, dict):
                 error_message = "=> `args` must be an object with a `prompt` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
             if "prompt" not in args:
                 error_message = "=> `args` must have a `prompt` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             self.retrieved_tables = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.PNEUMA_RETRIEVER
             )
-            return "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
+            return (
+                "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated.",
+                ToolExecutionStatus.SUCCESS,
+            )
         if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:
             self.__log(f"Web Search request with params: {args}")
             if not isinstance(args, dict):
                 error_message = "=> `args` must be an object with a `prompt` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
             if "prompt" not in args:
                 error_message = "=> `args` must have a `prompt` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             retrieved_docs = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.WEB_SEARCH
@@ -256,18 +276,24 @@ class Conductor:
                 retrieved_docs[0] if len(retrieved_docs) > 0 else None
             )
             if self.web_search_result is None:
-                return "No relevant information was found from Web Search."
-            return "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated."
+                return (
+                    "No relevant information was found from Web Search.",
+                    ToolExecutionStatus.SUCCESS,
+                )
+            return (
+                "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated.",
+                ToolExecutionStatus.SUCCESS,
+            )
         if tool == "web_crawl" and self.config.ENABLE_WEB_CRAWL:
             self.__log(f"Web Crawl request with params: {args}")
             if not isinstance(args, dict):
                 error_message = "=> `args` must be an object with a `url` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
             if "url" not in args:
                 error_message = "=> `args` must have a `url` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             retrieved_docs = self.toolkit.retrieve_documents(
                 args["url"], RetrieverType.WEB_CRAWL
@@ -276,32 +302,41 @@ class Conductor:
                 retrieved_docs[0] if len(retrieved_docs) > 0 else None
             )
             if self.web_crawl_result is None:
-                return "No relevant information was found from Web Crawl."
-            return "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated."
+                return (
+                    "No relevant information was found from Web Crawl.",
+                    ToolExecutionStatus.SUCCESS,
+                )
+            return (
+                "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated.",
+                ToolExecutionStatus.SUCCESS,
+            )
         if tool == "table_enumerator":
             self.__log(f"Table Enumerator request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "`args` must be an object with a `pattern` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
             if "pattern" not in args:
                 error_message = "`args` must have a `pattern` property"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             enumerated_tables = self.toolkit.retrieve_documents(
                 args["pattern"], RetrieverType.ENUMERATOR
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
-            return f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+            return (
+                f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`.",
+                ToolExecutionStatus.SUCCESS,
+            )
         if tool == "state_manipulation":
             self.__log(f"State Manipulation request with params: {args}")
 
             if not isinstance(args, dict):
                 error_message = "`args` must be an object"
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             T: dict[str, list[str]] | None = args.get("T")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
@@ -338,7 +373,10 @@ class Conductor:
                     self.info_need_state.is_T_materialized = False
                     is_T_modified = True
                 else:
-                    return "If you want to change T, make sure to also define column_descriptions."
+                    return (
+                        "If you want to change T, make sure to also define column_descriptions.",
+                        ToolExecutionStatus.ERROR,
+                    )
 
             is_S_modified = False
             if S is not None:
@@ -347,19 +385,22 @@ class Conductor:
                 is_S_modified = True
 
             if is_T_modified and is_S_modified:
-                return "Successfully modified both T and S."
+                return (
+                    "Successfully modified both T and S.",
+                    ToolExecutionStatus.SUCCESS,
+                )
             if is_T_modified:
-                return "Successfully modified T."
+                return "Successfully modified T.", ToolExecutionStatus.SUCCESS
             if is_S_modified:
-                return "Successfully modified S."
-            return "No modification is done."
+                return "Successfully modified S.", ToolExecutionStatus.SUCCESS
+            return "No modification is done.", ToolExecutionStatus.ERROR
         if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
                 error_message = (
                     "T has to already be defined before calling Materializer"
                 )
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             note = ""
             if isinstance(args, dict) and "note" in args:
@@ -380,18 +421,22 @@ class Conductor:
                 updated_content: pd.DataFrame = T_doc.content
                 updated_content.to_csv(T_doc.path, index=False)
 
-            return "Successfully materialized T."
+            return "Successfully materialized T.", ToolExecutionStatus.SUCCESS
         if tool == "executor":
             self.__log("Executor called")
             execution_result: str = ""
             if not self.info_need_state.is_T_materialized:
-                error_message = "T has not been materialized, so running Executor will produce useful results. Call Materializer first, then you can call Executor."
-                self.__log(f"=> {error_message}")
-                return error_message
+                if len(self.info_need_state.T.keys()) > 0:
+                    self.__log("Self-triggered materialization from calling Executor...")
+                    self.__execute_tool("materializer", {}, user_id, chat_id)
+                else:
+                    error_message = "T has not been materialized, so running Executor will produce useful results. Call Materializer first, then you can call Executor."
+                    self.__log(f"=> {error_message}")
+                    return error_message, ToolExecutionStatus.ERROR
             if len(self.info_need_state.S) == 0:
                 error_message = "S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call Executor again."
                 self.__log(f"=> {error_message}")
-                return error_message
+                return error_message, ToolExecutionStatus.ERROR
 
             T_df: dict[str, pd.DataFrame] = {}
             for t_id, i in self.info_need_state.T.items():
@@ -403,7 +448,10 @@ class Conductor:
             self.__log(f"Script (S) execution result: {execution_result}")
 
             self.info_need_state.is_S_executed = True
-            return f"Executed S, which resulted in this output: {execution_result}"
+            return (
+                f"Executed S, which resulted in this output: {execution_result}",
+                ToolExecutionStatus.SUCCESS,
+            )
         if tool == "categorical_column_info":
             if isinstance(args, dict):
                 self.__log(f"categorical_column_info request with params: {args}")
@@ -412,15 +460,15 @@ class Conductor:
                 if table_id is None:
                     error_message = "The `id` field most not be empty."
                     self.__log(f"=> {error_message}")
-                    return error_message
+                    return error_message, ToolExecutionStatus.ERROR
                 if table_columns is None:
                     error_message = "The `columns` field most not be empty."
                     self.__log(f"=> {error_message}")
-                    return error_message
+                    return error_message, ToolExecutionStatus.ERROR
                 if not isinstance(table_columns, list) or len(table_columns) == 0:
                     error_message = "The `columns` field must be a non-empty list of strings (column names in the table)"
                     self.__log(f"=> {error_message}")
-                    return error_message
+                    return error_message, ToolExecutionStatus.ERROR
 
                 for document in self.retrieved_tables:
                     if document.doc_id == table_id:
@@ -444,13 +492,19 @@ class Conductor:
                             top_values_str = ", ".join(str(v) for v in top_values)
                             column_info = f"{column}: {top_values_str}\n"
                             cat_col_info += column_info
-                        return cat_col_info
+                        return cat_col_info, ToolExecutionStatus.SUCCESS
 
-                return f"ID {table_id} does not exist; ensure it exists in the current retrieval results."
+                return (
+                    f"ID {table_id} does not exist; ensure it exists in the current retrieval results.",
+                    ToolExecutionStatus.ERROR,
+                )
             else:
-                return "Argument must be a specified key-value pairs with keys `id` and `columns`."
+                return (
+                    "Argument must be a specified key-value pairs with keys `id` and `columns`.",
+                    ToolExecutionStatus.ERROR,
+                )
 
-        return f"Tool calling failed; {tool} is unknown"
+        return f"Tool calling failed; {tool} is unknown", ToolExecutionStatus.ERROR
 
     def __materialize_T_driver(
         self,

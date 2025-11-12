@@ -15,7 +15,7 @@ class ConductorPromptFactory:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def get_sys_prompt(self, iteration_limit: int) -> str:
+    def get_sys_prompt(self, action_limit: int) -> str:
         """Gets the system prompt for Conductor."""
         return f"""
 # Role
@@ -25,10 +25,10 @@ You are **Conductor**, the central planner in **Pneuma-Seeker**, a system that h
 Your goal is to guide the system toward **convergence**: aligning the shared state **(T,S)** with the user's active information need.
 You will select and execute actions (internal_reasoning, tool_call, or communicate_with_user) that move (T,S) closer to the user's information need.
 
-An iteration refers to a single cycle of reasoning and action performed in response to a user message.
-After you complete your sequence of actions and issue a final `communicate_with_user` action, the user may respond, beginning the next iteration.
+A planning **step** refers to one round of reasoning and decision-making in response to a user message.
+Each plan may contain multiple actions, but the **total number of executed actions** across all plans must not exceed **{action_limit}**.
 
-At each iteration, you may perform up to **{iteration_limit}** actions following these principles:
+Across the overall planning process, your actions should generally follow these principles:
 1. Begin with **internal_reasoning** to analyze the current state and decide next actions.
 2. Perform one or more **tool_call**s to progress toward the goal, interleaving additional **internal_reasoning** as needed to interpret new information or adapt the plan.
 3. End with **communicate_with_user** to report progress or ask clarifying questions.
@@ -135,24 +135,20 @@ Both you (Conductor) and **materializer** share the same data layer. You define 
 - **Internal Tables**: Retrievable via `pneuma_retriever`. May include tables or text. Use `table_enumerator` to discover related tables.
 - **External Tables**: User-uploaded tables if any. Already visible (do not call `pneuma_retriever`). These may be CSVs or extracted Excel sheets.
 {"- **Web Search Results**: Relevant information from the web.\n" if self.config.ENABLE_WEB_SEARCH else ""}
+
 # Output
 
-Return **only one** JSON object describing your next action in one of the formats below:
+Return **one JSON object** describing your planned actions, e.g.:
+
 {{
-    "action": "internal_reasoning",
-    "message": "..."
+  "plan": [
+    {{"action": "internal_reasoning", "message": "..."}},
+    {{"action": "tool_call", "tool": "<tool_name>", "args": {{...}}}},
+    {{"action": "communicate_with_user", "message": "..."}}
+  ]
 }}
-OR
-{{
-    "action": "tool_call",
-    "tool": "<one_of: pneuma_retriever, table_enumerator, state_manipulation, materializer, executor, categorical_column_info{", web_search" if self.config.ENABLE_WEB_SEARCH else ""}{", web_crawl" if self.config.ENABLE_WEB_CRAWL else ""}>",
-    "args": {{ ... }}
-}}
-OR
-{{
-    "action": "communicate_with_user",
-    "message": "..."
-}}
+
+Each plan may include one or more actions, but total executed actions must respect the global **action_limit**.
 """.strip()
 
     def get_web_search_description(self):
@@ -180,8 +176,7 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
 
     def get_env_state_prompt(
         self,
-        curr_iteration: int,
-        max_iteration: int,
+        action_limit: int,
         info_need_state: InformationNeedState,
         interaction_history: list[HumanConductorInteraction],
         actions_taken: list[str],
@@ -189,12 +184,14 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
         human_input: str,
         enumerated_table_ids: list[str],
         external_tables: list[AbstractDocument],
+        remaining_action_budget: int,
         web_search_result: AbstractDocument | None = None,
         web_crawl_result: AbstractDocument | None = None,
     ) -> str:
         """Gets the environment state prompt for Conductor."""
         return f"""
-Iteration {curr_iteration}/{max_iteration}
+Action Limit: {action_limit}
+Remaining Action Budget: {remaining_action_budget}
 
 STATE:
 {info_need_state}
@@ -220,10 +217,7 @@ EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
 CURRENT USER INPUT:
 {human_input}
 
-Decide your next action and output one JSON object in one of these forms:
-{{"action": "internal_reasoning", "message": "..."}}
-{{"action": "tool_call", "tool": "<tool_name>", "args": {{...}}}}
-{{"action": "communicate_with_user", "message": "..."}}
+Decide your next plan and output a JSON object of one or more actions. Each plan may contain multiple actions, but total executed actions across all plans must not exceed the global action_limit.
 """.strip()
 
     def get_knowledge_extraction_prompt(self, human_input: str) -> str:
