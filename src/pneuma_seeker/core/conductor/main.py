@@ -87,6 +87,21 @@ class Conductor:
             "target_tables",
         )
 
+        self.valid_actions = [
+            "communicate_with_user",
+            "internal_reasoning",
+            "pneuma_retriever",
+            "table_enumerator",
+            "state_manipulation",
+            "materializer",
+            "executor",
+            "categorical_column_info",
+        ]
+        if self.config.ENABLE_WEB_SEARCH:
+            self.valid_actions.append("web_search")
+        if self.config.ENABLE_WEB_CRAWL:
+            self.valid_actions.append("web_crawl")
+
     def process_input(
         self,
         user_input: str,
@@ -155,7 +170,10 @@ class Conductor:
             )
 
             full_response = "".join(
-                self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
+                self.llm.chat(
+                    llm_messages,
+                    LLMOption(json_mode=True, stream=True, temperature=0, top_p=0.1),
+                )
             )
             self.__log(f"=> Model responded with a plan: {full_response}")
             llm_messages.append(
@@ -168,6 +186,10 @@ class Conductor:
                 for action_plan in plan:
                     if action_plan.get("action") is None:
                         raise ValueError("Action specified is not valid.")
+                    if action_plan.get("action") not in self.valid_actions:
+                        raise ValueError(
+                            f"The `action` must be one of the valid actions: {', '.join(self.valid_actions)}"
+                        )
                 self.__log("==> Plan parsed!")
             except Exception as exc:
                 self.__log(f"=> Unexpected error occurred: {exc}")
@@ -175,7 +197,7 @@ class Conductor:
                 llm_messages.append(
                     LLMMessage(
                         role=Role.USER.value,
-                        content=f"An unexpected error occurred while processing your response: {exc}. Please try again.",
+                        content=f"An unexpected error occurred while processing your response: {exc}. Please fix the issue and try again.",
                     )
                 )
                 continue
@@ -185,7 +207,6 @@ class Conductor:
                 actions_taken.append(str(action_plan))
                 action_type: str = action_plan.get("action")
                 action_message: None | str = action_plan.get("message")
-                tool: None | str = action_plan.get("tool")
                 args: None | dict = action_plan.get("args")
 
                 if action_type == "communicate_with_user" and isinstance(
@@ -217,8 +238,7 @@ class Conductor:
                         )
                         num_actions_taken += 1
                 elif args is not None:
-                    if tool is None:
-                        tool = action_type
+                    tool = action_type
                     yield f"LOG: Calling tool: {tool}..."
                     tool_outcome, tool_execution_status = self.__execute_tool(
                         tool, args, user_id, chat_id

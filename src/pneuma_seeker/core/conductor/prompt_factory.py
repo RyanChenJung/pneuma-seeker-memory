@@ -150,7 +150,7 @@ Return **one JSON object** describing your planned actions, e.g.:
 {{
   "plan": [
     {{"action": "internal_reasoning", "message": "..."}},
-    {{"action": "tool_call", "tool": "<tool_name>", "args": {{...}}}},
+    {{"action": "<one of tool names>", "args": {{...}}}},
     {{"action": "communicate_with_user", "message": "..."}}
   ]
 }}
