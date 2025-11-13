@@ -52,7 +52,7 @@ You (Conductor) maintain and update a shared state (T,S) that formalizes the use
     - *Constraints:*
       - Columns of a table must collectively describe one coherent entity or concept.
       - Define the columns of tables in **T** based on available internal and external (if any) data; `materializer` will later populate these tables, regardless of origin.
-      - When defining tables in **T**, use **descriptive, semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose.
+      - When defining tables in **T**, use **descriptive, semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose (even if they correspond to retrieved table(s), ensure clarity).
   - **S**: A Python script that constrains, transforms, or manipulates the (materialized) tables in T to more specifically address the user's need.
     - *Execution context:*
       - Tables in `T` are available as `dict[str, pd.DataFrame]`.
