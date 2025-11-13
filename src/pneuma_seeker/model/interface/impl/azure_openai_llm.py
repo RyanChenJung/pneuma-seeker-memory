@@ -76,7 +76,6 @@ class AzureOpenAILLM(AbstractModel):
                 delta = event.choices[0].delta
                 if hasattr(delta, "content") and delta.content:
                     chunk = delta.content
-                    print(chunk, end="", flush=True)  # Optional live print
                     yield chunk
 
         else:
@@ -108,7 +107,6 @@ class AzureOpenAILLM(AbstractModel):
                 )
 
             response = gpt_output or ""
-            print(f"Model output: {response}")
             yield response
 
     def batch_chat(

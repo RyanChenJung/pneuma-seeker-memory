@@ -101,7 +101,7 @@ class Conductor:
             external_table_paths
         )
         if len(self.external_tables) > 0:
-            self.__log("Utilizing external table data...")
+            self.__log("External tables loaded")
             for index, doc in enumerate(self.external_tables):
                 last_id = getattr(doc, "last_node_id", None)
                 if (
@@ -132,6 +132,9 @@ class Conductor:
         ]
 
         while not is_user_facing_response and num_actions_taken < self.iteration_limit:
+            self.__log(
+                f"Asking the model to produce a sequence of actions (plan) (Total actions taken so far: {num_actions_taken}/{self.iteration_limit})..."
+            )
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
@@ -154,26 +157,31 @@ class Conductor:
             full_response = "".join(
                 self.llm.chat(llm_messages, LLMOption(json_mode=True, stream=True))
             )
+            self.__log(f"=> Model responded with a plan: {full_response}")
             llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
             )
 
             try:
+                self.__log("==> Parsing plan...")
                 plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
                 for action_plan in plan:
                     if action_plan.get("action") is None:
                         raise ValueError("Action specified is not valid.")
-            except ValueError as exc:
-                self.__log(f"Failed to parse LLM response as JSON: {exc}")
+                self.__log("==> Plan parsed!")
+            except Exception as exc:
+                self.__log(f"=> Unexpected error occurred: {exc}")
+                yield "LOG: Fixing error in produced plan..."
                 llm_messages.append(
                     LLMMessage(
                         role=Role.USER.value,
-                        content="The response is not valid JSON. Please follow the specified format and try again.",
+                        content=f"An unexpected error occurred while processing your response: {exc}. Please try again.",
                     )
                 )
                 continue
 
             for action_plan in plan:
+                self.__log(f"=> Processing this action: {action_plan}")
                 actions_taken.append(str(action_plan))
                 action_type: str = action_plan.get("action")
                 action_message: None | str = action_plan.get("message")
@@ -254,8 +262,10 @@ class Conductor:
             self.retrieved_tables = self.toolkit.retrieve_documents(
                 args["prompt"], RetrieverType.PNEUMA_RETRIEVER
             )
+            success_msg = "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
+            self.__log(success_msg)
             return (
-                "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated.",
+                success_msg,
                 ToolExecutionStatus.SUCCESS,
             )
         if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:
@@ -302,12 +312,16 @@ class Conductor:
                 retrieved_docs[0] if len(retrieved_docs) > 0 else None
             )
             if self.web_crawl_result is None:
+                success_msg = "No relevant information was found from Web Crawl."
+                self.__log(success_msg)
                 return (
-                    "No relevant information was found from Web Crawl.",
+                    success_msg,
                     ToolExecutionStatus.SUCCESS,
                 )
+            success_msg = "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated."
+            self.__log(success_msg)
             return (
-                "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated.",
+                success_msg,
                 ToolExecutionStatus.SUCCESS,
             )
         if tool == "table_enumerator":
@@ -326,8 +340,10 @@ class Conductor:
                 args["pattern"], RetrieverType.ENUMERATOR
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
+            success_msg = f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+            self.__log(success_msg)
             return (
-                f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`.",
+                success_msg,
                 ToolExecutionStatus.SUCCESS,
             )
         if tool == "state_manipulation":
@@ -345,7 +361,7 @@ class Conductor:
             S: str | None = args.get("S")
 
             is_T_modified = False
-            if T is not None and column_descriptions is not None:
+            if T is not None:
                 if column_descriptions is not None:
                     T_docs: dict[str, AbstractDocument] = dict()
                     for schema_id in T:
@@ -373,8 +389,10 @@ class Conductor:
                     self.info_need_state.is_T_materialized = False
                     is_T_modified = True
                 else:
+                    error_message = "If you want to change T, make sure to also define column_descriptions."
+                    self.__log(error_message)
                     return (
-                        "If you want to change T, make sure to also define column_descriptions.",
+                        error_message,
                         ToolExecutionStatus.ERROR,
                     )
 
@@ -385,15 +403,23 @@ class Conductor:
                 is_S_modified = True
 
             if is_T_modified and is_S_modified:
+                success_msg = "Successfully modified both T and S."
+                self.__log(success_msg)
                 return (
-                    "Successfully modified both T and S.",
+                    success_msg,
                     ToolExecutionStatus.SUCCESS,
                 )
             if is_T_modified:
-                return "Successfully modified T.", ToolExecutionStatus.SUCCESS
+                success_msg = "Successfully modified T."
+                self.__log(success_msg)
+                return success_msg, ToolExecutionStatus.SUCCESS
             if is_S_modified:
-                return "Successfully modified S.", ToolExecutionStatus.SUCCESS
-            return "No modification is done.", ToolExecutionStatus.ERROR
+                success_msg = "Successfully modified S."
+                self.__log(success_msg)
+                return success_msg, ToolExecutionStatus.SUCCESS
+            error_msg = "No modification is done."
+            self.__log(error_msg)
+            return error_msg, ToolExecutionStatus.ERROR
         if tool == "materializer":
             if len(self.info_need_state.T.keys()) == 0:
                 error_message = (
@@ -421,16 +447,20 @@ class Conductor:
                 updated_content: pd.DataFrame = T_doc.content
                 updated_content.to_csv(T_doc.path, index=False)
 
-            return "Successfully materialized T.", ToolExecutionStatus.SUCCESS
+            success_msg = "Successfully materialized T."
+            self.__log(success_msg)
+            return success_msg, ToolExecutionStatus.SUCCESS
         if tool == "executor":
             self.__log("Executor called")
             execution_result: str = ""
             if not self.info_need_state.is_T_materialized:
                 if len(self.info_need_state.T.keys()) > 0:
-                    self.__log("Self-triggered materialization from calling Executor...")
+                    self.__log(
+                        "=> Self-triggered materialization from calling Executor..."
+                    )
                     self.__execute_tool("materializer", {}, user_id, chat_id)
                 else:
-                    error_message = "T has not been materialized, so running Executor will produce useful results. Call Materializer first, then you can call Executor."
+                    error_message = "T has not been defined. Please define it first before calling Executor."
                     self.__log(f"=> {error_message}")
                     return error_message, ToolExecutionStatus.ERROR
             if len(self.info_need_state.S) == 0:
@@ -492,17 +522,17 @@ class Conductor:
                             top_values_str = ", ".join(str(v) for v in top_values)
                             column_info = f"{column}: {top_values_str}\n"
                             cat_col_info += column_info
-                        return cat_col_info, ToolExecutionStatus.SUCCESS
+                        success_msg = cat_col_info
+                        self.__log(success_msg)
+                        return success_msg, ToolExecutionStatus.SUCCESS
 
-                return (
-                    f"ID {table_id} does not exist; ensure it exists in the current retrieval results.",
-                    ToolExecutionStatus.ERROR,
-                )
+                error_message = f"ID {table_id} does not exist; ensure it exists in the current retrieval results."
+                self.__log(error_message)
+                return error_message, ToolExecutionStatus.ERROR
             else:
-                return (
-                    "Argument must be a specified key-value pairs with keys `id` and `columns`.",
-                    ToolExecutionStatus.ERROR,
-                )
+                error_message = "Argument must be a specified key-value pairs with keys `id` and `columns`."
+                self.__log(error_message)
+                return error_message, ToolExecutionStatus.ERROR
 
         return f"Tool calling failed; {tool} is unknown", ToolExecutionStatus.ERROR
 

@@ -15,7 +15,6 @@ from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.config import Config
-from pneuma_seeker.utils.logger import formatted_log
 
 
 class Toolkit:
@@ -54,15 +53,12 @@ class Toolkit:
                 T_id: T_doc.content for T_id, T_doc in T.items()
             }
 
-            self.__log(f"Executing these SQL statements on the (materialized) T: {Q}")
-
             for table_name, df in tables.items():
                 con.register(table_name, df)
 
             results: list[DataFrame] = []
             for sql_idx, sql in enumerate(Q):
                 try:
-                    self.__log(f"=> ({sql_idx+1}) Executing {sql}")
                     result = con.execute(sql).fetchdf()
                     results.append(result)
                 except Exception as e:
@@ -191,6 +187,3 @@ class Toolkit:
             id_dfs,
             path,
         )
-
-    def __log(self, text):
-        formatted_log(self.logger, "CONDUCTOR'S TOOLKIT", text)
