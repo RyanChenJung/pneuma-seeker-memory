@@ -361,7 +361,7 @@ class Conductor:
             S: str | None = args.get("S")
 
             is_T_modified = False
-            if T is not None:
+            if T is not None and len(T) > 0:
                 if column_descriptions is not None:
                     T_docs: dict[str, AbstractDocument] = dict()
                     for schema_id in T:
