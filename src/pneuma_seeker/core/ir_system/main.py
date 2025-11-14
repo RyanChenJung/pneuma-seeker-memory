@@ -50,14 +50,18 @@ class IRSystem:
         prompt: str,
         sources: list[str],
         k: int = 10,
+        sample_only: bool = False,
+        sample_size: int | None = None,
     ) -> list[AbstractDocument]:
         """
         Retrieves documents from the specified retriever.
 
         - prompt (str): The query to be given to the retriever.
+        - sample_only (bool): Whether to retrieve only a sample of documents.
+        - sample_size (int | None): The number of documents to retrieve if sample_only is True.
         """
         retriever = self.retriever_factory.get_retriever(retriever_type)
-        documents = retriever.retrieve(prompt, sources, k)
+        documents = retriever.retrieve(prompt, sources, k, sample_only, sample_size)
         return documents
 
     def __log(self, text: str):
