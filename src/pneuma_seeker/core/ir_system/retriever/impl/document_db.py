@@ -57,7 +57,12 @@ class DocumentDB(AbstractRetriever):
                 pass
 
     def retrieve(
-        self, query: str, sources: list[str], k: int
+        self,
+        query: str,
+        sources: list[str],
+        k: int,
+        sample_only: bool,
+        sample_size: int | None = None,
     ) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
