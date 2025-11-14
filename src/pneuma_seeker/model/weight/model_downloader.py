@@ -11,6 +11,10 @@ repo_id = "Qwen/Qwen3-8B"
 local_dir = "qwen3-8b"
 snapshot_download(repo_id, local_dir=local_dir, resume_download=True)
 
+repo_id = "Qwen/Qwen3-4B-Instruct-2507"
+local_dir = "qwen3-4b-instruct"
+snapshot_download(repo_id, local_dir=local_dir, resume_download=True)
+
 # LLM for RAG
 repo_id = "mistralai/Mistral-7B-Instruct-v0.3"
 local_dir = "mistral-7b"
