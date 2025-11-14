@@ -35,17 +35,35 @@ else:
     with duckdb.connect(f"{DATASET_NAME}.db") as con:
 
         for table_file_name in tqdm(sorted(os.listdir(DATASET_PATH))):
-            if table_file_name.endswith(".csv"):
-                table_id = clean_column_table_name(Path(table_file_name).stem)
-                table_id_sql = f'"{table_id}"'
-                file_path = (Path(DATASET_PATH) / table_file_name).as_posix()
-                con.execute(
-                    f"""CREATE TABLE {table_id_sql}
-                    AS SELECT * FROM
-                    read_csv(
-                        '{file_path}',
-                        auto_detect=true,
-                        sample_size=-1,
-                        parallel=false
-                    )""",
+            if not table_file_name.endswith(".csv"):
+                continue
+
+            table_id = clean_column_table_name(Path(table_file_name).stem)
+            table_id_sql = f'"{table_id}"'
+
+            file_path = (Path(DATASET_PATH) / table_file_name).as_posix()
+
+            rel = con.read_csv(
+                file_path, auto_detect=True, sample_size=-1, parallel=False
+            )
+
+            original_cols = rel.columns
+            cleaned_cols = [clean_column_table_name(c) for c in original_cols]
+
+            select_clause = ", ".join(
+                f'"{orig}" AS "{cleaned}"'
+                for orig, cleaned in zip(original_cols, cleaned_cols)
+            )
+
+            con.execute(
+                f"""
+                CREATE TABLE {table_id_sql} AS
+                SELECT {select_clause}
+                FROM read_csv(
+                    '{file_path}',
+                    auto_detect=true,
+                    sample_size=-1,
+                    parallel=false
                 )
+            """
+            )
