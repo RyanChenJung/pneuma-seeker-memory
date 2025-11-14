@@ -1,9 +1,14 @@
 import os
 import re
+from pathlib import Path
 
+import duckdb
 import pandas as pd
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.core.ir_system.data_model import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+)
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from pneuma_seeker.utils.str_processor import clean_column_table_name
 
@@ -25,7 +30,12 @@ class Enumerator(AbstractRetriever):
         pass
 
     def retrieve(
-        self, query: str, sources: list[str], k: int
+        self,
+        query: str,
+        sources: list[str],
+        k: int,
+        sample_only: bool,
+        sample_size: int | None = None,
     ) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query, where the query is a regex pattern.
@@ -40,8 +50,20 @@ class Enumerator(AbstractRetriever):
             ]
 
             for table_path in match_table_paths:
-                actual_table = pd.read_csv(f"{dataset_path}/{table_path}")
-                actual_table.rename(columns=clean_column_table_name, inplace=True)
+                table_name = clean_column_table_name(
+                    Path(table_path).stem
+                )  # Assume table is already ingested
+                query_table = f"""
+                SELECT * FROM {table_name}
+                """
+                if sample_only:
+                    if sample_size is None or sample_size <= 0:
+                        sample_size = 5
+                    query_table += f" LIMIT {sample_size}"
+                with duckdb.connect(
+                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{data_src}.db")
+                ) as con:
+                    actual_table = con.execute(query_table).fetchdf()
                 results.append(
                     Table(
                         doc_id=clean_column_table_name(table_path[:-4].split("/")[-1]),
