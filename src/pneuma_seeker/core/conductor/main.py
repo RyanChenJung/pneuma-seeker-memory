@@ -37,6 +37,8 @@ class Conductor:
         data_sources: list[str],
         config: Config,
         prov_graph: ProvenanceGraph,
+        user_id: int,
+        chat_id: int,
     ) -> None:
         self.config = config
         self.logger = logger
@@ -49,6 +51,9 @@ class Conductor:
 
         self.prov_graph = prov_graph
         self.prompt_factory = ConductorPromptFactory(self.config)
+
+        self.user_id = user_id
+        self.chat_id = chat_id
 
         self.toolkit = Toolkit(
             self.llm,
@@ -66,6 +71,8 @@ class Conductor:
             self.prov_graph,
             self.toolkit,
             self.config,
+            self.user_id,
+            self.chat_id
         )
         self.table_reader = TableReader(
             self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
@@ -106,8 +113,6 @@ class Conductor:
     def process_input(
         self,
         user_input: str,
-        user_id: str,
-        chat_id: str,
         interaction_history: list[HumanConductorInteraction],
         external_table_paths: list[str],
     ):
@@ -242,7 +247,7 @@ class Conductor:
                     tool = action_type
                     yield f"LOG: Calling tool: {tool}..."
                     tool_outcome, tool_execution_status = self.__execute_tool(
-                        tool, args, user_id, chat_id
+                        tool, args, self.user_id, self.chat_id
                     )
                     llm_messages.append(
                         LLMMessage(role=Role.USER.value, content=tool_outcome)

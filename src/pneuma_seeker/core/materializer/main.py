@@ -39,13 +39,17 @@ class Materializer:
         prov_graph: ProvenanceGraph,
         toolkit: Toolkit,
         config: Config,
+        user_id: str,
+        chat_id: str,
     ):
         self.llm = llm
         self.embed_model = embed_model
         self.logger = logger
         self.config = config
 
-        self.__log("Initializing Materializer")
+        self.user_id = user_id
+        self.chat_id = chat_id
+        self.__log(f"Initializing Materializer for user_id: {self.user_id}, chat_id: {self.chat_id}")
 
         self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
