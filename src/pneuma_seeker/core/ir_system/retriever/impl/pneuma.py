@@ -142,7 +142,8 @@ class Pneuma(AbstractRetriever):
                         sample_size = 5
                     query_table += f" LIMIT {sample_size}"
                 with duckdb.connect(
-                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{dataset}.db")
+                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{dataset}.db"),
+                    read_only=True,
                 ) as con:
                     actual_table = con.execute(query_table).fetchdf()
 
