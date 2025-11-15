@@ -117,8 +117,11 @@ If you find that a computation requires matching data from different tables, fir
   Execute `S` on `T` to produce the final information that will be communicated to the user via `communicate_with_user`.
   - **Args**: {{}}
 
-- **categorical_column_info**:
-  List the unique categorical values in the specified columns.
+- **column_info_extractor**:
+  Extract summary information for selected columns in a retrieved table.
+  Automatically handles both numeric and categorical columns.
+  - Numeric columns: returns count, min, max, mean, stddev, and quartiles (Q1, median, Q3).
+  - Categorical columns: returns the top-k most frequent values and includes a 'truncated (X values left)' indicator when more unique values exist.
   - **Args**: {{"id": "<retrieved_table_id>", "columns": ["col1", "col2"]}}
 
 - **table_enumerator**:
