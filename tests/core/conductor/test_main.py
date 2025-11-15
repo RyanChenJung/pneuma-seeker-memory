@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
 import unittest
@@ -308,7 +308,7 @@ class ConductorTests(unittest.TestCase):
             )
         ]
 
-        plan1 = """{"action":"tool_call","tool":"categorical_column_info","args":{"id":"table1","columns":["B"]}}"""
+        plan1 = """{"action":"tool_call","tool":"column_info_extractor","args":{"id":"table1","columns":["A","B"]}}"""
         plan2 = '{"action":"communicate_with_user","message":"info provided"}'
         self.mock_llm._responses = [plan1, plan2]
 
@@ -320,7 +320,7 @@ class ConductorTests(unittest.TestCase):
             external_table_paths=[],
         )
         responses = list(gen)
-        self.assertIn("info provided", responses[-1])  # Expected info: "B: x, y\n"
+        self.assertIn("info provided", responses[-1])
 
     def test_external_table_upload_creates_provenance_node(self):
         """Tests that uploading an external table results in a new provenance node."""
