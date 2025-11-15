@@ -249,10 +249,12 @@ class Materializer:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
                 self.state.retrieved_tables = self.toolkit.retrieve_documents(
-                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10
+                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10, True, 5
                 )
                 if len(self.state.retrieved_tables) == 0:
-                    error_msg = f'No tables were retrieved using this prompt: ```{prompt}```.'
+                    error_msg = (
+                        f"No tables were retrieved using this prompt: ```{prompt}```."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                 else:
@@ -330,7 +332,7 @@ class Materializer:
             case "table_enumerator":
                 pattern = op_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
-                    pattern, RetrieverType.ENUMERATOR
+                    pattern, RetrieverType.ENUMERATOR, 10, True, 5
                 )
 
                 if len(extra_tables) > 0:
@@ -595,12 +597,16 @@ class Materializer:
                         right_table_doc = doc
 
                 if not isinstance(left_table, DataFrame):
-                    error_msg = f"left_table with ID {left_table_id} is not a DataFrame."
+                    error_msg = (
+                        f"left_table with ID {left_table_id} is not a DataFrame."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 if not isinstance(right_table, DataFrame):
-                    error_msg = f"right_table with ID {right_table_id} is not a DataFrame."
+                    error_msg = (
+                        f"right_table with ID {right_table_id} is not a DataFrame."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
@@ -611,7 +617,9 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 if not isinstance(right_table_doc, AbstractDocument):
-                    error_msg = f"ID {right_table_id} does not correspond to a document."
+                    error_msg = (
+                        f"ID {right_table_id} does not correspond to a document."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
@@ -627,12 +635,16 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 if not set(relevant_left_cols) <= set(list(left_table.columns)):
-                    error_msg = "relevant_left_cols is not a subset of left_table's columns."
+                    error_msg = (
+                        "relevant_left_cols is not a subset of left_table's columns."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 if not set(relevant_right_cols) <= set(list(right_table.columns)):
-                    error_msg = "relevant_right_cols is not a subset of right_table's columns."
+                    error_msg = (
+                        "relevant_right_cols is not a subset of right_table's columns."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
@@ -770,7 +782,9 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
                 elif isinstance(exec_res, Exception):
-                    self.__log(f"==> Exception occured during Python code execution: {exec_res}")
+                    self.__log(
+                        f"==> Exception occured during Python code execution: {exec_res}"
+                    )
                     diagnose_messages = [
                         LLMMessage(
                             role=Role.SYSTEM.value,
