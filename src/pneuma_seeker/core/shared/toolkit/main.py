@@ -39,9 +39,16 @@ class Toolkit:
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 
-    def retrieve_documents(self, prompt: str, retriever_type: RetrieverType, k=10):
+    def retrieve_documents(
+        self,
+        prompt: str,
+        retriever_type: RetrieverType,
+        k=10,
+        sample_only=False,
+        sample_size=None,
+    ):
         return self.ir_system.retrieve_documents(
-            retriever_type, prompt, self.data_sources, k
+            retriever_type, prompt, self.data_sources, k, sample_only, sample_size
         )
 
     def execute_sql(self, T: dict[str, AbstractDocument], Q: list[str]):

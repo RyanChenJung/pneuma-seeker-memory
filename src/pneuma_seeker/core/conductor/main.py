@@ -280,7 +280,7 @@ class Conductor:
                 return error_message, ToolExecutionStatus.ERROR
 
             self.retrieved_tables = self.toolkit.retrieve_documents(
-                args["prompt"], RetrieverType.PNEUMA_RETRIEVER
+                args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10, True, 5
             )
             success_msg = "Successfully retrieved tables from Pneuma-Retriever. Notice that the `RETRIEVED TABLES` has been updated."
             self.__log(success_msg)
