@@ -2,6 +2,7 @@ import os
 from logging import Logger
 from typing import Any
 
+import duckdb
 import pandas as pd
 
 from pneuma_seeker.core.conductor.data_model import (
@@ -95,7 +96,7 @@ class Conductor:
             "state_manipulation",
             "materializer",
             "executor",
-            "categorical_column_info",
+            "column_info_extractor",
         ]
         if self.config.ENABLE_WEB_SEARCH:
             self.valid_actions.append("web_search")
@@ -502,57 +503,157 @@ class Conductor:
                 f"Executed S, which resulted in this output: {execution_result}",
                 ToolExecutionStatus.SUCCESS,
             )
-        if tool == "categorical_column_info":
+        if tool == "column_info_extractor":
             if isinstance(args, dict):
-                self.__log(f"categorical_column_info request with params: {args}")
+                self.__log(f"Column Info Extractor request with params: {args}")
                 table_id: str | None = args.get("id")
                 table_columns: list[str] | None = args.get("columns")
                 if table_id is None:
-                    error_message = "The `id` field most not be empty."
-                    self.__log(f"=> {error_message}")
-                    return error_message, ToolExecutionStatus.ERROR
-                if table_columns is None:
-                    error_message = "The `columns` field most not be empty."
-                    self.__log(f"=> {error_message}")
-                    return error_message, ToolExecutionStatus.ERROR
-                if not isinstance(table_columns, list) or len(table_columns) == 0:
-                    error_message = "The `columns` field must be a non-empty list of strings (column names in the table)"
-                    self.__log(f"=> {error_message}")
-                    return error_message, ToolExecutionStatus.ERROR
+                    msg = "The `id` field must not be empty."
+                    self.__log(f"=> {msg}")
+                    return msg, ToolExecutionStatus.ERROR
 
-                for document in self.retrieved_tables:
-                    if document.doc_id == table_id:
-                        cat_col_info = ""
-                        table: pd.DataFrame = document.content
-                        for column in table_columns:
-                            if column not in table.columns:
-                                cat_col_info += (
-                                    f"Column `{column}` does not exist in the table.\n"
-                                )
+                if table_columns is None:
+                    msg = "The `columns` field must not be empty."
+                    self.__log(f"=> {msg}")
+                    return msg, ToolExecutionStatus.ERROR
+
+                if not isinstance(table_columns, list) or len(table_columns) == 0:
+                    msg = "The `columns` field must be a non-empty list of valid column name strings."
+                    self.__log(f"=> {msg}")
+                    return msg, ToolExecutionStatus.ERROR
+
+                table_exists = any(
+                    doc.doc_id == table_id for doc in self.retrieved_tables
+                )
+                if not table_exists:
+                    msg = (
+                        f"ID {table_id} does not exist in retrieval results; "
+                        f"ensure it exists in the current retrieval results."
+                    )
+                    self.__log(msg)
+                    return msg, ToolExecutionStatus.ERROR
+
+                info_output = f"Column information for table `{table_id}`:\n"
+                found_in_any_db = False
+                try:
+                    for data_source in self.data_sources:
+                        db_path = os.path.join(
+                            self.config.DB_BACKEND_PATH, f"{data_source}.db"
+                        )
+
+                        with duckdb.connect(db_path, read_only=True) as con:
+                            exists_check = con.execute(
+                                "SELECT table_name FROM information_schema.tables WHERE table_name = ?",
+                                [table_id],
+                            ).fetchall()
+
+                            if len(exists_check) == 0:
                                 continue
 
-                            counts = table[column].value_counts()
-                            top_values = counts.index[:10].tolist()
+                            found_in_any_db = True
+                            schema_df = con.execute(
+                                f"PRAGMA table_info('{table_id}');"
+                            ).fetchdf()
+                            schema_lookup = dict(
+                                zip(schema_df["name"], schema_df["type"])
+                            )
 
-                            # Append "truncated" if there are more than 10 unique values
-                            if len(counts) > 10:
-                                top_values.append("truncated")
+                            for col in table_columns:
+                                if col not in schema_lookup:
+                                    info_output += (
+                                        f"- `{col}`: Column does not exist.\n"
+                                    )
+                                    continue
 
-                            # Convert list to string for cleaner display
-                            top_values_str = ", ".join(str(v) for v in top_values)
-                            column_info = f"{column}: {top_values_str}\n"
-                            cat_col_info += column_info
-                        success_msg = cat_col_info
-                        self.__log(success_msg)
-                        return success_msg, ToolExecutionStatus.SUCCESS
+                                duck_type = schema_lookup[col].lower()
+                                is_numeric = any(
+                                    t in duck_type
+                                    for t in [
+                                        "int",
+                                        "decimal",
+                                        "double",
+                                        "real",
+                                        "float",
+                                    ]
+                                )
 
-                error_message = f"ID {table_id} does not exist; ensure it exists in the current retrieval results."
-                self.__log(error_message)
-                return error_message, ToolExecutionStatus.ERROR
+                                if is_numeric:
+                                    stats_query = f"""
+                                        SELECT 
+                                            COUNT(*) AS count,
+                                            MIN("{col}") AS min,
+                                            MAX("{col}") AS max,
+                                            AVG("{col}") AS mean,
+                                            STDDEV("{col}") AS stddev,
+                                            QUANTILE_CONT("{col}", 0.25) AS q25,
+                                            QUANTILE_CONT("{col}", 0.50) AS median,
+                                            QUANTILE_CONT("{col}", 0.75) AS q75
+                                        FROM "{table_id}";
+                                    """
+                                    stats = con.execute(stats_query).fetchdf().iloc[0]
+
+                                    info_output += (
+                                        f"- `{col}` (numeric):\n"
+                                        f"    count = {stats['count']}\n"
+                                        f"    min = {stats['min']}\n"
+                                        f"    max = {stats['max']}\n"
+                                        f"    mean = {stats['mean']}\n"
+                                        f"    stddev = {stats['stddev']}\n"
+                                        f"    q25 = {stats['q25']}\n"
+                                        f"    median = {stats['median']}\n"
+                                        f"    q75 = {stats['q75']}\n"
+                                    )
+                                    continue
+
+                                unique_count_query = f"""
+                                    SELECT COUNT(DISTINCT "{col}") FROM "{table_id}";
+                                """
+                                unique_count = con.execute(
+                                    unique_count_query
+                                ).fetchone()[0]
+
+                                topk = 10
+                                topk_query = f"""
+                                    SELECT "{col}" AS value, COUNT(*) AS count
+                                    FROM "{table_id}"
+                                    GROUP BY "{col}"
+                                    ORDER BY count DESC
+                                    LIMIT {topk};
+                                """
+                                df_top = con.execute(topk_query).fetchdf()
+
+                                values = df_top["value"].tolist()
+                                topk_count = len(values)
+                                if unique_count > topk_count:
+                                    remaining = unique_count - topk_count
+                                    values.append(
+                                        f"truncated ({remaining} values left)"
+                                    )
+
+                                values_str = ", ".join(str(v) for v in values)
+                                info_output += (
+                                    f"- `{col}` (categorical): {values_str}\n"
+                                )
+
+                            break
+
+                    if not found_in_any_db:
+                        msg = f"Table `{table_id}` does not exist in any available data source."
+                        self.__log(msg)
+                        return msg, ToolExecutionStatus.ERROR
+
+                except Exception as e:
+                    msg = f"Error computing column info: {e}"
+                    self.__log(msg)
+                    return msg, ToolExecutionStatus.ERROR
+
+                self.__log(info_output)
+                return info_output, ToolExecutionStatus.SUCCESS
             else:
-                error_message = "Argument must be a specified key-value pairs with keys `id` and `columns`."
-                self.__log(error_message)
-                return error_message, ToolExecutionStatus.ERROR
+                msg = "Argument must be a dict with keys: `id`, `columns`."
+                self.__log(msg)
+                return msg, ToolExecutionStatus.ERROR
 
         return f"Tool calling failed; {tool} is unknown", ToolExecutionStatus.ERROR
 
