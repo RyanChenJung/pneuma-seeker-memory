@@ -39,6 +39,8 @@ class ChatInterface:
                 data_sources,
                 Config(env_path=env_path),
                 prov_graph,
+                self.user_id,
+                self.chat_id,
             )
             self.conductor.info_need_state = info_need_state
             self.conductor.retrieved_tables = retr_results

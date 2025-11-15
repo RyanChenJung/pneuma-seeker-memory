@@ -50,6 +50,8 @@ class MaterializerTests(unittest.TestCase):
             prov_graph=self.prov_graph,
             toolkit=self.toolkit,
             config=self.config,
+            user_id="uX",
+            chat_id="cX",
         )
 
     def tearDown(self):
