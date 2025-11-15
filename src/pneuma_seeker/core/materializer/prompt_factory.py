@@ -65,9 +65,9 @@ COLUMN HANDLING:
 OUTPUT FORMAT:
 Produce exactly ONE JSON object:
 {{
-    "step_type": "internal_reasoning" | "operation",
-    "message": "...",        # if step_type == internal_reasoning
-    "name": "<operation>",   # if step_type == operation
+    "action_type": "internal_reasoning" | "operation",
+    "message": "...",        # if action_type == internal_reasoning
+    "name": "<operation>",   # if action_type == operation
     "args": {{...}},         # arguments for the operation
     "assign_to": "<target_table_id or intermediate_table_id>"
 }}
@@ -119,14 +119,14 @@ TOOL USAGE:
 OUTPUT FORMAT:
 Return exactly ONE JSON object per iteration:
 {{
-  "step_type": "internal_reasoning",
+  "action_type": "internal_reasoning",
   "message": "<your private reasoning>"
 }}
 
 OR
 
 {{
-  "step_type": "operation",
+  "action_type": "operation",
   "name": "pneuma_retriever" | "table_enumerator" | "table_select",
   "args": {{...}},
 }}
@@ -134,7 +134,7 @@ OR
 OR
 
 {{
-  "step_type": "operation",
+  "action_type": "operation",
   "name": "python_executor" | "sql_executor",
   "args": {{...}},
   "assign_to": "<target_table_id_or_intermediate_id>"

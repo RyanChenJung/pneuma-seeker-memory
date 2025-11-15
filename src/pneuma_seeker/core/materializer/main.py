@@ -95,7 +95,7 @@ class Materializer:
             )
         ]
         while not self.__check_completion(T):
-            self.__log("=> Planning next materialization step...")
+            self.__log("=> Planning next materialization action...")
             curr_iteration += 1
 
             # Prevent forever loop in the worst-case scenario
@@ -119,7 +119,7 @@ class Materializer:
             )
 
             response = "".join(self.llm.chat(llm_messages, LLMOption(json_mode=True)))
-            self.__log(f"=> Materialization step produced: {response}")
+            self.__log(f"=> Materialization action selected: {response}")
 
             if response == prev_response:
                 repetitive_response_count += 1
@@ -151,9 +151,9 @@ class Materializer:
                 )
                 continue
 
-            step_type: str = plan.get("step_type", "")
-            if len(step_type) == 0:
-                error_msg = "The step_type is not defined. Please define it properly."
+            action_type: str = plan.get("action_type", "")
+            if len(action_type) == 0:
+                error_msg = "The action_type is not defined. Please define it properly."
                 self.__log(f"==> {error_msg}")
                 self.actions.append(error_msg)
                 llm_messages.append(
@@ -164,7 +164,7 @@ class Materializer:
                 )
                 continue
 
-            self.__handle_step(step_type, plan, external_tables, T)
+            self.__process_action(action_type, plan, external_tables, T)
 
         self.__log("Materialization completed successfully.")
         final_result: dict[str, DataFrame] = {}
@@ -175,19 +175,19 @@ class Materializer:
                 )
         return final_result
 
-    def __handle_step(
+    def __process_action(
         self,
-        step_type: str,
+        action_type: str,
         plan: dict[str, Any],
         external_data: list[AbstractDocument],
         T: dict[str, DataFrame],
     ):
-        """Handles a single step in the materialization process."""
-        self.__log(f"=> Handling step of type: {step_type}")
-        if step_type == "internal_reasoning":
+        """Handles a single action in the materialization process."""
+        self.__log(f"=> Handling action of type: {action_type}")
+        if action_type == "internal_reasoning":
             message: str = plan["message"]
             self.actions.append(f"Reasoned internally: {message}")
-        elif step_type == "operation":
+        elif action_type == "operation":
             op_name, op_args, assign_to = (
                 plan.get("name", ""),
                 plan.get("args", {}),
@@ -202,7 +202,7 @@ class Materializer:
 
             self.__handle_operation(T, external_data, op_name, op_args, assign_to)
         else:
-            error_msg = f"The step {step_type} is not a valid action."
+            error_msg = f"{action_type} is not a valid action."
             self.__log(f"==> {error_msg}")
             self.actions.append(error_msg)
 
