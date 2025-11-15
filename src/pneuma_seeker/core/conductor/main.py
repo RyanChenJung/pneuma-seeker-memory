@@ -357,10 +357,10 @@ class Conductor:
                 return error_message, ToolExecutionStatus.ERROR
 
             enumerated_tables = self.toolkit.retrieve_documents(
-                args["pattern"], RetrieverType.ENUMERATOR
+                args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
             )
             self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
-            success_msg = f"Enumerated table IDs based on this pattern: {args["pattern"]}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+            success_msg = f"Enumerated table IDs based on this pattern: {args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
             self.__log(success_msg)
             return (
                 success_msg,
