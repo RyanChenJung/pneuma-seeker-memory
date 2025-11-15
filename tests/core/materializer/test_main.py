@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
 import unittest
@@ -57,8 +57,8 @@ class MaterializerTests(unittest.TestCase):
 
     def test_pneuma_retriever_and_table_select_materializes_T(self):
         # LLM will ask to call pneuma_retriever then table_select to materialize t1
-        plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        plan2 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
         self.mock_llm._responses = [plan1, plan2]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -93,11 +93,11 @@ class MaterializerTests(unittest.TestCase):
 
     def test_web_search_sets_web_search_result(self):
         # LLM will call pneuma_retriever, web_search, then table_select to finish
-        plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
         plan2 = (
-            '{"step_type":"operation","name":"web_search","args":{"prompt":"query"}}'
+            '{"action_type":"operation","name":"web_search","args":{"prompt":"query"}}'
         )
-        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
         self.mock_llm._responses = [plan1, plan2, plan3]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -158,11 +158,11 @@ class MaterializerTests(unittest.TestCase):
 
     def test_web_crawl_sets_web_crawl_result(self):
         # LLM will call pneuma_retriever, web_crawl, then table_select to finish
-        plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
         plan2 = (
-            '{"step_type":"operation","name":"web_crawl","args":{"url":"http://example.com"}}'
+            '{"action_type":"operation","name":"web_crawl","args":{"url":"http://example.com"}}'
         )
-        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
         self.mock_llm._responses = [plan1, plan2, plan3]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -223,9 +223,9 @@ class MaterializerTests(unittest.TestCase):
 
     def test_semantic_column_generator_adds_column(self):
         # LLM will call pneuma_retriever, semantic_column_generator, then table_select
-        plan1 = '{"step_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"step_type":"operation","name":"semantic_column_generator","args":{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
-        plan3 = '{"step_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b","newcol"]}}}'
+        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        plan2 = '{"action_type":"operation","name":"semantic_column_generator","args":{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
+        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b","newcol"]}}}'
         self.mock_llm._responses = [plan1, plan2, plan3]
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [10, 20]})
