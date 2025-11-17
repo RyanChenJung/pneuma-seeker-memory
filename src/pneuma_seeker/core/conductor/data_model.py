@@ -1,3 +1,6 @@
+from enum import Enum
+
+
 class HumanConductorInteraction:
     """
     Keeps track of pairs of human input-Conductor (final) response for the input
@@ -9,3 +12,8 @@ class HumanConductorInteraction:
 
     def __str__(self) -> str:
         return f"""{{"human input": {self.human_input}, "llm response": {self.llm_response}}}"""
+
+
+class ToolExecutionStatus(Enum):
+    SUCCESS = "Success"
+    ERROR = "Error"

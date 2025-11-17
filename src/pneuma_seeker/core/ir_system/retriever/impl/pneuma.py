@@ -1,34 +1,35 @@
+import gc
+import os
+import time
 from collections import defaultdict
 from enum import Enum
-import gc
 from math import ceil
-import os
+from pathlib import Path
 from typing import Optional
-from bm25s.tokenization import convert_tokenized_to_string_list
-import time
-import Stemmer
+
 import bm25s
 import chromadb_deterministic as chromadb
+import duckdb
 import pandas as pd
-from scipy.spatial.distance import cosine
-from torch import cuda
-
+import Stemmer
+from bm25s.tokenization import convert_tokenized_to_string_list
+from chromadb_deterministic.api import ClientAPI
+from chromadb_deterministic.api.models.Collection import Collection
 from pneuma_seeker.core.ir_system.data_model import (
+    AbstractDocument,
     RetrieverType,
     Table,
     TableContext,
     Text,
 )
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
-from tqdm import tqdm
-from chromadb_deterministic.api import ClientAPI
-from chromadb_deterministic.api.models.Collection import Collection
-
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.utils.str_processor import clean_column_table_name
+from scipy.spatial.distance import cosine
+from torch import cuda
+from tqdm import tqdm
 
 
 class Pneuma(AbstractRetriever):
@@ -62,7 +63,12 @@ class Pneuma(AbstractRetriever):
         pass
 
     def retrieve(
-        self, query: str, sources: list[str], k: int
+        self,
+        query: str,
+        sources: list[str],
+        k: int,
+        sample_only: bool,
+        sample_size: int | None = None,
     ) -> list[AbstractDocument]:
         """
         Retrieves a list of documents given a query.
@@ -125,14 +131,31 @@ class Pneuma(AbstractRetriever):
                 else:
                     continue
 
-                actual_table = pd.read_csv(table)
+                table_name = clean_column_table_name(
+                    Path(table).stem
+                )  # Assume table is already ingested
+                query_table = f"""
+                SELECT * FROM {table_name}
+                """
+                if sample_only:
+                    if sample_size is None or sample_size <= 0:
+                        sample_size = 5
+                    query_table += f" LIMIT {sample_size}"
+                with duckdb.connect(
+                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{dataset}.db"),
+                    read_only=True,
+                ) as con:
+                    actual_table = con.execute(query_table).fetchdf()
+
                 if metadata is None:
                     metadata = pd.read_csv(f"../../data_src/{dataset}/metadata.csv")
-                table_name = table.split("/")[-1]
-                if table_name.endswith(".csv"):
-                    table_name = table_name[:-4]
+                # table_name = table.split("/")[-1]
+                # if table_name.endswith(".csv"):
+                #     table_name = table_name[:-4]
                 table_description = (
-                    metadata.loc[metadata["table_name"] == table_name, "description"]
+                    metadata.loc[
+                        metadata["table_name"] == Path(table).stem, "description"
+                    ]
                     .head(1)
                     .item()
                 )
@@ -144,7 +167,7 @@ class Pneuma(AbstractRetriever):
                 actual_table.rename(columns=clean_column_table_name, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=clean_column_table_name(table[:-4].split("/")[-1]),
+                        doc_id=table_name,
                         retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=actual_table,
                         metadata=table_metadata,
@@ -574,7 +597,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer # type: ignore
+        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
@@ -611,7 +634,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer # type: ignore
+        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_rows = [
                 row for row in sample_rows if row.metadata["table_name"] == table
@@ -651,7 +674,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         )
         processed_table_context: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer # type: ignore
+        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_contexts = [
                 context
@@ -745,12 +768,12 @@ class HybridRetriever:
         self, items, missing_ids, collection: Collection, question_embedding
     ):
         extra_information = collection.get_fast(
-            ids=missing_ids, limit=len(missing_ids), include=["documents", "embeddings"] # type: ignore
+            ids=missing_ids, limit=len(missing_ids), include=["documents", "embeddings"]  # type: ignore
         )
         items["ids"][0].extend(extra_information["ids"])
         items["documents"][0].extend(extra_information["documents"])
         items["distances"][0].extend(
-            cosine(question_embedding, extra_information["embeddings"][i]) # type: ignore
+            cosine(question_embedding, extra_information["embeddings"][i])  # type: ignore
             for i in range(len(missing_ids))
         )
 
@@ -871,11 +894,11 @@ Is the table relevant to answer the question? Begin your answer with yes/no."""
         for node_id in sorted(vec_ids | bm25_ids):
             bm25_score_doc = processed_nodes_bm25.get(node_id)
             vec_score_doc = processed_nodes_vec.get(node_id)
-            combined_score = alpha * bm25_score_doc[0] + (1 - alpha) * vec_score_doc[0] # type: ignore
-            if bm25_score_doc[1] is None: # type: ignore
-                doc = vec_score_doc[1] # type: ignore
+            combined_score = alpha * bm25_score_doc[0] + (1 - alpha) * vec_score_doc[0]  # type: ignore
+            if bm25_score_doc[1] is None:  # type: ignore
+                doc = vec_score_doc[1]  # type: ignore
             else:
-                doc = bm25_score_doc[1] # type: ignore
+                doc = bm25_score_doc[1]  # type: ignore
             all_nodes.append((node_id, combined_score, doc))
 
         sorted_nodes = sorted(all_nodes, key=lambda node: (-node[1], node[0]))[:k]

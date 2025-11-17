@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
 import unittest
@@ -57,16 +57,20 @@ class ConductorTests(unittest.TestCase):
             data_sources=[],
             config=config,
             prov_graph=ProvenanceGraph(self.logger),
+            user_id="uX",
+            chat_id="cX",
         )
 
     def tearDown(self):
         patch.stopall()
 
     def test_pneuma_retriever_updates_retrieved_tables(self):
-        plan1 = '{"action":"tool_call","tool":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"action":"communicate_with_user","message":"done"}'
-        self.mock_llm._responses = [plan1, plan2]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"pneuma_retriever","args":{"prompt":"find tables"}},
+            {"action":"communicate_with_user","message":"done"}
+        ]}"""
+        ]
         self.conductor.toolkit.retrieve_documents = MagicMock(
             return_value=[
                 Table(
@@ -80,8 +84,6 @@ class ConductorTests(unittest.TestCase):
 
         gen = self.conductor.process_input(
             user_input="Find relevant tables",
-            user_id="uX",
-            chat_id="cX",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -97,10 +99,12 @@ class ConductorTests(unittest.TestCase):
         )
 
     def test_web_search_sets_web_search_result(self):
-        plan1 = '{"action":"tool_call","tool":"web_search","args":{"prompt":"query"}}'
-        plan2 = '{"action":"communicate_with_user","message":"web done"}'
-        self.mock_llm._responses = [plan1, plan2]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"web_search","args":{"prompt":"web search query"}},
+            {"action":"communicate_with_user","message":"web done"}
+        ]}"""
+        ]
         self.conductor.toolkit.retrieve_documents = MagicMock(
             return_value=[
                 Text(
@@ -114,8 +118,6 @@ class ConductorTests(unittest.TestCase):
 
         gen = self.conductor.process_input(
             user_input="Look up web",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -127,9 +129,12 @@ class ConductorTests(unittest.TestCase):
         )
 
     def test_web_crawl_sets_web_crawl_result(self):
-        plan1 = '{"action":"tool_call","tool":"web_crawl","args":{"url":"http://example.com"}}'
-        plan2 = '{"action":"communicate_with_user","message":"web crawl done"}'
-        self.mock_llm._responses = [plan1, plan2]
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"web_crawl","args":{"url":"http://example.com"}},
+            {"action":"communicate_with_user","message":"web crawl done"}
+        ]}"""
+        ]
 
         self.conductor.toolkit.retrieve_documents = MagicMock(
             return_value=[
@@ -144,22 +149,25 @@ class ConductorTests(unittest.TestCase):
 
         gen = self.conductor.process_input(
             user_input="Look up this URL: http://example.com",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
         responses = list(gen)
-        self.assertIn("web crawl done", responses[-1], "Expected web crawl done in final response")
+        self.assertIn(
+            "web crawl done", responses[-1], "Expected web crawl done in final response"
+        )
         self.assertIsNotNone(
             self.conductor.web_crawl_result,
             "web_crawl_result should be set after web_crawl call",
         )
 
     def test_table_enumerator_updates_enumerated_ids(self):
-        plan1 = '{"action":"tool_call","tool":"table_enumerator","args":{"pattern":"pattern"}}'
-        plan2 = '{"action":"communicate_with_user","message":"enum done"}'
-        self.mock_llm._responses = [plan1, plan2]
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"table_enumerator","args":{"pattern":"pattern"}},
+            {"action":"communicate_with_user","message":"enum done"}
+        ]}"""
+        ]
 
         self.conductor.toolkit.retrieve_documents = MagicMock(
             return_value=[
@@ -174,8 +182,6 @@ class ConductorTests(unittest.TestCase):
 
         gen = self.conductor.process_input(
             user_input="enumerate",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -184,14 +190,14 @@ class ConductorTests(unittest.TestCase):
         self.assertIsInstance(self.conductor.enumerated_table_ids, list)
 
     def test_state_manipulation_sets_only_S(self):
-        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"S":"result = something"}}"""
-        plan2 = '{"action":"communicate_with_user","message":"S set"}'
-        self.mock_llm._responses = [plan1, plan2]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"state_manipulation","args":{"S":"result = something"}},
+            {"action":"communicate_with_user","message":"S set"}
+        ]}"""
+        ]
         gen = self.conductor.process_input(
             user_input="set S",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -206,14 +212,15 @@ class ConductorTests(unittest.TestCase):
         self.assertEqual(state.column_descriptions, {})
 
     def test_state_manipulation_sets_only_T(self):
-        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}}}}"""
-        plan2 = '{"action":"communicate_with_user","message":"T set"}'
-        self.mock_llm._responses = [plan1, plan2]
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}}}},
+            {"action":"communicate_with_user","message":"T set"}
+        ]}"""
+        ]
 
         gen = self.conductor.process_input(
             user_input="set T",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -230,14 +237,14 @@ class ConductorTests(unittest.TestCase):
         self.assertFalse(state.is_S_executed)
 
     def test_state_manipulation_sets_S_and_T(self):
-        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}}"""
-        plan2 = '{"action":"communicate_with_user","message":"state done"}'
-        self.mock_llm._responses = [plan1, plan2]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}},
+            {"action":"communicate_with_user","message":"state done"}
+        ]}"""
+        ]
         gen = self.conductor.process_input(
             user_input="set S and T",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -255,12 +262,14 @@ class ConductorTests(unittest.TestCase):
         self.assertFalse(state.is_S_executed)
 
     def test_materializer_and_executor(self):
-        plan1 = """{"action":"tool_call","tool":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}}"""
-        plan2 = """{"action":"tool_call","tool":"materializer","args":{"note":""}}"""
-        plan3 = """{"action":"tool_call","tool":"executor","args":{}}"""
-        plan4 = '{"action":"communicate_with_user","message":"materialization and execution done"}'
-        self.mock_llm._responses = [plan1, plan2, plan3, plan4]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}},
+            {"action":"materializer","args":{"note":""}},
+            {"action":"executor","args":{}},
+            {"action":"communicate_with_user","message":"materialization and execution done"}
+        ]}"""
+        ]
         self.conductor.materializer.materialize_T = MagicMock(
             return_value={"t1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
         )
@@ -273,8 +282,6 @@ class ConductorTests(unittest.TestCase):
 
         gen = self.conductor.process_input(
             user_input="materialize T",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
@@ -297,7 +304,7 @@ class ConductorTests(unittest.TestCase):
             list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
         )
 
-    def test_categorical_column_info_produces_expected_string(self):
+    def test_column_info_extractor_produces_expected_string(self):
         df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "x", "y"]})
         self.conductor.retrieved_tables = [
             Table(
@@ -308,19 +315,19 @@ class ConductorTests(unittest.TestCase):
             )
         ]
 
-        plan1 = """{"action":"tool_call","tool":"categorical_column_info","args":{"id":"table1","columns":["B"]}}"""
-        plan2 = '{"action":"communicate_with_user","message":"info provided"}'
-        self.mock_llm._responses = [plan1, plan2]
-
+        self.mock_llm._responses = [
+            """{"plan": [
+            {"action":"column_info_extractor","args":{"id":"table1","columns":["A","B"]}},
+            {"action":"communicate_with_user","message":"info provided"}
+        ]}"""
+        ]
         gen = self.conductor.process_input(
             user_input="materialize T",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[],
         )
         responses = list(gen)
-        self.assertIn("info provided", responses[-1])  # Expected info: "B: x, y\n"
+        self.assertIn("info provided", responses[-1])
 
     def test_external_table_upload_creates_provenance_node(self):
         """Tests that uploading an external table results in a new provenance node."""
@@ -344,13 +351,12 @@ class ConductorTests(unittest.TestCase):
         )
 
         self.mock_llm._responses = [
-            '{"action":"communicate_with_user","message":"External data read successfuly."}'
+            """{"plan": [
+            {"action":"communicate_with_user","message":"External data read successfuly."}
+        ]}"""
         ]
-
         gen = self.conductor.process_input(
             user_input="upload",
-            user_id="u1",
-            chat_id="c1",
             interaction_history=[],
             external_table_paths=[tmp_path],
         )

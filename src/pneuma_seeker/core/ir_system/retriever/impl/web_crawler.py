@@ -35,13 +35,18 @@ class WebCrawler(AbstractRetriever):
         pass
 
     def retrieve(
-        self, query: str, sources: list[str], k: int
+        self,
+        query: str,
+        sources: list[str],
+        k: int,
+        sample_only: bool,
+        sample_size: int | None = None,
     ) -> list[AbstractDocument]:
         """
         Crawls the content of the page with URL query (if allowed by its robots.txt).
         """
         if not self.__is_allowed(query):
-            return f"Access to {query} is disallowed by robots.txt."
+            return [Text("web_crawl", RetrieverType.WEB_CRAWL, f"Access to {query} is disallowed by robots.txt.", {})]
 
         try:
             web_content = self.__fetch_content(query)

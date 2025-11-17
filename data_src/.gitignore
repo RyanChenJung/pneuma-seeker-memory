@@ -1,3 +1,4 @@
 fisher*
 target_tables
 *test_data*
+*.db

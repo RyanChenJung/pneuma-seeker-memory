@@ -46,7 +46,7 @@ class WebSearchTests(unittest.TestCase):
         mock_get.side_effect = [robots_resp, page_resp]
 
         crawler = WebCrawler(self.models, self.config)
-        results = crawler.retrieve("http://www.example.com", [], 1)
+        results = crawler.retrieve("http://www.example.com", [], 1, False)
 
         # Should return a list with one Text document
         self.assertIsInstance(results, list)

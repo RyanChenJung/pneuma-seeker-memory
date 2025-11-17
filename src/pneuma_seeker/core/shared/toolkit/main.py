@@ -15,7 +15,6 @@ from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.utils.config import Config
-from pneuma_seeker.utils.logger import formatted_log
 
 
 class Toolkit:
@@ -40,9 +39,16 @@ class Toolkit:
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
 
-    def retrieve_documents(self, prompt: str, retriever_type: RetrieverType, k=10):
+    def retrieve_documents(
+        self,
+        prompt: str,
+        retriever_type: RetrieverType,
+        k=10,
+        sample_only=False,
+        sample_size=None,
+    ):
         return self.ir_system.retrieve_documents(
-            retriever_type, prompt, self.data_sources, k
+            retriever_type, prompt, self.data_sources, k, sample_only, sample_size
         )
 
     def execute_sql(self, T: dict[str, AbstractDocument], Q: list[str]):
@@ -54,15 +60,12 @@ class Toolkit:
                 T_id: T_doc.content for T_id, T_doc in T.items()
             }
 
-            self.__log(f"Executing these SQL statements on the (materialized) T: {Q}")
-
             for table_name, df in tables.items():
                 con.register(table_name, df)
 
             results: list[DataFrame] = []
             for sql_idx, sql in enumerate(Q):
                 try:
-                    self.__log(f"=> ({sql_idx+1}) Executing {sql}")
                     result = con.execute(sql).fetchdf()
                     results.append(result)
                 except Exception as e:
@@ -191,6 +194,3 @@ class Toolkit:
             id_dfs,
             path,
         )
-
-    def __log(self, text):
-        formatted_log(self.logger, "CONDUCTOR'S TOOLKIT", text)

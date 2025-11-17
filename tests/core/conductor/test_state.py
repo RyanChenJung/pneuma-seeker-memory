@@ -4,11 +4,10 @@ import sys
 import unittest
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
 import pandas as pd
-
 from pneuma_seeker.core.conductor.state import InformationNeedState
 from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table
 

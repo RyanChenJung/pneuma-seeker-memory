@@ -27,11 +27,13 @@ class Qwen(AbstractModel):
 
     def load_model(self):
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name, torch_dtype="auto", device_map="auto"
+            self.model_name, dtype="auto", device_map="auto"
         )
 
     def load_tokenizer(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.tokenizer.padding_side = "left"
+        self.tokenizer.truncation_side = "left"
 
     def chat(
         self, messages: List[LLMMessage], llm_option: Optional[LLMOption] = None
