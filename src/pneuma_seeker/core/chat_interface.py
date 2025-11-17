@@ -80,8 +80,6 @@ class ChatInterface:
 
         for conductor_response in self.conductor.process_input(
             chat_messages[-1]["content"],
-            self.user_id,
-            self.chat_id,
             interaction_history,
             external_data_paths,
         ):
