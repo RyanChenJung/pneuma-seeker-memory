@@ -36,10 +36,9 @@ class TableStore:
     """
 
     def __init__(self, base_path: str = "intermediate_tables"):
-        self.base_path = base_path
-        Path(base_path).mkdir(parents=True, exist_ok=True)
-        # Cache DuckDB connections per user/chat so returned relation
-        # objects remain usable until the caller closes the store.
+        self.base_path = Path(__file__).parent / base_path
+        self.base_path.mkdir(parents=True, exist_ok=True)
+
         # Key: "{user_id}_{chat_id}" -> duckdb.DuckDBPyConnection
         self._connections: dict[str, duckdb.DuckDBPyConnection] = {}
 
@@ -51,7 +50,6 @@ class TableStore:
 
         db_path = os.path.join(self.base_path, f"{user_id}_{chat_id}.db")
         con = duckdb.connect(db_path)
-        # Ensure registry exists for this DB
         self.__init_metadata_table(con)
         self._connections[key] = con
         return con
@@ -118,7 +116,6 @@ class TableStore:
         table_type: "intermediate" or "target"
         """
         con = self._get_connection(user_id, chat_id)
-
         cleaned = clean_column_table_name(table_name)
         con.execute(f"CREATE OR REPLACE TABLE {cleaned} AS SELECT * FROM df")
         self.register_table(con, cleaned, table_type)
