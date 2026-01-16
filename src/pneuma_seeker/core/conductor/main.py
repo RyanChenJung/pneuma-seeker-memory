@@ -37,8 +37,8 @@ class Conductor:
         data_sources: list[str],
         config: Config,
         prov_graph: ProvenanceGraph,
-        user_id: int,
-        chat_id: int,
+        user_id: str,
+        chat_id: str,
     ) -> None:
         self.config = config
         self.logger = logger

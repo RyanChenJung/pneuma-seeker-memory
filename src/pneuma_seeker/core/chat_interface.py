@@ -53,6 +53,8 @@ class ChatInterface:
                 data_sources,
                 Config(env_path=env_path),
                 ProvenanceGraph(logger),
+                self.user_id,
+                self.chat_id,
             )
 
     def process_user_input(
