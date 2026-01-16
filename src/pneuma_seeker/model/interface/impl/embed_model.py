@@ -38,7 +38,7 @@ class EmbeddingModel(AbstractModel):
 
     def encode(
         self,
-        texts: str | list[str],
+        texts: list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
     ) -> ndarray:
         """Embed texts."""

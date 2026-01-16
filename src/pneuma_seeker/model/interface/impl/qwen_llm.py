@@ -171,7 +171,7 @@ class Qwen(AbstractModel):
 
     def encode(
         self,
-        texts: str | List[str],
+        texts: list[str],
         embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
     ) -> ndarray:
         raise NotImplementedError("Qwen does not support embedding texts.")

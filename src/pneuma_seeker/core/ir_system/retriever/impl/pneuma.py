@@ -96,7 +96,7 @@ class Pneuma(AbstractRetriever):
                     datum["metadata"]["table"]: datum_idx
                     for datum_idx, datum in enumerate(retriever.corpus)
                 }
-            question_embedding = self.embed_model.encode(query)[0].tolist()
+            question_embedding = self.embed_model.encode([query])[0].tolist()
             query_tokens = bm25s.tokenize(
                 query, stemmer=self.stemmer, show_progress=False
             )

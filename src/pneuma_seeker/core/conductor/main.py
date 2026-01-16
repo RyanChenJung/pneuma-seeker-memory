@@ -44,7 +44,9 @@ class Conductor:
         self.logger = logger
 
         self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
-        self.embed_model = get_embed_model()(embed_model_path, self.config, self.logger)
+        self.embed_model = get_embed_model(embed_model_path)(
+            embed_model_path, self.config, self.logger
+        )
 
         self.data_sources = data_sources
         self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
@@ -72,7 +74,7 @@ class Conductor:
             self.toolkit,
             self.config,
             self.user_id,
-            self.chat_id
+            self.chat_id,
         )
         self.table_reader = TableReader(
             self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
