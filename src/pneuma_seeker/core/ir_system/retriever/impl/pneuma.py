@@ -28,6 +28,7 @@ from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.utils.str_processor import clean_column_table_name
 from scipy.spatial.distance import cosine
+from tiktoken import encoding_for_model
 from torch import cuda
 from tqdm import tqdm
 
@@ -611,7 +612,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
 
                 while (col_idx + 1) < len(column_summaries):
                     temp = processed_summary + " | " + column_summaries[col_idx + 1]
-                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
+                    if self.__estimate_tokens(temp) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_summary = temp
                         col_idx += 1
                     else:
@@ -648,7 +649,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                     temp = (
                         processed_sample_row + " || " + table_rows[rows_idx + 1].content
                     )
-                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
+                    if self.__estimate_tokens(temp) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_sample_row = temp
                         rows_idx += 1
                     else:
@@ -690,7 +691,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                         + " || "
                         + table_contexts[context_idx + 1].content
                     )
-                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
+                    if self.__estimate_tokens(temp) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_context = temp
                         context_idx += 1
                     else:
@@ -708,6 +709,16 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         print(f"Num of context summaries (BEFORE): {len(table_context)}")
         print(f"Num of context summaries (AFTER): {len(processed_table_context)}")
         return processed_table_context
+
+    def __estimate_tokens(self, text: str):
+        """Estimates the number of tokens in a given text."""
+        try:
+            if len(text) == 0:
+                return 0
+            enc = encoding_for_model("o4-mini")
+            return len(enc.encode(text))
+        except Exception:
+            return len(text.split(" "))
 
 
 class RerankingMode(Enum):
