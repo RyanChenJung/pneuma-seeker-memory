@@ -7,10 +7,12 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from queue import Queue
 from typing import Any
 
 import markdown
 import markdown2
+from anyio import to_thread
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -21,6 +23,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 from pneuma_seeker.core.chat_interface import ChatInterface
+from pneuma_seeker.model.llm_message import LLMMessage
 from torch.backends import cudnn
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -186,7 +189,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
     model = data.get("model", "assistant")
 
     return templates.TemplateResponse(
-        "state_view_prov_comprehensive.html",
+        "state_view.html",
         {
             "request": request,
             "state": state,
@@ -199,76 +202,88 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
     )
 
 
+def now_ms() -> int:
+    """Returns the current time in milliseconds."""
+    return int(datetime.now().timestamp() * 1000)
+
+
+def stream_payload(sender: str, text: str) -> str:
+    """Formats a message payload for streaming responses."""
+    return (
+        json.dumps(
+            {
+                "sender": sender,
+                "text": text,
+                "time_stamp": now_ms(),
+            }
+        )
+        + "\n"
+    )
+
+
 @app.post("/chat")
-async def chat_endpoint(request: Request):
-    """
-    Handles chat requests with HTTP streaming instead of WebSockets.
-    Streams logs and assistant messages in real time.
-    """
-    body = await request.json()
-    user_id = body.get("user_id", "default_user")
-    chat_id = body.get("chat_id", "default_chat")
+async def chat(request: Request):
+    body: dict[str, Any] = await request.json()
+    user_id: str = body.get("user_id", "default_user")
+    chat_id: str = body.get("chat_id", "default_chat")
+    messages = body.get("messages", [])
+    files = body.get("files", [])
 
-    messages: list[dict[str, Any]] = body["messages"]
-    files: list[str] = body.get("files", [])
+    llm_messages: list[LLMMessage] = []
+    for msg in messages:
+        llm_messages.append(LLMMessage(role=msg["role"], content=msg["content"]))
 
-    chat_interface = manager.get_chat_interface(user_id, chat_id)
+    chat_session = manager.get_chat_interface(user_id, chat_id)
 
     async def event_stream():
         start = datetime.now().timestamp()
 
-        yield json.dumps(
-            {
-                "sender": "log",
-                "text": "Connecting to Pneuma Seeker...",
-                "time_stamp": int(datetime.now().timestamp() * 1000),
-            }
-        ) + "\n"
+        yield stream_payload("log", "Pneuma connected. Starting processing...")
+        await asyncio.sleep(0)
 
-        await asyncio.sleep(0.1)
+        response_queue: Queue[str | None] = Queue()
 
-        yield json.dumps(
-            {
-                "sender": "log",
-                "text": "Processing input...",
-                "time_stamp": int(datetime.now().timestamp() * 1000),
-            }
-        ) + "\n"
+        def run_chat():
+            try:
+                for msg in chat_session.chat(llm_messages, files):
+                    response_queue.put(msg)
+            finally:
+                response_queue.put(None)
 
-        await asyncio.sleep(0.1)
+        producer = asyncio.create_task(
+            to_thread.run_sync(run_chat, abandon_on_cancel=True)
+        )
 
-        # Stream data from ChatInterface
-        for msg in chat_interface.process_user_input(messages, files):  # type: ignore
-            if msg.startswith("LOG"):
-                yield json.dumps(
-                    {
-                        "sender": "log",
-                        "text": msg,
-                        "time_stamp": int(datetime.now().timestamp() * 1000),
-                    }
-                ) + "\n"
-            elif msg.startswith("DONE"):
-                end = datetime.now().timestamp()
-                yield json.dumps(
-                    {
-                        "sender": "done",
-                        "text": f"Processing done in {end - start:.2f} seconds.",
-                        "time_stamp": int(datetime.now().timestamp() * 1000),
-                    }
-                ) + "\n"
-            else:
-                yield json.dumps(
-                    {
-                        "sender": "assistant",
-                        "text": msg,
-                        "time_stamp": int(datetime.now().timestamp() * 1000),
-                    }
-                ) + "\n"
+        try:
+            while True:
+                try:
+                    response = await to_thread.run_sync(response_queue.get)
 
-            await asyncio.sleep(0)  # yield control back to loop
-        chat_interface.persist_state()
+                    if response is None:
+                        break
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+                    if response.startswith("LOG"):
+                        payload = stream_payload("log", response)
+                    elif response.startswith("DONE"):
+                        payload = stream_payload(
+                            "done",
+                            f"Processing done in {datetime.now().timestamp() - start:.2f}s.",
+                        )
+                    else:
+                        payload = stream_payload("assistant", response)
+
+                    yield payload
+                    await asyncio.sleep(0)
+                except Exception as e:
+                    break
+        finally:
+            chat_session.persist_session()
+            producer.cancel()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+    )
 
 
 @app.get("/all_tables/{user_id}/{chat_id}")

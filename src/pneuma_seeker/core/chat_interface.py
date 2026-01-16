@@ -57,7 +57,7 @@ class ChatInterface:
                 self.chat_id,
             )
 
-    def process_user_input(
+    def chat(
         self,
         chat_messages: list[LLMMessage],
         external_data_paths: list[str] | None = None,
@@ -89,7 +89,7 @@ class ChatInterface:
 
         yield "DONE"
 
-    def persist_state(self):
+    def persist_session(self):
         """Callback to persist the current state of Provenance Graph."""
         try:
             node_count = len(self.conductor.prov_graph.nodes)
