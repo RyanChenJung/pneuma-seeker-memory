@@ -205,8 +205,8 @@
             <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
           </h5>
 
-          <div id="script-container" class="script-wrapper" aria-live="polite" aria-atomic="true">
-            <pre id="script-pre" class="mb-0"></pre>
+          <div id="script-container" class="script-wrapper bg-secondary-subtle" aria-live="polite" aria-atomic="true">
+            <!-- <pre id="script-pre" class="mb-0"></pre> -->
           </div>
         </div>
       </div>
@@ -369,7 +369,7 @@
     tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
 
     // Render Python Script
-    const scriptPre = document.getElementById("script-pre");
+    const scriptPre = document.getElementById("script-container");
     scriptPre.textContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
 
     // Render Provenance Code (now properly formatted as HTML)
