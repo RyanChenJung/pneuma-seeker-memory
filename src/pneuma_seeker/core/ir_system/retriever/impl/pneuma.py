@@ -598,7 +598,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
@@ -635,7 +634,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_rows = [
                 row for row in sample_rows if row.metadata["table_name"] == table
@@ -675,7 +673,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         )
         processed_table_context: list[Text] = []
         self.embed_model.load_model()
-        tokenizer = self.embed_model.model.tokenizer  # type: ignore
         for table in tqdm(unique_tables):
             table_contexts = [
                 context
