@@ -14,6 +14,8 @@ class Config:
         self.AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-12-01-preview")
         self.USE_AZURE = self.__get_use_azure()
 
+        self.EMBEDDING_MAX_TOKENS = int(os.getenv("EMBEDDING_MAX_TOKENS", "1536"))
+
         self.OPENWEBUI_BASE_URL = os.getenv(
             "OPENWEBUI_BASE_URL", "http://localhost:8080/"
         )
