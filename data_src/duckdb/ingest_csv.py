@@ -1,12 +1,12 @@
-from pathlib import Path
-import re
 import os
+import re
+from pathlib import Path
 
 import duckdb
 from tqdm import tqdm
 
 
-def clean_column_table_name(name):
+def clean_column_table_name(name: str) -> str:
     """Cleans and normalizes column/table names."""
     name = name.lower()
     # Replace spaces and hyphens with underscores
@@ -22,48 +22,99 @@ def clean_column_table_name(name):
     return name
 
 
-DATASET_NAME = "buysite"
-DATASET_PATH = f"../{DATASET_NAME}/dataset"
+def dedupe_columns(cols):
+    seen = {}
+    result = []
+    for c in cols:
+        if c not in seen:
+            seen[c] = 0
+            result.append(c)
+        else:
+            seen[c] += 1
+            result.append(f"{c}_{seen[c]}")
+    return result
 
-if os.path.exists(f"{DATASET_NAME}.db"):
+
+DATASET_NAME = "federal_student_loan"
+DATASET_PATH = f"../{DATASET_NAME}/dataset"
+OVERWRITE_DB = True
+
+if os.path.exists(f"{DATASET_NAME}.db") and not OVERWRITE_DB:
     raise FileExistsError(
         f"{DATASET_NAME}.db already exists. Aborting to prevent overwrite."
     )
 else:
+    if os.path.exists(f"{DATASET_NAME}.db") and OVERWRITE_DB:
+        os.remove(f"{DATASET_NAME}.db")
     print(f"Ingesting CSV files from {DATASET_PATH} into {DATASET_NAME}.db")
 
-    with duckdb.connect(f"{DATASET_NAME}.db") as con:
-
+    dataset_con = duckdb.connect(f"{DATASET_NAME}.db")
+    try:
         for table_file_name in tqdm(sorted(os.listdir(DATASET_PATH))):
-            if not table_file_name.endswith(".csv"):
+            if not table_file_name.lower().endswith(".csv"):
                 continue
 
-            table_id = clean_column_table_name(Path(table_file_name).stem)
-            table_id_sql = f'"{table_id}"'
-
             file_path = (Path(DATASET_PATH) / table_file_name).as_posix()
+            table_stem = Path(table_file_name).stem
+            cleaned_table_name = clean_column_table_name(table_stem)
 
-            rel = con.read_csv(
-                file_path, auto_detect=True, sample_size=-1, parallel=False
-            )
-
-            original_cols = rel.columns
-            cleaned_cols = [clean_column_table_name(c) for c in original_cols]
-
-            select_clause = ", ".join(
-                f'"{orig}" AS "{cleaned}"'
-                for orig, cleaned in zip(original_cols, cleaned_cols)
-            )
-
-            con.execute(
-                f"""
-                CREATE TABLE {table_id_sql} AS
-                SELECT {select_clause}
-                FROM read_csv(
-                    '{file_path}',
-                    auto_detect=true,
-                    sample_size=-1,
-                    parallel=false
+            # Read header only to get original column names (fast)
+            try:
+                rel = dataset_con.execute(
+                    f"""
+                    SELECT *
+                    FROM read_csv_auto(
+                        '{file_path}',
+                        HEADER=TRUE,
+                        SAMPLE_SIZE=0
+                    )
+                    LIMIT 0
+                    """
                 )
-            """
-            )
+                original_cols = [desc[0] for desc in rel.description]
+            except Exception:
+                # Fallback: let DuckDB auto-detect and ingest (still fine)
+                original_cols = None
+
+            if original_cols:
+                cleaned_cols = dedupe_columns(
+                    [clean_column_table_name(c) for c in original_cols]
+                )
+                select_clause = ", ".join(
+                    f'"{orig}" AS "{cleaned}"'
+                    for orig, cleaned in zip(original_cols, cleaned_cols)
+                )
+
+                dataset_con.execute(
+                    f"""
+                    CREATE OR REPLACE TABLE "{cleaned_table_name}" AS
+                    SELECT {select_clause}
+                    FROM read_csv_auto(
+                        '{file_path}',
+                        HEADER=TRUE,
+                        IGNORE_ERRORS=TRUE,
+                        STRICT_MODE=FALSE,
+                        NULL_PADDING=TRUE,
+                        SAMPLE_SIZE=100_000,
+                        PARALLEL=FALSE
+                    );
+                    """
+                )
+            else:
+                # If we couldn't get header with pandas, let DuckDB create the table
+                dataset_con.execute(
+                    f"""
+                    CREATE OR REPLACE TABLE "{cleaned_table_name}" AS
+                    SELECT * FROM read_csv_auto(
+                        '{file_path}',
+                        HEADER=TRUE,
+                        IGNORE_ERRORS=TRUE,
+                        STRICT_MODE=FALSE,
+                        NULL_PADDING=TRUE,
+                        SAMPLE_SIZE=100_000,
+                        PARALLEL=FALSE
+                    );
+                    """
+                )
+    finally:
+        dataset_con.close()
