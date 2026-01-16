@@ -150,16 +150,16 @@ class Pneuma(AbstractRetriever):
 
                 if metadata is None:
                     metadata = pd.read_csv(f"../../data_src/{dataset}/metadata.csv")
-                # table_name = table.split("/")[-1]
-                # if table_name.endswith(".csv"):
-                #     table_name = table_name[:-4]
-                table_description = (
-                    metadata.loc[
-                        metadata["table_name"] == Path(table).stem, "description"
-                    ]
-                    .head(1)
-                    .item()
-                )
+                try:
+                    table_description = (
+                        metadata.loc[
+                            metadata["table_name"] == Path(table).stem, "description"
+                        ]
+                        .head(1)
+                        .item()
+                    )
+                except:
+                    table_description = "No description."
 
                 table_metadata: dict[str, str] = dict()
                 if isinstance(table_description, str):
