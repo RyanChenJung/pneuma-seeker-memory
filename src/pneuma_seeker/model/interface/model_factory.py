@@ -7,16 +7,13 @@ from pneuma_seeker.model.interface.impl.azure_openai_embed_model import (
 from pneuma_seeker.model.interface.impl.azure_openai_llm import AzureOpenAILLM
 from pneuma_seeker.model.interface.impl.embed_model import EmbeddingModel
 from pneuma_seeker.model.interface.impl.openai_llm import OpenAILLM
-from pneuma_seeker.model.interface.impl.qwen_llm import Qwen
 from pneuma_seeker.utils.config import Config
 
 
 def get_llm(model_path: str, config: Config) -> Type[AbstractModel]:
     """Factory function to return the correct LLM instance."""
     normalized_model_path = model_path.lower()
-    if "qwen" in normalized_model_path:
-        return Qwen
-    elif (
+    if (
         "gpt" in normalized_model_path
         or "o3" in normalized_model_path
         or "o4" in normalized_model_path
