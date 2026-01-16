@@ -90,7 +90,16 @@ class OpenAILLM(AbstractModel):
         """
         Chats (in batch) with the model.
         """
-        raise NotImplementedError("GPT does not support batch chat functionality.")
+        responses: list[str] = []
+
+        for messages in batch_messages:
+            response = "".join(self.chat(messages, llm_option))
+            responses.append(response)
+
+        batch_size = (
+            llm_option.batch_size if llm_option and llm_option.batch_size else 1
+        )
+        return responses, batch_size
 
     def encode(
         self,
