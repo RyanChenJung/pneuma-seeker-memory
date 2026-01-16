@@ -611,7 +611,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
 
                 while (col_idx + 1) < len(column_summaries):
                     temp = processed_summary + " | " + column_summaries[col_idx + 1]
-                    if len(tokenizer.encode(temp)) < self.EMBEDDING_MAX_TOKENS:
+                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_summary = temp
                         col_idx += 1
                     else:
@@ -648,7 +648,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                     temp = (
                         processed_sample_row + " || " + table_rows[rows_idx + 1].content
                     )
-                    if len(tokenizer.encode(temp)) < self.EMBEDDING_MAX_TOKENS:
+                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_sample_row = temp
                         rows_idx += 1
                     else:
@@ -690,7 +690,7 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
                         + " || "
                         + table_contexts[context_idx + 1].content
                     )
-                    if len(tokenizer.encode(temp)) < self.EMBEDDING_MAX_TOKENS:
+                    if len(tokenizer.encode(temp)) < self.config.EMBEDDING_MAX_TOKENS:
                         processed_context = temp
                         context_idx += 1
                     else:

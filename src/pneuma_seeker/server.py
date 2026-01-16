@@ -2,7 +2,6 @@
 import asyncio
 import io
 import json
-import os
 import tempfile
 import zipfile
 from datetime import datetime
@@ -24,12 +23,7 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 from pneuma_seeker.core.chat_interface import ChatInterface
 from pneuma_seeker.model.llm_message import LLMMessage
-from torch.backends import cudnn
 
-os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-cudnn.deterministic = True
-cudnn.benchmark = False
 
 app = FastAPI(title="Pneuma-Seeker")
 app.add_middleware(
@@ -69,7 +63,7 @@ class Manager:
 
 manager = Manager(
     llm_path="o4-mini",
-    embed_model_path="model/weight/bge-base",
+    embed_model_path="text-embedding-3-small",
     data_sources=["buysite"],
 )
 
