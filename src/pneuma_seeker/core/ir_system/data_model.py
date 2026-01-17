@@ -109,22 +109,22 @@ class Table(AbstractDocument):
         super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
     def __str__(self) -> str:
-        content_representation = ""
         table: DataFrame = self.content
-        content_representation += (
-            f"Table {self.doc_id}:\ncol: {" | ".join(table.columns)}"
-        )
+        description = self.metadata.get("description")
+
+        cols = " | ".join(map(str, table.columns))
+        parts = [f"Table {self.doc_id}:", f"Columns: {cols}"]
+
+        if description:
+            parts.insert(1, f"Description: {description}")
+
         if len(table) > 0:
-            # Sample 5 rows to represent the table
             sample_rows = table.sample(min(5, len(table)), random_state=42)
-            sample_row_idx = 1
-            for _, data in sample_rows.iterrows():
-                str_data = [str(i) for i in data]
-                content_representation += (
-                    f"\nsample row {sample_row_idx}: {" | ".join(str_data)}"
-                )
-                sample_row_idx += 1
-        return content_representation
+            for i, (_, row) in enumerate(sample_rows.iterrows(), start=1):
+                row_str = " | ".join(map(str, row))
+                parts.append(f"Sample row {i}: {row_str}")
+
+        return "\n".join(parts)
 
 
 class TableContext(AbstractDocument):
