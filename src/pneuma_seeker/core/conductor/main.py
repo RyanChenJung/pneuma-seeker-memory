@@ -213,9 +213,18 @@ class Conductor:
             for action_plan in plan:
                 self.__log(f"=> Processing this action: {action_plan}")
                 actions_taken.append(str(action_plan))
-                action_type: str = action_plan.get("action")
+                action_type: None | str = action_plan.get("action")
                 action_message: None | str = action_plan.get("message")
                 args: None | dict = action_plan.get("args")
+
+                if action_type is None:
+                    llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content="Each action entry must have an `action` field specifying the action to take.",
+                        )
+                    )
+                    break
 
                 if action_type == "communicate_with_user" and isinstance(
                     action_message, str
