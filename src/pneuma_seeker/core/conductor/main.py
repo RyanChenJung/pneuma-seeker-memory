@@ -627,7 +627,15 @@ class Conductor:
                                 """
                                 unique_count = con.execute(
                                     unique_count_query
-                                ).fetchone()[0]
+                                ).fetchone()
+
+                                if unique_count is None:
+                                    msg = (
+                                        f"Execution returned no results for unique count of column `{col}`."
+                                    )
+                                    self.__log(msg)
+                                    return msg, ToolExecutionStatus.ERROR
+                                unique_count = unique_count[0]
 
                                 topk = 10
                                 topk_query = f"""
