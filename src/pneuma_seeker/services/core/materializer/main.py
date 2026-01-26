@@ -249,7 +249,7 @@ class Materializer:
             case "pneuma_retriever":
                 prompt = op_args.get("prompt", "")
                 self.state.retrieved_tables = self.toolkit.retrieve_documents(
-                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10, True, 5
+                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 if len(self.state.retrieved_tables) == 0:
                     error_msg = (
