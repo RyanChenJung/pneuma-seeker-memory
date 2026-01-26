@@ -4,7 +4,7 @@ from typing import Any, Optional, TypedDict
 
 from pandas import DataFrame
 
-from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.language_model.abstract_model import AbstractModel
 
 
 class RetrieverType(Enum):

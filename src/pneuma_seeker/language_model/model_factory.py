@@ -1,12 +1,12 @@
 from typing import Type
 
-from pneuma_seeker.model.interface.abstract_model import AbstractModel
-from pneuma_seeker.model.interface.impl.azure_openai_embed_model import (
+from pneuma_seeker.language_model.abstract_model import AbstractModel
+from pneuma_seeker.language_model.interface.impl.azure_openai_embed_model import (
     AzureOpenAIEmbedModel,
 )
-from pneuma_seeker.model.interface.impl.azure_openai_llm import AzureOpenAILLM
-from pneuma_seeker.model.interface.impl.embed_model import EmbeddingModel
-from pneuma_seeker.model.interface.impl.openai_llm import OpenAILLM
+from pneuma_seeker.language_model.interface.impl.azure_openai_llm import AzureOpenAILLM
+from pneuma_seeker.language_model.interface.impl.embed_model import EmbeddingModel
+from pneuma_seeker.language_model.interface.impl.openai_llm import OpenAILLM
 from pneuma_seeker.shared.config import Config
 
 

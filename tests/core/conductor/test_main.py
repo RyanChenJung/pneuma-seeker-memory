@@ -18,8 +18,8 @@ from pneuma_seeker.core.ir_system.data_model import (
     Table,
     Text,
 )
-from pneuma_seeker.model.interface.impl.mock_embed_model import MockEmbedModel
-from pneuma_seeker.model.interface.impl.mock_llm import MockLLM
+from pneuma_seeker.language_model.interface.impl.mock_embed_model import MockEmbedModel
+from pneuma_seeker.language_model.interface.impl.mock_llm import MockLLM
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
 

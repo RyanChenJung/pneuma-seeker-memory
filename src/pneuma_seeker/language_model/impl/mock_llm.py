@@ -1,7 +1,7 @@
 from typing import Optional
 
 from numpy import ndarray
-from pneuma_seeker.model.interface.abstract_model import AbstractModel
+from pneuma_seeker.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
 

@@ -18,7 +18,7 @@ from pneuma_seeker.core.ir_system.data_model import (
     Table,
 )
 from pneuma_seeker.core.materializer.main import Materializer
-from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
+from pneuma_seeker.language_model.model_factory import get_embed_model, get_llm
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
