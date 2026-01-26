@@ -1,4 +1,4 @@
-# services/db-service/src/db_service/db.py
+# services/db/main.py
 import json
 import os
 from logging import Logger
@@ -7,8 +7,8 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 from pandas import DataFrame
-from shared.schemas.db.table_type import TableType
-from shared.str_processor import clean_column_table_name
+from pneuma_seeker.shared.schemas.db.table_type import TableType
+from pneuma_seeker.shared.str_processor import clean_column_table_name
 from tqdm import tqdm
 
 
