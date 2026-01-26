@@ -155,7 +155,7 @@ class PneumaRetriever(AbstractRetriever):
                         .item()
                     )
                 except:
-                    table_description = "No description."
+                    table_description = ""
 
                 table_metadata: dict[str, str] = dict()
                 if isinstance(table_description, str):
