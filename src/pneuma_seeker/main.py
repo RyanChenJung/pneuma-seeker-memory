@@ -1,4 +1,4 @@
-# backend: src/pneuma_seeker/server.py
+# src/pneuma_seeker/main.py
 import asyncio
 import io
 import json
@@ -44,7 +44,7 @@ app.add_middleware(
 
 BASE_DIR = (
     Path(__file__).resolve().parents[2]
-)  # go up from /src/pneuma_seeker/server.py → project root
+)  # go up from /src/pneuma_seeker/main.py → project root
 TABLES_DIR = BASE_DIR / "data_src" / "target_tables"
 
 templates = Jinja2Templates(

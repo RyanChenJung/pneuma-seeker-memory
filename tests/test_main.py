@@ -1,3 +1,4 @@
+# tests/test_main.py
 import io
 import json
 import os
@@ -18,12 +19,12 @@ sys.path.insert(
 
 from fastapi.testclient import TestClient
 
-import pneuma_seeker.server as server
+import pneuma_seeker.main as main
 
 
 class ServerEndpointTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(server.app)
+        self.client = TestClient(main.app)
 
     def _make_mock_chat_interface(
         self, prov_nodes=None, graph_code="print('hi')", stream_messages=None
@@ -93,8 +94,8 @@ class ServerEndpointTests(unittest.TestCase):
         mock_chat = self._make_mock_chat_interface(prov_nodes=prov_nodes)
 
         # Patch manager.get_chat_interface temporarily
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             r = self.client.get("/provenance/nodes/u1/c1")
             self.assertEqual(r.status_code, 200)
@@ -105,12 +106,12 @@ class ServerEndpointTests(unittest.TestCase):
             ids = {n["id"] for n in body["nodes"]}
             self.assertEqual(ids, {"n1", "n2"})
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_materializer_code_download_returns_file(self):
         mock_chat = self._make_mock_chat_interface(graph_code="print('materialize')")
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             r = self.client.get("/materializer_code/u1/c1")
             self.assertEqual(r.status_code, 200)
@@ -120,7 +121,7 @@ class ServerEndpointTests(unittest.TestCase):
                 "attachment; filename=", r.headers.get("content-disposition", "")
             )
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_combined_html_calls_prov_explanation_and_renders(self):
         # Prepare a chat_interface mock where T is materialized and prov_graph returns markdown
@@ -141,11 +142,11 @@ class ServerEndpointTests(unittest.TestCase):
         chat_interface = MagicMock()
         chat_interface.conductor = conductor
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
 
         # Replace templates.TemplateResponse so we can inspect the context passed to it
-        original_templates = server.templates
+        original_templates = main.templates
 
         def fake_template_response(template_name, context):
             # Ensure prov_explanation was computed from prov_graph markdown
@@ -155,7 +156,7 @@ class ServerEndpointTests(unittest.TestCase):
             return HTMLResponse(content=context["prov_explanation"], status_code=200)
 
         # Replace the templates object with a minimal object exposing TemplateResponse
-        server.templates = types.SimpleNamespace(
+        main.templates = types.SimpleNamespace(
             TemplateResponse=fake_template_response
         )
 
@@ -171,16 +172,16 @@ class ServerEndpointTests(unittest.TestCase):
             # ensure the prov_graph method was called
             prov_graph.get_graph_explanation.assert_called()
         finally:
-            server.session_manager.get_chat_session = original_get
-            server.templates = original_templates
+            main.session_manager.get_chat_session = original_get
+            main.templates = original_templates
 
     def test_all_tables_downloads_zip(self):
         # Create a temp TABLES_DIR structure with user/chat and a csv file
         tmp_dir = tempfile.mkdtemp()
-        original_tables_dir = server.TABLES_DIR
-        server.TABLES_DIR = Path(tmp_dir)
+        original_tables_dir = main.TABLES_DIR
+        main.TABLES_DIR = Path(tmp_dir)
         try:
-            user_dir = server.TABLES_DIR / "u_test"
+            user_dir = main.TABLES_DIR / "u_test"
             chat_dir = user_dir / "c_test"
             chat_dir.mkdir(parents=True)
             csv_path = chat_dir / "table1.csv"
@@ -195,7 +196,7 @@ class ServerEndpointTests(unittest.TestCase):
             names = z.namelist()
             self.assertIn("table1.csv", names)
         finally:
-            server.TABLES_DIR = original_tables_dir
+            main.TABLES_DIR = original_tables_dir
             shutil.rmtree(tmp_dir)
 
     def test_chat_endpoint_streams_messages_and_calls_persist(self):
@@ -204,8 +205,8 @@ class ServerEndpointTests(unittest.TestCase):
             stream_messages=["LOG one", "answer text", "DONE"]
         )
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             r = self.client.post(
                 "/chat", json={"user_id": "u1", "chat_id": "c1", "messages": messages}
@@ -219,7 +220,7 @@ class ServerEndpointTests(unittest.TestCase):
             # persist_session should have been scheduled (called after streaming) - ensure method exists and can be called
             self.assertTrue(hasattr(mock_chat, "persist_session"))
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_download_chat_pdf_returns_pdf(self):
         # Patch the weasyprint.HTML used inside the endpoint
@@ -254,15 +255,15 @@ class ServerEndpointTests(unittest.TestCase):
 
     def test_all_tables_error_cases(self):
         tmp_dir = tempfile.mkdtemp()
-        original_tables_dir = server.TABLES_DIR
-        server.TABLES_DIR = Path(tmp_dir)
+        original_tables_dir = main.TABLES_DIR
+        main.TABLES_DIR = Path(tmp_dir)
         try:
             # user missing
             r = self.client.get("/all_tables/no_user/no_chat")
             self.assertEqual(r.status_code, 404)
 
             # user exists but chat missing
-            user_dir = server.TABLES_DIR / "u1"
+            user_dir = main.TABLES_DIR / "u1"
             user_dir.mkdir(parents=True)
             r = self.client.get("/all_tables/u1/no_chat")
             self.assertEqual(r.status_code, 404)
@@ -273,7 +274,7 @@ class ServerEndpointTests(unittest.TestCase):
             r = self.client.get("/all_tables/u1/c1")
             self.assertEqual(r.status_code, 404)
         finally:
-            server.TABLES_DIR = original_tables_dir
+            main.TABLES_DIR = original_tables_dir
             shutil.rmtree(tmp_dir)
 
     def test_combined_html_when_not_materialized_uses_default_explanation(self):
@@ -288,17 +289,17 @@ class ServerEndpointTests(unittest.TestCase):
         chat_interface = MagicMock()
         chat_interface.conductor = conductor
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
 
-        original_templates = server.templates
+        original_templates = main.templates
 
         def fake_template_response(template_name, context):
             self.assertIn("prov_explanation", context)
             self.assertIn("not materialized", context["prov_explanation"])
             return HTMLResponse(content=context["prov_explanation"], status_code=200)
 
-        server.templates = types.SimpleNamespace(TemplateResponse=fake_template_response)
+        main.templates = types.SimpleNamespace(TemplateResponse=fake_template_response)
 
         try:
             payload = {"messages": [], "model": "assistant"}
@@ -306,8 +307,8 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(r.status_code, 200)
             self.assertIn("not materialized", r.text)
         finally:
-            server.session_manager.get_chat_session = original_get
-            server.templates = original_templates
+            main.session_manager.get_chat_session = original_get
+            main.templates = original_templates
 
     def test_provenance_nodes_handles_non_object_source_retriever(self):
         node = types.SimpleNamespace(
@@ -321,8 +322,8 @@ class ServerEndpointTests(unittest.TestCase):
         prov_nodes = {node.id: node}
         mock_chat = self._make_mock_chat_interface(prov_nodes=prov_nodes)
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             r = self.client.get("/provenance/nodes/u1/c1")
             self.assertEqual(r.status_code, 200)
@@ -330,7 +331,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(body["node_count"], 1)
             self.assertEqual(body["nodes"][0]["source_retriever"], "RAW")
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_chat_ndjson_lines_are_valid_json_and_files_passed(self):
         # capture files passed to chat
@@ -345,8 +346,8 @@ class ServerEndpointTests(unittest.TestCase):
         mock_chat = self._make_mock_chat_interface(stream_messages=None)
         mock_chat.chat.side_effect = side_effect
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             payload = {"user_id": "u1", "chat_id": "c1", "messages": [{"role": "user", "content": "hi"}], "files": ["f1"]}
             r = self.client.post("/chat", json=payload)
@@ -362,7 +363,7 @@ class ServerEndpointTests(unittest.TestCase):
             # ensure files were passed through
             self.assertEqual(captured, [["f1"]])
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_chat_exception_still_calls_persist_session(self):
         def raise_on_call(messages, files):
@@ -371,8 +372,8 @@ class ServerEndpointTests(unittest.TestCase):
         mock_chat = self._make_mock_chat_interface(stream_messages=None)
         mock_chat.chat.side_effect = raise_on_call
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
         try:
             r = self.client.post("/chat", json={"user_id": "u1", "chat_id": "c1", "messages": []})
             # Even if chat raised, the endpoint should return 200 with no content or a handled error from background task.
@@ -380,7 +381,7 @@ class ServerEndpointTests(unittest.TestCase):
             # ensure persist_session method exists and can be called
             self.assertTrue(hasattr(mock_chat, "persist_session"))
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_materializer_code_empty_and_error_cases(self):
         # empty code
@@ -393,8 +394,8 @@ class ServerEndpointTests(unittest.TestCase):
         chat_interface = MagicMock()
         chat_interface.conductor = conductor
 
-        original_get = server.session_manager.get_chat_session
-        server.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
+        original_get = main.session_manager.get_chat_session
+        main.session_manager.get_chat_session = lambda user_id, chat_id: chat_interface
         try:
             r = self.client.get("/materializer_code/u1/c1")
             self.assertEqual(r.status_code, 200)
@@ -403,16 +404,16 @@ class ServerEndpointTests(unittest.TestCase):
 
             # error case: use a TestClient that does not re-raise server exceptions
             prov_graph.get_graph_code.side_effect = RuntimeError("fail")
-            client_no_raise = TestClient(server.app, raise_server_exceptions=False)
+            client_no_raise = TestClient(main.app, raise_server_exceptions=False)
             r2 = client_no_raise.get("/materializer_code/u1/c1")
             self.assertEqual(r2.status_code, 500)
         finally:
-            server.session_manager.get_chat_session = original_get
+            main.session_manager.get_chat_session = original_get
 
     def test_helpers_now_ms_and_stream_payload(self):
-        t = server.now_ms()
+        t = main.now_ms()
         self.assertIsInstance(t, int)
-        payload = server.stream_payload("log", "hello")
+        payload = main.stream_payload("log", "hello")
         obj = json.loads(payload.strip())
         self.assertEqual(obj["sender"], "log")
         self.assertEqual(obj["text"], "hello")
