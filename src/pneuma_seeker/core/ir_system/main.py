@@ -7,7 +7,7 @@ from pneuma_seeker.core.ir_system.retriever.retriever_factory import (
     RetrieverModel,
     RetrieverType,
 )
-from pneuma_seeker.language_model.abstract_model import AbstractModel
+from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 

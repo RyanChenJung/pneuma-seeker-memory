@@ -23,7 +23,7 @@ from pneuma_seeker.core.ir_system.data_model import (
     Text,
 )
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
-from pneuma_seeker.language_model.abstract_model import AbstractModel
+from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption

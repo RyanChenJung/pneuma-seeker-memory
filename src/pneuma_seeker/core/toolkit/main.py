@@ -12,7 +12,7 @@ from pneuma_seeker.core.toolkit.tool.semantic_operator import (
     SyntacticSimMetric,
 )
 from pneuma_seeker.core.toolkit.tool.sql_executor import SQLExecutor
-from pneuma_seeker.language_model.abstract_model import AbstractModel
+from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
 

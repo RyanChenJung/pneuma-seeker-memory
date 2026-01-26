@@ -15,7 +15,7 @@ from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFac
 from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.toolkit.main import Toolkit
 from pneuma_seeker.core.toolkit.tool.semantic_operator import SyntacticSimMetric
-from pneuma_seeker.language_model.abstract_model import AbstractModel
+from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption

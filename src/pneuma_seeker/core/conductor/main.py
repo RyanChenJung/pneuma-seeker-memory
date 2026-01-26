@@ -11,58 +11,51 @@ from pneuma_seeker.core.conductor.data_model import (
 )
 from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.toolkit.main import Toolkit
 from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
 from pneuma_seeker.core.materializer.main import Materializer
-from pneuma_seeker.language_model.model_factory import get_embed_model, get_llm
-from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
-from pneuma_seeker.shared.schemas.language_model.role import Role
-from pneuma_seeker.shared.schemas.language_model.option import LLMOption
+from pneuma_seeker.core.toolkit.main import Toolkit
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.services.language_model.model_factory import get_embed_model, get_llm
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.option import LLMOption
+from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.table_reader import TableReader
 
 
 class Conductor:
     def __init__(
         self,
-        llm_path: str,
-        embed_model_path: str,
-        logger: Logger,
-        data_sources: list[str],
-        config: Config,
-        prov_graph: ProvenanceGraph,
         user_id: str,
         chat_id: str,
+        config: Config,
+        logger: Logger,
+        prov_graph: ProvenanceGraph,
     ) -> None:
-        self.config = config
-        self.logger = logger
-
-        self.llm = get_llm(llm_path, self.config)(llm_path, self.config, self.logger)
-        self.embed_model = get_embed_model(embed_model_path)(
-            embed_model_path, self.config, self.logger
-        )
-
-        self.data_sources = data_sources
-        self.iteration_limit = config.CONDUCTOR_ITERATION_LIMIT
-
-        self.prov_graph = prov_graph
-        self.prompt_factory = ConductorPromptFactory(self.config)
-
         self.user_id = user_id
         self.chat_id = chat_id
+        self.config = config
+        self.logger = logger
+        self.prov_graph = prov_graph
+
+        self.llm = get_llm(self.config)(config.LLM_PATH, self.config, self.logger)
+        self.embed_model = get_embed_model(config)(
+            config.EMBED_MODEL_PATH, self.config, self.logger
+        )
+
+        self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(
             self.llm,
             self.embed_model,
             self.logger,
-            self.data_sources,
+            config.DATA_SOURCES,
             self.prov_graph,
             self.config,
         )
@@ -70,7 +63,7 @@ class Conductor:
             self.llm,
             self.embed_model,
             self.logger,
-            self.data_sources,
+            config.DATA_SOURCES,
             self.prov_graph,
             self.toolkit,
             self.config,
@@ -113,7 +106,7 @@ class Conductor:
         if self.config.ENABLE_WEB_CRAWL:
             self.valid_actions.append("web_crawl")
 
-    def process_input(
+    def chat(
         self,
         user_input: str,
         interaction_history: list[HumanConductorInteraction],
@@ -151,19 +144,24 @@ class Conductor:
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_sys_prompt(self.iteration_limit),
+                content=self.prompt_factory.get_sys_prompt(
+                    self.config.CONDUCTOR_ITERATION_LIMIT
+                ),
             )
         ]
 
-        while not is_user_facing_response and num_actions_taken < self.iteration_limit:
+        while (
+            not is_user_facing_response
+            and num_actions_taken < self.config.CONDUCTOR_ITERATION_LIMIT
+        ):
             self.__log(
-                f"Asking the model to produce a sequence of actions (plan) (Total actions taken so far: {num_actions_taken}/{self.iteration_limit})..."
+                f"Asking the model to produce a sequence of actions (plan) (Total actions taken so far: {num_actions_taken}/{self.config.CONDUCTOR_ITERATION_LIMIT})..."
             )
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
-                        self.iteration_limit,
+                        self.config.CONDUCTOR_ITERATION_LIMIT,
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
@@ -171,7 +169,7 @@ class Conductor:
                         user_input,
                         self.enumerated_table_ids,
                         self.external_tables,
-                        self.iteration_limit - num_actions_taken,
+                        self.config.CONDUCTOR_ITERATION_LIMIT - num_actions_taken,
                         self.web_search_result,
                         self.web_crawl_result,
                     ),
@@ -554,7 +552,7 @@ class Conductor:
                 info_output = f"Column information for table `{table_id}`:\n"
                 found_in_any_db = False
                 try:
-                    for data_source in self.data_sources:
+                    for data_source in self.config.DATA_SOURCES:
                         db_path = os.path.join(
                             self.config.DB_BACKEND_PATH, f"{data_source}.db"
                         )
@@ -631,9 +629,7 @@ class Conductor:
                                 ).fetchone()
 
                                 if unique_count is None:
-                                    msg = (
-                                        f"Execution returned no results for unique count of column `{col}`."
-                                    )
+                                    msg = f"Execution returned no results for unique count of column `{col}`."
                                     self.__log(msg)
                                     return msg, ToolExecutionStatus.ERROR
                                 unique_count = unique_count[0]

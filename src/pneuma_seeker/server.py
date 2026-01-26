@@ -21,14 +21,22 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.templating import Jinja2Templates
-from pneuma_seeker.core.chat_interface import ChatInterface
+from pneuma_seeker.session_manager import SessionManager
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.logger import setup_logger
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 
 
 app = FastAPI(title="Pneuma-Seeker")
+logger = setup_logger("Core Service")
+config = Config("../../.env")
+session_manager = SessionManager(
+    config,
+    logger,
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,37 +47,28 @@ BASE_DIR = (
 )  # go up from /src/pneuma_seeker/server.py → project root
 TABLES_DIR = BASE_DIR / "data_src" / "target_tables"
 
-
-class Manager:
-    def __init__(self, llm_path, embed_model_path, data_sources):
-        self.llm_path = llm_path
-        self.embed_model_path = embed_model_path
-        self.data_sources = data_sources
-        self.chat_interfaces: dict[tuple[str, str], ChatInterface] = {}
-
-    def get_chat_interface(self, user_id: str, chat_id: str):
-        key = (user_id, chat_id)
-        if key not in self.chat_interfaces:
-            self.chat_interfaces[key] = ChatInterface(
-                llm_path=self.llm_path,
-                embed_model_path=self.embed_model_path,
-                user_id=user_id,
-                chat_id=chat_id,
-                data_sources=self.data_sources,
-                env_path="../../.env",
-            )
-        return self.chat_interfaces[key]
-
-
-manager = Manager(
-    llm_path="o4-mini",
-    embed_model_path="text-embedding-3-small",
-    data_sources=["buysite"],
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parent / "templates")
 )
 
+# Helper functions
+def now_ms() -> int:
+    """Returns the current time in milliseconds."""
+    return int(datetime.now().timestamp() * 1000)
 
-templates = Jinja2Templates(directory="template")
 
+def stream_payload(sender: str, text: str) -> str:
+    """Formats a message payload for streaming responses."""
+    return (
+        json.dumps(
+            {
+                "sender": sender,
+                "text": text,
+                "time_stamp": now_ms(),
+            }
+        )
+        + "\n"
+    )
 
 @app.get("/")
 def root():
@@ -82,8 +81,8 @@ async def get_provenance_nodes(request: Request, user_id: str, chat_id: str):
     Return all nodes of the provenance graph for a given user and chat.
     """
     # Get the provenance graph instance
-    chat_interface = manager.get_chat_interface(user_id, chat_id)
-    prov_graph = chat_interface.conductor.materializer.prov_graph
+    chat_session = session_manager.get_chat_session(user_id, chat_id)
+    prov_graph = chat_session.conductor.materializer.prov_graph
 
     # Convert all nodes to JSON-serializable format
     nodes_json = []
@@ -162,7 +161,7 @@ async def download_chat_pdf(data: dict):
 
 @app.post("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_combined_html(request: Request, user_id: str, chat_id: str, data: dict):
-    conductor = manager.get_chat_interface(user_id, chat_id).conductor
+    conductor = session_manager.get_chat_session(user_id, chat_id).conductor
     state = conductor.info_need_state.get_current_state_instance()
 
     base_url = str(request.base_url).rstrip("/")
@@ -196,25 +195,6 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
     )
 
 
-def now_ms() -> int:
-    """Returns the current time in milliseconds."""
-    return int(datetime.now().timestamp() * 1000)
-
-
-def stream_payload(sender: str, text: str) -> str:
-    """Formats a message payload for streaming responses."""
-    return (
-        json.dumps(
-            {
-                "sender": sender,
-                "text": text,
-                "time_stamp": now_ms(),
-            }
-        )
-        + "\n"
-    )
-
-
 @app.post("/chat")
 async def chat(request: Request):
     body: dict[str, Any] = await request.json()
@@ -227,7 +207,7 @@ async def chat(request: Request):
     for msg in messages:
         llm_messages.append(LLMMessage(role=msg["role"], content=msg["content"]))
 
-    chat_session = manager.get_chat_interface(user_id, chat_id)
+    chat_session = session_manager.get_chat_session(user_id, chat_id)
 
     async def event_stream():
         start = datetime.now().timestamp()
@@ -326,9 +306,9 @@ def download_materializer_code(user_id: str, chat_id: str):
     """
     Downloads Materializer code (.py) generated for a given user and chat.
     """
-    chat_interface = manager.get_chat_interface(user_id, chat_id)
+    chat_session = session_manager.get_chat_session(user_id, chat_id)
     materializer_code = (
-        chat_interface.conductor.materializer.prov_graph.get_graph_code()
+        chat_session.conductor.materializer.prov_graph.get_graph_code()
     )
 
     file_stream = io.BytesIO()

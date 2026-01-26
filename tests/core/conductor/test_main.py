@@ -18,8 +18,8 @@ from pneuma_seeker.core.ir_system.data_model import (
     Table,
     Text,
 )
-from pneuma_seeker.language_model.interface.impl.mock_embed_model import MockEmbedModel
-from pneuma_seeker.language_model.interface.impl.mock_llm import MockLLM
+from pneuma_seeker.services.language_model.impl.mock_embed_model import MockEmbedModel
+from pneuma_seeker.services.language_model.impl.mock_llm import MockLLM
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
 
@@ -82,7 +82,7 @@ class ConductorTests(unittest.TestCase):
             ]
         )
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="Find relevant tables",
             interaction_history=[],
             external_table_paths=[],
@@ -116,7 +116,7 @@ class ConductorTests(unittest.TestCase):
             ]
         )
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="Look up web",
             interaction_history=[],
             external_table_paths=[],
@@ -147,7 +147,7 @@ class ConductorTests(unittest.TestCase):
             ]
         )
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="Look up this URL: http://example.com",
             interaction_history=[],
             external_table_paths=[],
@@ -180,7 +180,7 @@ class ConductorTests(unittest.TestCase):
             ]
         )
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="enumerate",
             interaction_history=[],
             external_table_paths=[],
@@ -196,7 +196,7 @@ class ConductorTests(unittest.TestCase):
             {"action":"communicate_with_user","message":"S set"}
         ]}"""
         ]
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="set S",
             interaction_history=[],
             external_table_paths=[],
@@ -219,7 +219,7 @@ class ConductorTests(unittest.TestCase):
         ]}"""
         ]
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="set T",
             interaction_history=[],
             external_table_paths=[],
@@ -243,7 +243,7 @@ class ConductorTests(unittest.TestCase):
             {"action":"communicate_with_user","message":"state done"}
         ]}"""
         ]
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="set S and T",
             interaction_history=[],
             external_table_paths=[],
@@ -280,7 +280,7 @@ class ConductorTests(unittest.TestCase):
             }
         )
 
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="materialize T",
             interaction_history=[],
             external_table_paths=[],
@@ -321,7 +321,7 @@ class ConductorTests(unittest.TestCase):
             {"action":"communicate_with_user","message":"info provided"}
         ]}"""
         ]
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="materialize T",
             interaction_history=[],
             external_table_paths=[],
@@ -355,7 +355,7 @@ class ConductorTests(unittest.TestCase):
             {"action":"communicate_with_user","message":"External data read successfuly."}
         ]}"""
         ]
-        gen = self.conductor.process_input(
+        gen = self.conductor.chat(
             user_input="upload",
             interaction_history=[],
             external_table_paths=[tmp_path],
