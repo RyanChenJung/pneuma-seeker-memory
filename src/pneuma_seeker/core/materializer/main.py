@@ -16,8 +16,9 @@ from pneuma_seeker.core.materializer.state import MaterializerState
 from pneuma_seeker.core.shared.toolkit.main import Toolkit
 from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
-from pneuma_seeker.model.llm_message import LLMMessage, Role
-from pneuma_seeker.model.option import LLMOption
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.role import Role
+from pneuma_seeker.shared.schemas.language_model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log

@@ -24,8 +24,9 @@ from pneuma_seeker.core.ir_system.data_model import (
 )
 from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
-from pneuma_seeker.model.llm_message import LLMMessage, Role
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.role import Role
+from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.shared.str_processor import clean_column_table_name
 from scipy.spatial.distance import cosine
 from tiktoken import encoding_for_model

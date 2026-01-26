@@ -19,8 +19,9 @@ from pneuma_seeker.core.ir_system.data_model import (
 )
 from pneuma_seeker.core.materializer.main import Materializer
 from pneuma_seeker.model.interface.model_factory import get_embed_model, get_llm
-from pneuma_seeker.model.llm_message import LLMMessage, Role
-from pneuma_seeker.model.option import LLMOption
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.role import Role
+from pneuma_seeker.shared.schemas.language_model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log

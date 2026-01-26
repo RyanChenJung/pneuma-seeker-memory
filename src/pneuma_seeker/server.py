@@ -22,7 +22,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 from pneuma_seeker.core.chat_interface import ChatInterface
-from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 
 
 app = FastAPI(title="Pneuma-Seeker")

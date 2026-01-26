@@ -3,8 +3,8 @@ from collections.abc import Generator
 import json
 from logging import Logger
 from typing import Optional
-from pneuma_seeker.model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.model.llm_message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from numpy import ndarray
 
 from pneuma_seeker.shared.config import Config
