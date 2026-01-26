@@ -34,7 +34,7 @@ from torch import cuda
 from tqdm import tqdm
 
 
-class Pneuma(AbstractRetriever):
+class PneumaRetriever(AbstractRetriever):
     """Represents a tabular data retriever."""
 
     def __init__(self, models, config):
