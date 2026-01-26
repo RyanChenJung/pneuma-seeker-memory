@@ -88,7 +88,7 @@ class PneumaDB:
                     original_cols = None
 
                 if original_cols:
-                    cleaned_cols = self.dedupe_columns(
+                    cleaned_cols = self.__dedupe_columns(
                         [clean_column_table_name(c) for c in original_cols]
                     )
                     select_clause = ", ".join(
@@ -130,7 +130,7 @@ class PneumaDB:
         finally:
             dataset_con.close()
 
-    def dedupe_columns(self, cols):
+    def __dedupe_columns(self, cols):
         seen = {}
         result = []
         for c in cols:
@@ -367,7 +367,7 @@ class PneumaDB:
     # ------------------------------------------------------------------
     # Query Execution
     # ------------------------------------------------------------------
-    def execute_workspace_query(
+    def execute_query(
         self, user_id: str, chat_id: str, sql: str, sql_params: dict = {}
     ) -> DataFrame:
         """

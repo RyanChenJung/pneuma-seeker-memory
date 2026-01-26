@@ -98,7 +98,7 @@ class TestDBServiceAPI(unittest.TestCase):
     def test_preview_table(self):
         user_id, chat_id = self._new_workspace()
         self._register_external_table(user_id, chat_id, "preview_me")
-        df = db.execute_workspace_query(
+        df = db.execute_query(
             user_id, chat_id, 'SELECT * FROM "preview_me" LIMIT 2'
         )
         self.assertEqual(len(df), 2)
@@ -112,7 +112,7 @@ class TestDBServiceAPI(unittest.TestCase):
         db.register_temporary_table(user_id, chat_id, "tmp", df)
 
         # ensure temp table is queryable
-        tmp_df = db.execute_workspace_query(user_id, chat_id, 'SELECT * FROM "tmp"')
+        tmp_df = db.execute_query(user_id, chat_id, 'SELECT * FROM "tmp"')
         self.assertEqual(len(tmp_df), 1)
 
         db.unregister_temporary_table(user_id, chat_id, "tmp")
@@ -123,7 +123,7 @@ class TestDBServiceAPI(unittest.TestCase):
     def test_execute_query(self):
         user_id, chat_id = self._new_workspace()
         self._register_external_table(user_id, chat_id, "src")
-        df = db.execute_workspace_query(
+        df = db.execute_query(
             user_id, chat_id, "SELECT COUNT(*) AS c FROM src"
         )
         self.assertEqual(int(df.iloc[0]["c"]), 3)
