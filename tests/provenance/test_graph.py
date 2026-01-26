@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import MagicMock
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
 from pneuma_seeker.core.ir_system.data_model import RetrieverType
@@ -188,6 +188,75 @@ class ProvenanceGraphTests(unittest.TestCase):
         # process the root then detect the cycle among the remaining nodes.
         self.assertTrue(concat.endswith("tables: dict[str, pd.DataFrame] = {}"))
         self.logger.warning.assert_called()
+
+    def test_add_node_invalid_type_raises(self):
+        """Adding a non-ProvenanceNode should raise ValueError."""
+        with self.assertRaises(ValueError):
+            self.graph.add_node("not a node") # type: ignore
+
+    def test_connect_invalid_types_raise(self):
+        """Connecting non-ProvenanceNode objects should raise ValueError."""
+        n = ProvenanceNode(RetrieverType.USER, "a", "")
+        with self.assertRaises(ValueError):
+            self.graph.connect("not a node", n) # type: ignore
+        with self.assertRaises(ValueError):
+            self.graph.connect(n, "not a node") # type: ignore
+
+    def test_topological_sort_branching_order(self):
+        """Branching DAG should preserve parent-before-child ordering."""
+        parent = ProvenanceNode(RetrieverType.USER, "p", "")
+        child1 = ProvenanceNode(RetrieverType.USER, "c1", "")
+        child2 = ProvenanceNode(RetrieverType.USER, "c2", "")
+        parent.add_child(child1)
+        parent.add_child(child2)
+        self.graph.add_node(parent)
+        self.graph.add_node(child1)
+        self.graph.add_node(child2)
+
+        ordered = self.graph.topological_sort()
+        ids = [n.id for n in ordered]
+        self.assertTrue(ids.index(parent.id) < ids.index(child1.id))
+        self.assertTrue(ids.index(parent.id) < ids.index(child2.id))
+
+    def test_trace_include_self(self):
+        """trace_upstream/downstream should include the node when requested."""
+        a = ProvenanceNode(RetrieverType.USER, "a", "")
+        b = ProvenanceNode(RetrieverType.USER, "b", "")
+        a.add_child(b)
+        self.graph.add_node(a)
+        self.graph.add_node(b)
+
+        up_with_self = set(self.graph.trace_upstream(b, include_self=True))
+        self.assertIn(a, up_with_self)
+        self.assertIn(b, up_with_self)
+
+    def test_get_nodes_multi_filter(self):
+        """get_nodes should support filtering by multiple attributes."""
+        node = ProvenanceNode(RetrieverType.USER, "unique_code", "desc")
+        self.graph.add_node(node)
+        result = self.graph.get_nodes({"python_code": "unique_code", "source_retriever": RetrieverType.USER})
+        self.assertIn(node, result)
+
+    def test_reset_for_materialization_cleans_edges(self):
+        """reset_for_materialization should remove non-USER nodes and strip edges to them."""
+        user_node = ProvenanceNode(RetrieverType.USER, "u", "")
+        non_user = ProvenanceNode(RetrieverType.WEB_SEARCH, "w", "")
+        non_user.add_child(user_node)
+        self.graph.add_node(user_node)
+        self.graph.add_node(non_user)
+
+        # Ensure the parent relationship exists before reset
+        self.assertIn(non_user, user_node.parents)
+
+        self.graph.reset_for_materialization()
+
+        # non_user should be removed
+        self.assertNotIn(non_user.id, self.graph.nodes)
+
+        # user_node should remain, but should no longer have the non-user parent
+        kept = self.graph.get_node_by_id(user_node.id)
+        self.assertIsNotNone(kept)
+        self.assertEqual(kept.parents, []) # type: ignore
 
 if __name__ == "__main__":
     unittest.main()
