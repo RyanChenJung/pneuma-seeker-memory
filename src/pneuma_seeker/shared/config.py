@@ -8,13 +8,21 @@ class Config:
     def __init__(self, env_path=".env") -> None:
         """Loads configuration from environment variables or a .env file."""
         load_dotenv(env_path)
+        self.LLM_PATH = os.getenv("LLM_PATH", "gpt-4.1-mini")
+        self.EMBED_MODEL_PATH = os.getenv("EMBED_MODEL_PATH", "text-embedding-3-small")
+        self.EMBEDDING_MAX_TOKENS = int(os.getenv("EMBEDDING_MAX_TOKENS", "1536"))
+
+        self.PERSIST_CHAT_SESSION = (
+            os.getenv("PERSIST_CHAT_SESSION", "true").lower() == "true"
+        )
+        self.DATA_SOURCES = ["buysite"]
+        self.ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
         self.AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
         self.AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2024-12-01-preview")
         self.USE_AZURE = self.__get_use_azure()
-
-        self.EMBEDDING_MAX_TOKENS = int(os.getenv("EMBEDDING_MAX_TOKENS", "1536"))
 
         self.OPENWEBUI_BASE_URL = os.getenv(
             "OPENWEBUI_BASE_URL", "http://localhost:8080/"
