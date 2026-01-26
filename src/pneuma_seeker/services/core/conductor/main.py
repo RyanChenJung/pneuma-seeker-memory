@@ -5,13 +5,15 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.conductor.data_model import (
     HumanConductorInteraction,
     ToolExecutionStatus,
 )
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
 from pneuma_seeker.services.core.conductor.state import InformationNeedState
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
@@ -37,38 +39,35 @@ class Conductor:
         config: Config,
         logger: Logger,
         prov_graph: ProvenanceGraph,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ) -> None:
         self.user_id = user_id
         self.chat_id = chat_id
         self.config = config
         self.logger = logger
         self.prov_graph = prov_graph
-
-        self.llm = get_llm(self.config)(config.LLM_PATH, self.config, self.logger)
-        self.embed_model = get_embed_model(config)(
-            config.EMBED_MODEL_PATH, self.config, self.logger
-        )
+        self.db_api = db_api
+        self.language_model_api = language_model_api
 
         self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.toolkit = Toolkit(
-            self.llm,
-            self.embed_model,
-            self.logger,
-            config.DATA_SOURCES,
-            self.prov_graph,
             self.config,
+            self.logger,
+            self.prov_graph,
+            self.db_api,
+            self.language_model_api,
         )
         self.materializer = Materializer(
-            self.llm,
-            self.embed_model,
-            self.logger,
-            config.DATA_SOURCES,
-            self.prov_graph,
-            self.toolkit,
-            self.config,
             self.user_id,
             self.chat_id,
+            self.config,
+            self.logger,
+            self.prov_graph,
+            self.toolkit,
+            self.db_api,
+            self.language_model_api,
         )
         self.table_reader = TableReader(
             self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
@@ -177,7 +176,7 @@ class Conductor:
             )
 
             full_response = "".join(
-                self.llm.chat(
+                self.language_model_api.chat(
                     llm_messages,
                     LLMOption(json_mode=True, stream=True, temperature=0, top_p=0.1),
                 )
@@ -274,7 +273,7 @@ class Conductor:
                 )
             )
             user_facing_response = "".join(
-                self.llm.chat(llm_messages, LLMOption(stream=True))
+                self.language_model_api.chat(llm_messages, LLMOption(stream=True))
             )
 
         yield user_facing_response

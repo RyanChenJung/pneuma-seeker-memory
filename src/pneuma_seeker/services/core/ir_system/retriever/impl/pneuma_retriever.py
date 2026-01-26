@@ -15,15 +15,12 @@ import Stemmer
 from bm25s.tokenization import convert_tokenized_to_string_list
 from chromadb_deterministic.api import ClientAPI
 from chromadb_deterministic.api.models.Collection import Collection
-from pneuma_seeker.services.core.ir_system.data_model import (
-    AbstractDocument,
-    RetrieverType,
-    Table,
-    TableContext,
-    Text,
-)
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, TableContext, Text
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
@@ -37,13 +34,12 @@ from tqdm import tqdm
 class PneumaRetriever(AbstractRetriever):
     """Represents a tabular data retriever."""
 
-    def __init__(self, models, config):
-        super().__init__(models, config)
-        self.llm = self.models["llm"]
-        self.embed_model = self.models["embed_model"]
-        self.EMBEDDING_MAX_TOKENS = 768
+    def __init__(
+        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
+    ):
+        super().__init__(config, db_api, language_model_api)
         self.hybrid_retriever = HybridRetriever(
-            self.llm,
+            self.language_model_api.llm,
             RerankingMode.NONE,  # Alternative: RerankingMode.LLM
         )
         self.stemmer = Stemmer.Stemmer("english")
@@ -67,7 +63,6 @@ class PneumaRetriever(AbstractRetriever):
     def retrieve(
         self,
         query: str,
-        sources: list[str],
         k: int,
         sample_only: bool,
         sample_size: int | None = None,
@@ -77,7 +72,7 @@ class PneumaRetriever(AbstractRetriever):
         """
         retrieval_results: list[AbstractDocument] = []
         increased_k = k * 5
-        for dataset in sources:
+        for dataset in self.config.DATA_SOURCES:
             client = chromadb.PersistentClient(
                 os.path.join(self.index_path, f"vector-index-{dataset}")
             )
@@ -98,7 +93,7 @@ class PneumaRetriever(AbstractRetriever):
                     datum["metadata"]["table"]: datum_idx
                     for datum_idx, datum in enumerate(retriever.corpus)
                 }
-            question_embedding = self.embed_model.encode([query])[0].tolist()
+            question_embedding = self.language_model_api.embed_model.encode([query])[0].tolist()
             query_tokens = bm25s.tokenize(
                 query, stemmer=self.stemmer, show_progress=False
             )
@@ -203,7 +198,7 @@ class PneumaRetriever(AbstractRetriever):
                 os.path.join(self.index_path, f"vector-index-{dataset}")
             )
             self.__indexing_vector(
-                client, self.embed_model, schema_summaries, sample_rows, table_context
+                client, schema_summaries, sample_rows, table_context
             )
             end = time.time()
             print(f"[VECTOR INDEX] Indexing time: {end-start} seconds")
@@ -224,7 +219,6 @@ class PneumaRetriever(AbstractRetriever):
     def __indexing_vector(
         self,
         client: ClientAPI,
-        embedding_model: AbstractModel,
         schema_summaries: list[Text],
         sample_rows: list[Text],
         contexts: list[Text] = [],
@@ -293,7 +287,7 @@ class PneumaRetriever(AbstractRetriever):
                     ids.append(f"{table}_SEP_contexts-{context_idx}")
 
         for i in range(0, len(documents), 30000):
-            embeddings = embedding_model.encode(
+            embeddings = self.language_model_api.encode(
                 documents[i : i + 30000], EmbeddingModelOption(batch_size=100)
             )
 
@@ -402,7 +396,7 @@ class PneumaRetriever(AbstractRetriever):
             max_batch_size = optimal_batch_size
             same_batch_size_counter = 0
             for i in tqdm(range(0, len(conversations), max_batch_size)):
-                llm_output = self.llm.batch_chat(
+                llm_output = self.language_model_api.batch_chat(
                     conversations[i : i + max_batch_size],
                     LLMOption(max_new_tokens=400, batch_size=optimal_batch_size),
                 )
@@ -478,7 +472,7 @@ class PneumaRetriever(AbstractRetriever):
         conv_low_idx = len(adjusted_conversations) // 2 - batch_size // 2
         conv_high_idx = conv_low_idx + batch_size
 
-        output = self.llm.batch_chat(
+        output = self.language_model_api.batch_chat(
             adjusted_conversations[conv_low_idx:conv_high_idx],
             LLMOption(max_new_tokens=1, batch_size=batch_size),
         )
@@ -598,7 +592,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
         unique_tables = sorted(
             set([summary.metadata["table_name"] for summary in schema_summaries])
         )
-        self.embed_model.load_model()
         for table in tqdm(unique_tables):
             table_schema_summary = [
                 summary.content
@@ -634,7 +627,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
     def __merge_sample_rows(self, sample_rows: list[Text]) -> list[Text]:
         unique_tables = sorted(set([row.metadata["table_name"] for row in sample_rows]))
         processed_sample_rows: list[Text] = []
-        self.embed_model.load_model()
         for table in tqdm(unique_tables):
             table_rows = [
                 row for row in sample_rows if row.metadata["table_name"] == table
@@ -673,7 +665,6 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
             set([context.metadata["table_name"] for context in table_context])
         )
         processed_table_context: list[Text] = []
-        self.embed_model.load_model()
         for table in tqdm(unique_tables):
             table_contexts = [
                 context

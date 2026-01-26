@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
-from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument, RetrieverModel
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
 
 
 class AbstractRetriever(ABC):
-    def __init__(self, models: RetrieverModel, config: Config):
+    def __init__(
+        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
+    ):
         """
         Initialize the Retriever class
         """
-        self.models = models
+        self.db_api = db_api
+        self.language_model_api = language_model_api
         self.is_loaded = False
         self.config = config
 
@@ -32,7 +36,6 @@ class AbstractRetriever(ABC):
     def retrieve(
         self,
         query: str,
-        sources: list[str],
         k: int,
         sample_only: bool,
         sample_size: int | None = None,

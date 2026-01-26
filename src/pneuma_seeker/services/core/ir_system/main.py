@@ -1,15 +1,15 @@
 from logging import Logger
 
-from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.ir_system.prompt_factory import PromptFactory
 from pneuma_seeker.services.core.ir_system.retriever.retriever_factory import (
     RetrieverFactory,
-    RetrieverModel,
-    RetrieverType,
 )
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
 
 
 class IRSystem:
@@ -20,19 +20,18 @@ class IRSystem:
 
     def __init__(
         self,
-        llm: AbstractModel,
-        embed_model: AbstractModel,
-        logger: Logger,
         config: Config,
+        logger: Logger,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ):
-        self.prompt_factory = PromptFactory()
-        self.llm = llm
-        self.embed_model = embed_model
-        self.logger = logger
         self.config = config
-        self.retriever_factory = RetrieverFactory(
-            RetrieverModel(llm=self.llm, embed_model=self.embed_model), config
-        )
+        self.logger = logger
+        self.db_api = db_api
+        self.language_model_api = language_model_api
+
+        self.prompt_factory = PromptFactory()
+        self.retriever_factory = RetrieverFactory(config, db_api, language_model_api)
 
     def index_documents(
         self, retriever_type: RetrieverType, documents: list[AbstractDocument]
@@ -48,7 +47,6 @@ class IRSystem:
         self,
         retriever_type: RetrieverType,
         prompt: str,
-        sources: list[str],
         k: int = 10,
         sample_only: bool = False,
         sample_size: int | None = None,
@@ -61,7 +59,7 @@ class IRSystem:
         - sample_size (int | None): The number of documents to retrieve if sample_only is True.
         """
         retriever = self.retriever_factory.get_retriever(retriever_type)
-        documents = retriever.retrieve(prompt, sources, k, sample_only, sample_size)
+        documents = retriever.retrieve(prompt, k, sample_only, sample_size)
         return documents
 
     def __log(self, text: str):

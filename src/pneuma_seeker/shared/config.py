@@ -34,9 +34,21 @@ class Config:
         )
 
         self.SEMANTIC_JOIN_TOP_K = 1
+        self.SEMANTIC_JOIN_BATCH_SIZE = max(
+            1, int(os.getenv("SEMANTIC_JOIN_BATCH_SIZE", "30"))
+        )
+        self.SEMANTIC_JOIN_DELIMITER = os.getenv("SEMANTIC_JOIN_DELIMITER", " [SEP] ")
+        self.SEMANTIC_JOIN_ALPHA = float(os.getenv("SEMANTIC_JOIN_ALPHA", "0.5"))
+
+        self.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE = max(
+            1, int(os.getenv("SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE", "60"))
+        )
+        self.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE = max(
+            1, int(os.getenv("SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE", "10"))
+        )
+
         self.MATERIALIZER_HARD_ITERATION_LIMIT = 100
         self.ENABLE_WEB_SEARCH = self.__get_enable_web_search()
-
         self.ENABLE_WEB_CRAWL = os.getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
         self.WEB_CRAWL_MAX_CHARS = int(os.getenv("WEB_CRAWL_MAX_CHARS", "5000"))
 

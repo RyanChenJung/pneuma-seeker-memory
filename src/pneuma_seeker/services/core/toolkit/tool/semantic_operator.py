@@ -7,7 +7,10 @@ from pyxdameraulevenshtein import damerau_levenshtein_distance
 from sklearn.feature_extraction.text import CountVectorizer
 from tqdm.auto import tqdm
 
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
+from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.parser import augmented_literal_eval
@@ -21,11 +24,11 @@ class SyntacticSimMetric(Enum):
 
 class SemanticOperator:
     def __init__(
-        self, llm: AbstractModel, embed_model: AbstractModel, batch_size: int = 10
+        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
     ) -> None:
-        self.llm = llm
-        self.embed_model = embed_model
-        self.batch_size = max(1, batch_size)
+        self.config = config
+        self.db_api = db_api
+        self.language_model_api = language_model_api
 
     def generate_semantic_column(
         self,
@@ -54,8 +57,8 @@ class SemanticOperator:
         formatted_values = self.__format_values(source_table)
 
         unique_values = list(dict.fromkeys(formatted_values))
-        for i in range(0, len(unique_values), self.batch_size):
-            batch = unique_values[i : i + self.batch_size]
+        for i in range(0, len(unique_values), self.config.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE):
+            batch = unique_values[i : i + self.config.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE]
             encoded_prompt = [
                 LLMMessage(
                     role=Role.SYSTEM.value,
@@ -71,7 +74,7 @@ class SemanticOperator:
                 ),
             ]
 
-            raw_output = "".join(self.llm.chat(encoded_prompt)).strip()
+            raw_output = "".join(self.language_model_api.chat(encoded_prompt)).strip()
             start = raw_output.find("[")
             end = raw_output.rfind("]")
 
@@ -258,16 +261,14 @@ class SemanticOperator:
             return np.empty((0, 0), dtype=np.float32)
 
         if embed_batch_size is None or embed_batch_size <= 0:
-            embs = self.embed_model.encode(texts)
-            return np.asarray(embs)
+            return self.language_model_api.encode(texts)
 
         chunks: list[np.ndarray] = []
         n = len(texts)
         num_chunks = (n + embed_batch_size - 1) // embed_batch_size
         for i in tqdm(range(0, n, embed_batch_size), total=num_chunks, desc=desc):
             chunk = texts[i : i + embed_batch_size]
-            emb_chunk = self.embed_model.encode(chunk)
-            chunks.append(np.asarray(emb_chunk))
+            chunks.append(self.language_model_api.encode(chunk))
         return np.vstack(chunks)
 
     def __pairwise_cosine_sim_matrix(
@@ -403,6 +404,6 @@ RIGHT candidates:
 {[r.to_dict() for r in right_rows]}"""
 
         response = "".join(
-            self.llm.chat([LLMMessage(role=Role.SYSTEM.value, content=prompt)])
+            self.language_model_api.chat([LLMMessage(role=Role.SYSTEM.value, content=prompt)])
         )
         return augmented_literal_eval(response)

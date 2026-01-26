@@ -4,19 +4,21 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Text,
 )
-from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
+from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import (
+    AbstractRetriever,
+)
 
 
 class WebCrawler(AbstractRetriever):
     """Represents a web crawler interface."""
 
-    def __init__(self, models, config):
-        super().__init__(models, config)
+    def __init__(self, config, db_api, language_model_api):
+        super().__init__(config, db_api, language_model_api)
         self.max_chars = config.WEB_CRAWL_MAX_CHARS
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "WebCrawler"})
@@ -37,7 +39,6 @@ class WebCrawler(AbstractRetriever):
     def retrieve(
         self,
         query: str,
-        sources: list[str],
         k: int,
         sample_only: bool,
         sample_size: int | None = None,
@@ -46,7 +47,14 @@ class WebCrawler(AbstractRetriever):
         Crawls the content of the page with URL query (if allowed by its robots.txt).
         """
         if not self.__is_allowed(query):
-            return [Text("web_crawl", RetrieverType.WEB_CRAWL, f"Access to {query} is disallowed by robots.txt.", {})]
+            return [
+                Text(
+                    "web_crawl",
+                    RetrieverType.WEB_CRAWL,
+                    f"Access to {query} is disallowed by robots.txt.",
+                    {},
+                )
+            ]
 
         try:
             web_content = self.__fetch_content(query)

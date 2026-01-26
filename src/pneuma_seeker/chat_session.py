@@ -1,6 +1,8 @@
 # backend/services/core-service/src/core_service/chat_session.py
 from logging import Logger
 
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.services.core.conductor.main import Conductor
 from pneuma_seeker.services.core.persistence import load_state, save_state
@@ -19,12 +21,16 @@ class ChatSession:
         chat_id: str,
         config: Config,
         logger: Logger,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ):
         """Initializes the ChatSession with user and chat IDs, configuration, logger, and APIs."""
         self.user_id = user_id
         self.chat_id = chat_id
         self.config = config
         self.logger = logger
+        self.db_api = db_api
+        self.language_model_api = language_model_api
 
         self.conductor = Conductor(
             self.user_id,
@@ -32,6 +38,8 @@ class ChatSession:
             self.config,
             self.logger,
             ProvenanceGraph(self.logger),
+            self.db_api,
+            self.language_model_api,
         )
 
         if self.config.PERSIST_CHAT_SESSION:

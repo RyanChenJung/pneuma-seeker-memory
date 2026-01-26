@@ -4,7 +4,7 @@ import os
 
 from Stemmer import Stemmer
 
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     Knowledge,
     RetrieverType,
@@ -16,8 +16,8 @@ from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import A
 class DocumentDB(AbstractRetriever):
     """Represents a domain knowledge retriever."""
 
-    def __init__(self, models, config):
-        super().__init__(models, config)
+    def __init__(self, config, db_api, language_model_api):
+        super().__init__(config, db_api, language_model_api)
         self.local_retriever = None
         self.global_retriever = None
 
@@ -59,7 +59,6 @@ class DocumentDB(AbstractRetriever):
     def retrieve(
         self,
         query: str,
-        sources: list[str],
         k: int,
         sample_only: bool,
         sample_size: int | None = None,

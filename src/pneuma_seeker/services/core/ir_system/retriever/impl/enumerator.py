@@ -3,8 +3,7 @@ import re
 from pathlib import Path
 
 import duckdb
-import pandas as pd
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
@@ -32,7 +31,6 @@ class Enumerator(AbstractRetriever):
     def retrieve(
         self,
         query: str,
-        sources: list[str],
         k: int,
         sample_only: bool,
         sample_size: int | None = None,
@@ -41,7 +39,7 @@ class Enumerator(AbstractRetriever):
         Retrieves a list of documents given a query, where the query is a regex pattern.
         """
         results: list[AbstractDocument] = []
-        for data_src in sources:
+        for data_src in self.config.DATA_SOURCES:
             dataset_path = f"../../data_src/{data_src}/dataset"
             all_table_paths = os.listdir(dataset_path)
             regex = re.compile(query)
@@ -67,7 +65,7 @@ class Enumerator(AbstractRetriever):
                 results.append(
                     Table(
                         doc_id=clean_column_table_name(table_path[:-4].split("/")[-1]),
-                        retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                        retriever_type=RetrieverType.ENUMERATOR,
                         content=actual_table,
                         metadata=dict(),
                         path=f"{dataset_path}/{table_path}",

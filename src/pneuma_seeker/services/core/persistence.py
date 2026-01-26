@@ -160,6 +160,7 @@ def load_state(
     list[str],
     ProvenanceGraph,
 ]:
+    init_db(db_path or "test.duckdb")
     con = duckdb.connect(db_path) if db_path is not None else duckdb.connect(DB_PATH)
     row = con.execute(
         """

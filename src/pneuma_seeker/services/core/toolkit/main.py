@@ -4,7 +4,12 @@ from typing import Any
 import duckdb
 from pandas import DataFrame
 
-from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+)
 from pneuma_seeker.services.core.ir_system.main import IRSystem
 from pneuma_seeker.services.core.toolkit.tool.python_executor import PythonExecutor
 from pneuma_seeker.services.core.toolkit.tool.semantic_operator import (
@@ -12,7 +17,6 @@ from pneuma_seeker.services.core.toolkit.tool.semantic_operator import (
     SyntacticSimMetric,
 )
 from pneuma_seeker.services.core.toolkit.tool.sql_executor import SQLExecutor
-from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
 
@@ -20,24 +24,26 @@ from pneuma_seeker.shared.config import Config
 class Toolkit:
     def __init__(
         self,
-        llm: AbstractModel,
-        embed_model: AbstractModel,
-        logger: Logger,
-        data_sources: list[str],
-        prov_graph: ProvenanceGraph,
         config: Config,
+        logger: Logger,
+        prov_graph: ProvenanceGraph,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ) -> None:
-        self.llm = llm
-        self.embed_model = embed_model
-        self.logger = logger
-        self.data_sources = data_sources
-        self.prov_graph = prov_graph
         self.config = config
+        self.logger = logger
+        self.prov_graph = prov_graph
+        self.db_api = db_api
+        self.language_model_api = language_model_api
 
-        self.ir_system = IRSystem(self.llm, self.embed_model, self.logger, self.config)
+        self.ir_system = IRSystem(
+            self.config, self.logger, self.db_api, self.language_model_api
+        )
         self.python_executor = PythonExecutor(self.logger)
         self.sql_executor = SQLExecutor()
-        self.semantic_operator = SemanticOperator(self.llm, self.embed_model, 20)
+        self.semantic_operator = SemanticOperator(
+            self.config, self.db_api, self.language_model_api
+        )
 
     def retrieve_documents(
         self,
@@ -48,7 +54,7 @@ class Toolkit:
         sample_size=None,
     ):
         return self.ir_system.retrieve_documents(
-            retriever_type, prompt, self.data_sources, k, sample_only, sample_size
+            retriever_type, prompt, k, sample_only, sample_size
         )
 
     def execute_sql(self, T: dict[str, AbstractDocument], Q: list[str]):

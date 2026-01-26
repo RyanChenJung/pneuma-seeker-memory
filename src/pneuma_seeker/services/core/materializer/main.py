@@ -6,6 +6,8 @@ from typing import Any
 
 from pandas import DataFrame
 
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
@@ -33,33 +35,30 @@ class Materializer:
 
     def __init__(
         self,
-        llm: AbstractModel,
-        embed_model: AbstractModel,
-        logger: Logger,
-        data_sources: list[str],
-        prov_graph: ProvenanceGraph,
-        toolkit: Toolkit,
-        config: Config,
         user_id: str,
         chat_id: str,
+        config: Config,
+        logger: Logger,
+        prov_graph: ProvenanceGraph,
+        toolkit: Toolkit,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ):
-        self.llm = llm
-        self.embed_model = embed_model
-        self.logger = logger
-        self.config = config
-
         self.user_id = user_id
         self.chat_id = chat_id
+        self.config = config
+        self.logger = logger
+        self.prov_graph = prov_graph
+        self.toolkit = toolkit
+        self.db_api = db_api
+        self.language_model_api = language_model_api
+
         self.__log(f"Initializing Materializer for user_id: {self.user_id}, chat_id: {self.chat_id}")
 
         self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
 
         self.actions: list[str] = []
-        self.data_sources = data_sources
-        self.prov_graph = prov_graph
-        self.toolkit = toolkit
-
         self.module_dir = os.path.dirname(os.path.abspath(__file__))
 
     def materialize_T(
