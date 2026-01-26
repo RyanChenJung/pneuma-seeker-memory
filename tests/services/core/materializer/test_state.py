@@ -9,7 +9,7 @@ sys.path.insert(
 
 import pandas as pd
 
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Table
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 from pneuma_seeker.services.core.materializer.state import MaterializerState
 
 

@@ -9,7 +9,7 @@ sys.path.insert(
 
 import pandas as pd
 
-from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
 from pneuma_seeker.services.core.toolkit.tool.python_executor import PythonExecutor
 
 

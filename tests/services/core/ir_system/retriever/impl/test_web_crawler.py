@@ -11,7 +11,7 @@ sys.path.insert(
 import requests
 
 from pneuma_seeker.services.core.ir_system.retriever.impl.web_crawler import WebCrawler
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Text
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Text
 
 
 class WebSearchTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class WebSearchTests(unittest.TestCase):
 
         mock_get.return_value = robots_resp
 
-        crawler = WebCrawler(self.models, self.config)
+        crawler = WebCrawler(self.config)
         out = crawler.retrieve("http://www.example.com/anypath", [], 1)
 
         # When disallowed, retrieve returns a string error message

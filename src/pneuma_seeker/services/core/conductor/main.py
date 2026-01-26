@@ -7,12 +7,8 @@ import pandas as pd
 
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.api.db import DBAPI
-from pneuma_seeker.services.core.conductor.data_model import (
-    HumanConductorInteraction,
-    ToolExecutionStatus,
-)
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction, InformationNeedState, ToolExecutionStatus
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,

@@ -8,7 +8,7 @@ from pandas import DataFrame
 
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
@@ -122,7 +122,7 @@ class Materializer:
                 )
             )
 
-            response = "".join(self.llm.chat(llm_messages, LLMOption(json_mode=True)))
+            response = "".join(self.language_model_api.chat(llm_messages, LLMOption(json_mode=True)))
             self.__log(f"=> Materialization action selected: {response}")
 
             if response == prev_response:

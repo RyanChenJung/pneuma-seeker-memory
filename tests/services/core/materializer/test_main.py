@@ -3,6 +3,9 @@ import logging
 import os
 import sys
 
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
@@ -12,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Table, Text
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table, Text
 from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
@@ -31,27 +34,26 @@ class MaterializerTests(unittest.TestCase):
         self.config.ENABLE_WEB_SEARCH = True
         self.config.ENABLE_WEB_CRAWL = True
 
-        self.mock_llm = MockLLM()
-        self.mock_embed_model = MockEmbedModel()
+        self.db_api = DBAPI(self.config, self.logger)
+        self.lm_api = LanguageModelAPI(self.config, self.logger)
+
         self.toolkit = Toolkit(
-            self.mock_llm,
-            self.mock_embed_model,
-            self.logger,
-            [],
-            self.prov_graph,
             self.config,
+            self.logger,
+            self.prov_graph,
+            self.db_api,
+            self.lm_api,
         )
 
         self.materializer = Materializer(
-            llm=self.mock_llm,
-            embed_model=self.mock_embed_model,
-            logger=self.logger,
-            data_sources=[],
-            prov_graph=self.prov_graph,
-            toolkit=self.toolkit,
-            config=self.config,
             user_id="uX",
             chat_id="cX",
+            config=self.config,
+            logger=self.logger,
+            prov_graph=self.prov_graph,
+            toolkit=self.toolkit,
+            db_api=self.db_api,
+            language_model_api=self.lm_api,
         )
 
     def tearDown(self):
@@ -61,7 +63,7 @@ class MaterializerTests(unittest.TestCase):
         # LLM will ask to call pneuma_retriever then table_select to materialize t1
         plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
         plan2 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
-        self.mock_llm._responses = [plan1, plan2]
+        self.lm_api.llm._responses = [plan1, plan2] # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -100,7 +102,7 @@ class MaterializerTests(unittest.TestCase):
             '{"action_type":"operation","name":"web_search","args":{"prompt":"query"}}'
         )
         plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
-        self.mock_llm._responses = [plan1, plan2, plan3]
+        self.lm_api.llm._responses = [plan1, plan2, plan3] # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -165,7 +167,7 @@ class MaterializerTests(unittest.TestCase):
             '{"action_type":"operation","name":"web_crawl","args":{"url":"http://example.com"}}'
         )
         plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
-        self.mock_llm._responses = [plan1, plan2, plan3]
+        self.lm_api.llm._responses = [plan1, plan2, plan3] # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -228,7 +230,7 @@ class MaterializerTests(unittest.TestCase):
         plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
         plan2 = '{"action_type":"operation","name":"semantic_column_generator","args":{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
         plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b","newcol"]}}}'
-        self.mock_llm._responses = [plan1, plan2, plan3]
+        self.lm_api.llm._responses = [plan1, plan2, plan3] # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [10, 20]})
         table_doc = Table(

@@ -5,7 +5,8 @@ import uuid
 
 from pyvis.network import Network
 
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType
+
 
 
 class ProvenanceNode:

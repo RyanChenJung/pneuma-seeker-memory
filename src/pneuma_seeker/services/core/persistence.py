@@ -9,13 +9,9 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
-from pneuma_seeker.services.core.ir_system.data_model import (
-    AbstractDocument,
-    RetrieverType,
-    Table,
-)
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table
 from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 DB_PATH = os.path.join(
@@ -338,7 +334,7 @@ def _deserialize_provenance_graph(
 
     # 1. create all nodes first
     for n in obj.get("nodes", []):
-        # Recreate RetrieverType from the canonical Enum defined in ir_system.data_model
+        # Recreate RetrieverType from the canonical Enum defined in ir_system schemas
         source_val = n.get("source_retriever")
         try:
             source_enum = RetrieverType(source_val)

@@ -33,6 +33,15 @@ class SessionManagerTests(unittest.TestCase):
         self.assertIsNot(a, b)
         self.assertIsNot(a, c)
         self.assertIsNot(b, c)
+    
+    def test_chat_session_is_created_only_once_per_key(self):
+        import pneuma_seeker.session_manager as sm_mod
+        cs_mock = sm_mod.ChatSession
+
+        self.sm.get_chat_session("user1", "chat1")
+        self.sm.get_chat_session("user1", "chat1")
+
+        self.assertEqual(cs_mock.call_count, 1)
 
     def tearDown(self) -> None:
         import pneuma_seeker.session_manager as sm_mod

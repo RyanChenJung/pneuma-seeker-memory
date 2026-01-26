@@ -10,8 +10,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 import pneuma_seeker.chat_session as chat_session_mod
 from pneuma_seeker.provenance.graph import ProvenanceNode
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Table
+from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 
@@ -54,6 +54,8 @@ class ChatSessionTests(unittest.TestCase):
 
         self.cfg = Config()
         self.logger = MagicMock()
+        self.db_api = MagicMock()
+        self.lm_api = MagicMock()
 
     def tearDown(self) -> None:
         # restore
@@ -67,7 +69,7 @@ class ChatSessionTests(unittest.TestCase):
             chat_session_mod.ProvenanceGraph = self._orig_prov
 
     def test_chat_yields_conductor_responses_and_done(self):
-        cs = chat_session_mod.ChatSession("u1", "c1", self.cfg, self.logger)
+        cs = chat_session_mod.ChatSession("u1", "c1", self.cfg, self.logger, self.db_api, self.lm_api)
         messages = [LLMMessage(role="user", content="hello")]
         out = list(cs.chat(messages))
         # Should include two responses from DummyConductor and a final DONE
@@ -76,7 +78,7 @@ class ChatSessionTests(unittest.TestCase):
         self.assertIn("DONE", out)
 
     def test_persist_session_calls_save_state(self):
-        cs = chat_session_mod.ChatSession("u2", "c2", self.cfg, self.logger)
+        cs = chat_session_mod.ChatSession("u2", "c2", self.cfg, self.logger, self.db_api, self.lm_api)
         # populate conductor.prov_graph.nodes to simulate content
         cs.conductor.prov_graph.nodes = {
             "n1": ProvenanceNode(

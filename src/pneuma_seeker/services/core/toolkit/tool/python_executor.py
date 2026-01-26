@@ -6,8 +6,8 @@ import pandas as pd
 
 from logging import Logger
 
-from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument
 from pneuma_seeker.services.core.toolkit.data_model import ExecutorOutput
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 
 
 class PythonExecutor:

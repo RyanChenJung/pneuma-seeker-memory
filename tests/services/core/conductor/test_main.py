@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from pneuma_seeker.services.core.ir_system.data_model import (
+from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,

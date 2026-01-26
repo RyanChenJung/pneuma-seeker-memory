@@ -8,7 +8,7 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
-from pneuma_seeker.services.core.ir_system.data_model import RetrieverType
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 
 

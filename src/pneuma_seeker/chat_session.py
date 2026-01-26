@@ -1,13 +1,13 @@
 # backend/services/core-service/src/core_service/chat_session.py
 from logging import Logger
 
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.services.core.conductor.main import Conductor
 from pneuma_seeker.services.core.persistence import load_state, save_state
-from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 
@@ -47,7 +47,7 @@ class ChatSession:
                 load_state(
                     self.user_id,
                     self.chat_id,
-                    logger,
+                    self.logger,
                     self.config.DATA_SOURCES[0],
                 )
             )
