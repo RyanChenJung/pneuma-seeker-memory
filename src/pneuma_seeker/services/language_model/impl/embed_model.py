@@ -38,10 +38,14 @@ class EmbeddingModel(AbstractModel):
     def encode(
         self,
         texts: list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+        embed_model_option: EmbeddingModelOption | None = None,
     ) -> ndarray:
         """Embed texts."""
         self.load_model()
+
+        if not embed_model_option:
+            embed_model_option = EmbeddingModelOption()
+
         if isinstance(texts, str):
             texts = [texts]
         return self.model.encode(  # type: ignore

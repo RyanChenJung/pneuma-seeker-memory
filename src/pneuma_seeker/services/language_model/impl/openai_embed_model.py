@@ -50,10 +50,13 @@ class OpenAIEmbedModel(AbstractModel):
     def encode(
         self,
         texts: list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+        embed_model_option: EmbeddingModelOption | None = None,
     ) -> np.ndarray:
         if not texts:
             return np.empty((0, 0))
+        
+        if embed_model_option is None:
+            embed_model_option = EmbeddingModelOption()
 
         embeddings: list[list[float]] = []
         for i in range(0, len(texts), embed_model_option.batch_size):

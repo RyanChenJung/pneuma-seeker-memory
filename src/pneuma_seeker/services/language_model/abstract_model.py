@@ -49,7 +49,7 @@ class AbstractModel(ABC):
     def encode(
         self,
         texts: list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+        embed_model_option: EmbeddingModelOption | None = None,
     ) -> ndarray:
         """Embed texts."""
         pass

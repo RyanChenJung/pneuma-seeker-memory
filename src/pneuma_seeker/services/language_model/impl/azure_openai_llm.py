@@ -133,7 +133,7 @@ class AzureOpenAILLM(AbstractModel):
     def encode(
         self,
         texts: list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+        embed_model_option: EmbeddingModelOption | None = None,
     ) -> ndarray:
         """Embed texts."""
         raise NotImplementedError("GPT does not support embedding texts.")

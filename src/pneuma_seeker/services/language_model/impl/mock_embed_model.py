@@ -35,7 +35,7 @@ class MockEmbedModel(AbstractModel):
     def encode(
         self,
         texts: list[str],
-        embed_model_option: EmbeddingModelOption = EmbeddingModelOption(),
+        embed_model_option: EmbeddingModelOption | None = None,
     ) -> ndarray:
         return ndarray(0)
 
