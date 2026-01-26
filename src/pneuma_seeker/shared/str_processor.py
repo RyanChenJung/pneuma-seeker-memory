@@ -1,4 +1,4 @@
-# src/pneuma_seeker/utils/str_processor.py
+# src/pneuma_seeker/shared/str_processor.py
 import re
 
 

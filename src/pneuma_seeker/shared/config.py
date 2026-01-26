@@ -1,4 +1,4 @@
-# src/pneuma_seeker/utils/config.py
+# src/pneuma_seeker/shared/config.py
 import os
 
 from dotenv import load_dotenv

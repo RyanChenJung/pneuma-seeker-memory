@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
-from pneuma_seeker.utils.parser import augmented_literal_eval
+from pneuma_seeker.shared.parser import augmented_literal_eval
 
 
 class SyntacticSimMetric(Enum):

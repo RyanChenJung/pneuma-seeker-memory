@@ -7,7 +7,7 @@ from pneuma_seeker.model.interface.impl.azure_openai_embed_model import (
 from pneuma_seeker.model.interface.impl.azure_openai_llm import AzureOpenAILLM
 from pneuma_seeker.model.interface.impl.embed_model import EmbeddingModel
 from pneuma_seeker.model.interface.impl.openai_llm import OpenAILLM
-from pneuma_seeker.utils.config import Config
+from pneuma_seeker.shared.config import Config
 
 
 def get_llm(model_path: str, config: Config) -> Type[AbstractModel]:

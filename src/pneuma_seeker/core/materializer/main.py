@@ -19,9 +19,9 @@ from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.model.option import LLMOption
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.utils.config import Config
-from pneuma_seeker.utils.logger import formatted_log
-from pneuma_seeker.utils.parser import parse_code, parse_json
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.logger import formatted_log
+from pneuma_seeker.shared.parser import parse_code, parse_json
 
 
 class Materializer:

@@ -14,7 +14,7 @@ from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import (
 from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.model.interface.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
-from pneuma_seeker.utils.config import Config
+from pneuma_seeker.shared.config import Config
 
 
 class Toolkit:

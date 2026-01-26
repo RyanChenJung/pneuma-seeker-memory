@@ -1,4 +1,4 @@
-# src/pneuma_seeker/utils/table_reader.py
+# src/pneuma_seeker/shared/table_reader.py
 import os
 import requests
 import pandas as pd
@@ -7,7 +7,7 @@ from pneuma_seeker.core.ir_system.data_model import (
     Table,
     RetrieverType,
 )
-from pneuma_seeker.utils.str_processor import clean_column_table_name
+from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 
 class TableReader:

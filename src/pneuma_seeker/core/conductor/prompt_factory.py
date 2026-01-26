@@ -6,7 +6,7 @@ from pneuma_seeker.core.ir_system.data_model import (
     AbstractDocument,
     convert_retrieval_results_to_str,
 )
-from pneuma_seeker.utils.config import Config
+from pneuma_seeker.shared.config import Config
 
 
 class ConductorPromptFactory:

@@ -5,7 +5,7 @@ from pneuma_seeker.core.ir_system.retriever.impl.pneuma import Pneuma
 from pneuma_seeker.core.ir_system.retriever.impl.document_db import DocumentDB
 from pneuma_seeker.core.ir_system.retriever.impl.web_crawler import WebCrawler
 from pneuma_seeker.core.ir_system.retriever.impl.web_search import WebSearch
-from pneuma_seeker.utils.config import Config
+from pneuma_seeker.shared.config import Config
 
 
 class RetrieverFactory:

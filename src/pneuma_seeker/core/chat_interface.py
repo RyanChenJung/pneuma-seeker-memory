@@ -6,8 +6,8 @@ from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
 from pneuma_seeker.core.conductor.main import Conductor
 from pneuma_seeker.model.llm_message import LLMMessage, Role
 from pneuma_seeker.provenance.graph import ProvenanceGraph
-from pneuma_seeker.utils.config import Config
-from pneuma_seeker.utils.logger import setup_logger
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.logger import setup_logger
 
 
 class ChatInterface:

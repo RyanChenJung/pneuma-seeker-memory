@@ -9,7 +9,7 @@ from pneuma_seeker.core.ir_system.data_model import (
 from pneuma_seeker.core.shared.toolkit.operation_description import (
     get_operation_description,
 )
-from pneuma_seeker.utils.config import Config
+from pneuma_seeker.shared.config import Config
 
 
 class MaterializerPromptFactory:

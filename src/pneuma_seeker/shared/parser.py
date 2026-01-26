@@ -1,4 +1,4 @@
-# src/pneuma_seeker/utils/parser.py
+# src/pneuma_seeker/shared/parser.py
 import json
 import re
 

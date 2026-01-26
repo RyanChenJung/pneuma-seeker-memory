@@ -1,4 +1,4 @@
-# src/pneuma_seeker/utils/logger.py
+# src/pneuma_seeker/shared/logger.py
 import logging
 import os
 import sys
