@@ -6,12 +6,12 @@ from pandas import DataFrame
 
 from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
 from pneuma_seeker.core.ir_system.main import IRSystem
-from pneuma_seeker.core.shared.toolkit.tool.python_executor import PythonExecutor
-from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import (
+from pneuma_seeker.core.toolkit.tool.python_executor import PythonExecutor
+from pneuma_seeker.core.toolkit.tool.semantic_operator import (
     SemanticOperator,
     SyntacticSimMetric,
 )
-from pneuma_seeker.core.shared.toolkit.tool.sql_executor import SQLExecutor
+from pneuma_seeker.core.toolkit.tool.sql_executor import SQLExecutor
 from pneuma_seeker.language_model.abstract_model import AbstractModel
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config

@@ -13,8 +13,8 @@ from pneuma_seeker.core.ir_system.data_model import (
 )
 from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.core.materializer.state import MaterializerState
-from pneuma_seeker.core.shared.toolkit.main import Toolkit
-from pneuma_seeker.core.shared.toolkit.tool.semantic_operator import SyntacticSimMetric
+from pneuma_seeker.core.toolkit.main import Toolkit
+from pneuma_seeker.core.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
@@ -812,6 +812,7 @@ class Materializer:
                                 python_code,
                                 "The execution did not result in a DataFrame, but something else.",
                             ),
+                            description="Executes Python code.",
                         )
                         self.prov_graph.add_node(new_node, True)
                         for parent_node in parent_nodes:
