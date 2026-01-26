@@ -13,7 +13,7 @@ from pneuma_seeker.shared.parser import parse_json
 
 class AbstractModel(ABC):
     @abstractmethod
-    def __init__(self, model_name: str, config: Config, logger: Logger, **kwargs):
+    def __init__(self, config: Config, logger: Logger, **kwargs):
         """All implementors must accept a model_name in the constructor."""
         pass
 

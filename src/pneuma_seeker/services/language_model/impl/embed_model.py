@@ -11,18 +11,17 @@ from pneuma_seeker.shared.config import Config
 
 
 class EmbeddingModel(AbstractModel):
-    def __init__(self, model_name: str, config: Config, logger: Logger):
+    def __init__(self, config: Config, logger: Logger):
         """
         Designed with "BAAI/bge-base-en-v1.5" in mind, loaded using SentenceTransformers.
         """
-        self.model_name = model_name
         self.model = None
         self.config = config
         self.logger = logger
 
     def load_model(self):
         if self.model is None:
-            self.model = SentenceTransformer(self.model_name)
+            self.model = SentenceTransformer(self.config.EMBED_MODEL_PATH)
 
     def load_tokenizer(self):
         # No need to load tokenizer

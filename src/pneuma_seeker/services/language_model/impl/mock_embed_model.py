@@ -1,12 +1,10 @@
 from collections.abc import Generator
-from logging import Logger
 from typing import Optional
 
 from numpy import ndarray
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.shared.config import Config
 
 
 class MockEmbedModel(AbstractModel):

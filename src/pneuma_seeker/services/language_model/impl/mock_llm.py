@@ -1,15 +1,21 @@
+from logging import Logger
 from typing import Optional
 
 from numpy import ndarray
+
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
+from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
-from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
+from pneuma_seeker.shared.schemas.language_model.option import (
+    EmbeddingModelOption,
+    LLMOption,
+)
 
 
 class MockLLM(AbstractModel):
     """Simple deterministic LLM mock that returns queued JSON strings."""
 
-    def __init__(self, responses=None):
+    def __init__(self, config: Config, logger: Logger, responses=None):
         self._responses = list(responses or [])
 
     def chat(self, messages: list[LLMMessage], llm_option: Optional[LLMOption] = None):

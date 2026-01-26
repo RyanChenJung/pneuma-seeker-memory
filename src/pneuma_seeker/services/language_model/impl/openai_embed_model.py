@@ -3,14 +3,14 @@ from logging import Logger
 from typing import Optional
 
 import numpy as np
-from openai import AzureOpenAI
+from openai import OpenAI
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.shared.config import Config
 
 
-class AzureOpenAIEmbedModel(AbstractModel):
+class OpenAIEmbedModel(AbstractModel):
     def __init__(
         self,
         config: Config,
@@ -18,11 +18,7 @@ class AzureOpenAIEmbedModel(AbstractModel):
     ):
         self.config = config
         self.logger = logger
-        self.client = AzureOpenAI(
-            api_version=self.config.AZURE_API_VERSION,
-            azure_endpoint=self.config.AZURE_OPENAI_ENDPOINT,
-            api_key=self.config.AZURE_OPENAI_API_KEY,
-        )
+        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     def load_model(self):
         # OpenAI API does not require model loading

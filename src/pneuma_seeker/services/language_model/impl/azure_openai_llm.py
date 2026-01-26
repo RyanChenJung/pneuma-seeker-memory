@@ -6,25 +6,27 @@ from numpy import ndarray
 from openai import AzureOpenAI
 
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
-from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
-from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.option import (
+    EmbeddingModelOption,
+    LLMOption,
+)
 
 
 class AzureOpenAILLM(AbstractModel):
     def __init__(
         self,
-        model_name: str,
         config: Config,
         logger: Logger,
     ):
+        self.config = config
+        self.logger = logger
         self.client = AzureOpenAI(
             api_version=config.AZURE_API_VERSION,
             azure_endpoint=config.AZURE_OPENAI_ENDPOINT,
             api_key=config.AZURE_OPENAI_API_KEY,
         )
-        self.model_name = model_name
-        self.logger = logger
 
     def load_model(self):
         # OpenAI API does not require model loading
@@ -53,7 +55,7 @@ class AzureOpenAILLM(AbstractModel):
             if json_mode:
                 response_stream = self.client.chat.completions.create(
                     messages=messages,  # type: ignore
-                    model=self.model_name,
+                    model=self.config.LLM_PATH,
                     seed=42,
                     temperature=temperature,
                     max_completion_tokens=max_completion_tokens,
@@ -63,7 +65,7 @@ class AzureOpenAILLM(AbstractModel):
             else:
                 response_stream = self.client.chat.completions.create(
                     messages=messages,  # type: ignore
-                    model=self.model_name,
+                    model=self.config.LLM_PATH,
                     seed=42,
                     temperature=temperature,
                     max_completion_tokens=max_completion_tokens,
@@ -84,7 +86,7 @@ class AzureOpenAILLM(AbstractModel):
                 gpt_output = (
                     self.client.chat.completions.create(
                         messages=messages,  # type: ignore
-                        model=self.model_name,
+                        model=self.config.LLM_PATH,
                         seed=42,
                         temperature=temperature,
                         max_completion_tokens=max_completion_tokens,
@@ -97,7 +99,7 @@ class AzureOpenAILLM(AbstractModel):
                 gpt_output = (
                     self.client.chat.completions.create(
                         messages=messages,  # type: ignore
-                        model=self.model_name,
+                        model=self.config.LLM_PATH,
                         seed=42,
                         temperature=temperature,
                         max_completion_tokens=max_completion_tokens,

@@ -15,13 +15,12 @@ from pneuma_seeker.shared.config import Config
 class OpenAILLM(AbstractModel):
     def __init__(
         self,
-        model_name: str,
         config: Config,
         logger: Logger,
     ):
-        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
-        self.model_name = model_name
+        self.config = config
         self.logger = logger
+        self.client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     def load_model(self):
         # OpenAI API does not require model loading
@@ -49,7 +48,7 @@ class OpenAILLM(AbstractModel):
             # Stream response as generator of chunks
             response_stream = self.client.chat.completions.create(
                 messages=messages,  # type: ignore
-                model=self.model_name,
+                model=self.config.LLM_PATH,
                 seed=42,
                 temperature=temperature,
                 max_completion_tokens=max_completion_tokens,
@@ -58,8 +57,13 @@ class OpenAILLM(AbstractModel):
             )  # type: ignore
 
             for event in response_stream:
-                if event.choices[0].delta.content:
-                    chunk = event.choices[0].delta.content
+                # Some stream events may be keep-alives with empty choices — skip them
+                if not getattr(event, "choices", None):
+                    continue
+                first = event.choices[0]
+                delta = getattr(first, "delta", None)
+                if delta and getattr(delta, "content", None):
+                    chunk = delta.content
                     print(chunk, end="", flush=True)  # Optional live print
                     yield chunk
 
@@ -68,7 +72,7 @@ class OpenAILLM(AbstractModel):
             gpt_output = (
                 self.client.chat.completions.create(
                     messages=messages,  # type: ignore
-                    model=self.model_name,
+                    model=self.config.LLM_PATH,
                     seed=42,
                     temperature=temperature,
                     max_completion_tokens=max_completion_tokens,

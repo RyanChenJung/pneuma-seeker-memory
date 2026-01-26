@@ -6,6 +6,9 @@ from pneuma_seeker.services.language_model.impl.azure_openai_embed_model import 
 )
 from pneuma_seeker.services.language_model.impl.azure_openai_llm import AzureOpenAILLM
 from pneuma_seeker.services.language_model.impl.embed_model import EmbeddingModel
+from pneuma_seeker.services.language_model.impl.openai_embed_model import (
+    OpenAIEmbedModel,
+)
 from pneuma_seeker.services.language_model.impl.openai_llm import OpenAILLM
 from pneuma_seeker.shared.config import Config
 
@@ -31,5 +34,7 @@ def get_embed_model(config: Config) -> Type[AbstractModel]:
     """Factory function to return the correct embedding model class."""
     normalized_model_path = config.EMBED_MODEL_PATH.lower()
     if "text-embedding-3-small" in normalized_model_path:
-        return AzureOpenAIEmbedModel
+        if config.USE_AZURE:
+            return AzureOpenAIEmbedModel
+        return OpenAIEmbedModel
     return EmbeddingModel
