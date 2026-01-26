@@ -1,8 +1,12 @@
+import os
+import sys
 import types
 import unittest
 from unittest.mock import MagicMock
 
 from pandas import DataFrame
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 import pneuma_seeker.chat_session as chat_session_mod
 from pneuma_seeker.provenance.graph import ProvenanceNode
@@ -40,7 +44,10 @@ class ChatSessionTests(unittest.TestCase):
 
         chat_session_mod.Conductor = DummyConductor
         chat_session_mod.load_state = lambda user_id, chat_id, logger, src: (
-            {"state": "ok"}, [], [], types.SimpleNamespace(nodes={})
+            {"state": "ok"},
+            [],
+            [],
+            types.SimpleNamespace(nodes={}),
         )
         chat_session_mod.save_state = MagicMock()
         chat_session_mod.ProvenanceGraph = lambda logger: types.SimpleNamespace()
@@ -71,9 +78,20 @@ class ChatSessionTests(unittest.TestCase):
     def test_persist_session_calls_save_state(self):
         cs = chat_session_mod.ChatSession("u2", "c2", self.cfg, self.logger)
         # populate conductor.prov_graph.nodes to simulate content
-        cs.conductor.prov_graph.nodes = {"n1": ProvenanceNode(source_retriever=RetrieverType.USER, python_code="code", description="")}
+        cs.conductor.prov_graph.nodes = {
+            "n1": ProvenanceNode(
+                source_retriever=RetrieverType.USER, python_code="code", description=""
+            )
+        }
         cs.conductor.info_need_state = InformationNeedState()
-        cs.conductor.retrieved_tables = [Table(doc_id="doc1", retriever_type=RetrieverType.PNEUMA_RETRIEVER, content=DataFrame(), metadata={})]
+        cs.conductor.retrieved_tables = [
+            Table(
+                doc_id="doc1",
+                retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                content=DataFrame(),
+                metadata={},
+            )
+        ]
         cs.conductor.enumerated_table_ids = ["id1"]
 
         # call persist
