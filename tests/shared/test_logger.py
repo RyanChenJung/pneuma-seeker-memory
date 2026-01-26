@@ -1,4 +1,4 @@
-# tests/pneuma_seeker/utils/test_logger.py
+# tests/pneuma_seeker/shared/test_logger.py
 import sys
 import unittest
 import logging
@@ -6,9 +6,9 @@ import tempfile
 import os
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
-from pneuma_seeker.utils.logger import setup_logger, formatted_log
+from pneuma_seeker.shared.logger import setup_logger, formatted_log
 
 
 class LoggerTests(unittest.TestCase):

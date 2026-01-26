@@ -1,9 +1,9 @@
-# tests/pneuma_seeker/utils/test_table_reader.py
+# tests/pneuma_seeker/shared/test_table_reader.py
 import os
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
 import tempfile
@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pandas as pd
 
-from pneuma_seeker.utils.table_reader import TableReader
+from pneuma_seeker.shared.table_reader import TableReader
 from pneuma_seeker.core.ir_system.data_model import Table
 
 
@@ -60,7 +60,7 @@ class TableReaderTests(unittest.TestCase):
         sheet_names = {t.metadata["sheet_name"] for t in tables}
         self.assertEqual(sheet_names, {"Sheet1", "Sheet2"})
 
-    @patch("pneuma_seeker.utils.table_reader.requests.get")
+    @patch("pneuma_seeker.shared.table_reader.requests.get")
     def test_download_csv_from_api(self, mock_get):
         # Mock CSV response
         csv_content = b"A,B\n1,2\n3,4"
@@ -75,7 +75,7 @@ class TableReaderTests(unittest.TestCase):
         self.assertEqual(list(tables[0].content.columns), ["a", "b"])
         self.assertEqual(tables[0].content.shape, (2, 2))
 
-    @patch("pneuma_seeker.utils.table_reader.TableReader._download_from_api")
+    @patch("pneuma_seeker.shared.table_reader.TableReader._download_from_api")
     def test_download_excel_from_api(self, mock_download):
         # Write to a temp file in the test dir
         df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})

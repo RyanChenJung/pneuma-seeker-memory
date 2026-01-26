@@ -1,13 +1,13 @@
-# tests/pneuma_seeker/utils/test_str_processor.py
+# tests/pneuma_seeker/shared/test_str_processor.py
 import os
 import unittest
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
 
-from pneuma_seeker.utils.str_processor import clean_column_table_name
+from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 class StrProcessorTests(unittest.TestCase):
     def test_basic_cleaning(self):

@@ -1,12 +1,12 @@
-# tests/pneuma_seeker/utils/test_parser.py
+# tests/pneuma_seeker/shared/test_parser.py
 import os
 import unittest
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))
 )
-from pneuma_seeker.utils import parser
+from pneuma_seeker.shared import parser
 
 
 class ParserTests(unittest.TestCase):
