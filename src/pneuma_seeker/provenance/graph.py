@@ -19,8 +19,8 @@ class ProvenanceNode:
         self.source_retriever = source_retriever
         self.python_code = python_code
         self.description = description
-        self.parents = []
-        self.children = []
+        self.parents: list[ProvenanceNode] = []
+        self.children: list[ProvenanceNode] = []
 
     def add_child(self, child: "ProvenanceNode"):
         """Adds a child node to this node."""

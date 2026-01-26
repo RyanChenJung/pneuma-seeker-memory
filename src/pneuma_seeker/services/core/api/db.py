@@ -240,8 +240,8 @@ class DBAPI:
                 ),
                 "python_code": node.python_code,
                 "description": node.description,
-                "children": [child.id for child in node.children],
                 "parents": [parent.id for parent in node.parents],
+                "children": [child.id for child in node.children],
             }
             for node in graph.nodes.values()
         ]
@@ -278,9 +278,9 @@ class DBAPI:
             path = T_dict.get("path", "") or ""
             last_node_id = T_dict.get("last_node_id")
 
-            # Always re-fetch table preview from workspace DB
+            # Always re-fetch table from workspace DB
             content = self.execute_query(
-                user_id, chat_id, f'SELECT * FROM "{T_id}" LIMIT 5;'
+                user_id, chat_id, f'SELECT * FROM "{T_id}";'
             )
 
             if content is None:
@@ -301,7 +301,7 @@ class DBAPI:
         info_state.T = T
         info_state.is_T_materialized = state_data.get("is_T_materialized", False)
         info_state.column_descriptions = state_data.get("column_descriptions", {})
-        info_state.S = state_data.get("S", [])
+        info_state.S = state_data.get("S", "")
         info_state.is_S_executed = state_data.get("is_S_executed", False)
 
         # ---- rebuild retrieved tables ----
@@ -313,13 +313,13 @@ class DBAPI:
             content = self.execute_query(
                 user_id,
                 chat_id,
-                f'SELECT * FROM "{self.config.DATA_SOURCES[0]}"."{doc["doc_id"]}" LIMIT 5;',
+                f'SELECT * FROM "{self.config.DATA_SOURCES[0]}"."{doc["doc_id"]}";'
             )
 
             retrieved_tables.append(
-                AbstractDocument(
-                    doc_id=doc["doc_id"],
-                    retriever_type=RetrieverType(doc["retriever_type"]),
+                Table(
+                    doc_id=doc.get("doc_id", ""),
+                    retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                     content=content,
                     metadata=doc.get("metadata", {}),
                     path=doc.get("path"),
