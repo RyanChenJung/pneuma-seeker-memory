@@ -1,5 +1,5 @@
 # src/pneuma_seeker/core/conductor/state.py
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument
 
 
 class InformationNeedState:

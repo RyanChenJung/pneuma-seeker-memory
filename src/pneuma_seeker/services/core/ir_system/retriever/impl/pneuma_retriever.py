@@ -15,14 +15,14 @@ import Stemmer
 from bm25s.tokenization import convert_tokenized_to_string_list
 from chromadb_deterministic.api import ClientAPI
 from chromadb_deterministic.api.models.Collection import Collection
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
     TableContext,
     Text,
 )
-from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
+from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role

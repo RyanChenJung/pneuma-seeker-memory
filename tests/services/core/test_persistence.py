@@ -11,9 +11,9 @@ sys.path.insert(
 import duckdb
 import pandas as pd
 
-from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverType
-from pneuma_seeker.core.persistence import (
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument, RetrieverType
+from pneuma_seeker.services.core.persistence import (
     _deserialize_provenance_graph,
     _serialize_provenance_graph,
     init_db,

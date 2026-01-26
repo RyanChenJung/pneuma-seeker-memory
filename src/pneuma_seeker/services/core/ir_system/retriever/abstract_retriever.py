@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument, RetrieverModel
-from pneuma_seeker.core.ir_system.data_model import RetrieverType
+from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument, RetrieverModel
+from pneuma_seeker.services.core.ir_system.data_model import RetrieverType
 from pneuma_seeker.shared.config import Config
 
 

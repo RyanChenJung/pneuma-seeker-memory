@@ -10,8 +10,8 @@ sys.path.insert(
 
 import requests
 
-from pneuma_seeker.core.ir_system.retriever.impl.web_crawler import WebCrawler
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Text
+from pneuma_seeker.services.core.ir_system.retriever.impl.web_crawler import WebCrawler
+from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Text
 
 
 class WebSearchTests(unittest.TestCase):

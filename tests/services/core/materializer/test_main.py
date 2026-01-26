@@ -12,11 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table, Text
-from pneuma_seeker.core.materializer.main import Materializer
+from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Table, Text
+from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.core.toolkit.main import Toolkit
+from pneuma_seeker.services.core.toolkit.main import Toolkit
 from pneuma_seeker.services.language_model.impl.mock_embed_model import MockEmbedModel
 from pneuma_seeker.services.language_model.impl.mock_llm import MockLLM
 

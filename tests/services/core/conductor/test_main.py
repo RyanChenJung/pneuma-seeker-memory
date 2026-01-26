@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
@@ -42,7 +42,7 @@ class ConductorTests(unittest.TestCase):
         self.patcher_get_llm.start()
         self.patcher_get_embed.start()
 
-        from pneuma_seeker.core.conductor.main import Conductor
+        from pneuma_seeker.services.core.conductor.main import Conductor
 
         config = Config(".env.test")
         config.ENABLE_WEB_SEARCH = True

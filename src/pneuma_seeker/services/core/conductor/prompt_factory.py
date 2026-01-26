@@ -1,8 +1,8 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
 
-from pneuma_seeker.core.conductor.data_model import HumanConductorInteraction
-from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.conductor.data_model import HumanConductorInteraction
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     convert_retrieval_results_to_str,
 )

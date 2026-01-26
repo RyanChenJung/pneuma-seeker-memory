@@ -9,8 +9,8 @@ sys.path.insert(
 
 import pandas as pd
 
-from pneuma_seeker.core.ir_system.data_model import RetrieverType, Table
-from pneuma_seeker.core.materializer.state import MaterializerState
+from pneuma_seeker.services.core.ir_system.data_model import RetrieverType, Table
+from pneuma_seeker.services.core.materializer.state import MaterializerState
 
 
 class MaterializerStateTests(unittest.TestCase):

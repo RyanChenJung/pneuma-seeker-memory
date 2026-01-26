@@ -4,12 +4,12 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Text,
 )
-from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
+from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 
 
 class WebCrawler(AbstractRetriever):

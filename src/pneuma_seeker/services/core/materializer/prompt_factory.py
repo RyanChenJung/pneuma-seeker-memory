@@ -2,11 +2,11 @@ import json
 
 from pandas import DataFrame
 
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     convert_retrieval_results_to_str,
 )
-from pneuma_seeker.core.toolkit.operation_description import (
+from pneuma_seeker.services.core.toolkit.operation_description import (
     get_operation_description,
 )
 from pneuma_seeker.shared.config import Config

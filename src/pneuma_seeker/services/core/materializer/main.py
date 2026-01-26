@@ -6,15 +6,15 @@ from typing import Any
 
 from pandas import DataFrame
 
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.materializer.prompt_factory import MaterializerPromptFactory
-from pneuma_seeker.core.materializer.state import MaterializerState
-from pneuma_seeker.core.toolkit.main import Toolkit
-from pneuma_seeker.core.toolkit.tool.semantic_operator import SyntacticSimMetric
+from pneuma_seeker.services.core.materializer.prompt_factory import MaterializerPromptFactory
+from pneuma_seeker.services.core.materializer.state import MaterializerState
+from pneuma_seeker.services.core.toolkit.main import Toolkit
+from pneuma_seeker.services.core.toolkit.tool.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role

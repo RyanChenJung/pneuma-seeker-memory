@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 
 from pneuma_seeker.shared.table_reader import TableReader
-from pneuma_seeker.core.ir_system.data_model import Table
+from pneuma_seeker.services.core.ir_system.data_model import Table
 
 
 class TableReaderTests(unittest.TestCase):

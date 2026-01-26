@@ -5,19 +5,19 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-from pneuma_seeker.core.conductor.data_model import (
+from pneuma_seeker.services.core.conductor.data_model import (
     HumanConductorInteraction,
     ToolExecutionStatus,
 )
-from pneuma_seeker.core.conductor.prompt_factory import ConductorPromptFactory
-from pneuma_seeker.core.conductor.state import InformationNeedState
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.materializer.main import Materializer
-from pneuma_seeker.core.toolkit.main import Toolkit
+from pneuma_seeker.services.core.materializer.main import Materializer
+from pneuma_seeker.services.core.toolkit.main import Toolkit
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.services.language_model.model_factory import get_embed_model, get_llm
 from pneuma_seeker.shared.config import Config

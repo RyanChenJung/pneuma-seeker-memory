@@ -1,8 +1,8 @@
 from logging import Logger
 
-from pneuma_seeker.core.ir_system.data_model import AbstractDocument
-from pneuma_seeker.core.ir_system.prompt_factory import PromptFactory
-from pneuma_seeker.core.ir_system.retriever.retriever_factory import (
+from pneuma_seeker.services.core.ir_system.data_model import AbstractDocument
+from pneuma_seeker.services.core.ir_system.prompt_factory import PromptFactory
+from pneuma_seeker.services.core.ir_system.retriever.retriever_factory import (
     RetrieverFactory,
     RetrieverModel,
     RetrieverType,

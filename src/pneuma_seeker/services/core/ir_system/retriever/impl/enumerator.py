@@ -4,12 +4,12 @@ from pathlib import Path
 
 import duckdb
 import pandas as pd
-from pneuma_seeker.core.ir_system.data_model import (
+from pneuma_seeker.services.core.ir_system.data_model import (
     AbstractDocument,
     RetrieverType,
     Table,
 )
-from pneuma_seeker.core.ir_system.retriever.abstract_retriever import AbstractRetriever
+from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
 from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 
