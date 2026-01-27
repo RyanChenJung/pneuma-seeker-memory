@@ -1,30 +1,35 @@
 import os
 import sys
-import pandas as pd
 
+import pandas as pd
 from tqdm import tqdm
+
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+)
 
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+from pneuma_seeker.services.core.ir_system.main import IRSystem
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import setup_logger
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, TableContext
-
-sys.path.append("../../../..")
-from pneuma_seeker.services.core.ir_system.main import IRSystem
-
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+    TableContext,
+)
 
 INDEXING_ARCHEOLOGY = False
 INDEXING_BIOMEDICAL = False
 INDEXING_ENVIRONMENT = False
 INDEXING_TAG = False
 INDEXING_BUYSITE = False
-INDEXING_FEDERAL_STUDENT_LOAN = True
+INDEXING_FEDERAL_STUDENT_LOAN = False
+INDEXING_CSAIL_STATA_NEUTRON = True
 
 
-config = Config("../../.env")
-llm_path = "o4-mini"
-embed_model_path = "text-embedding-3-small"
+config = Config("../../../../../.env")
 logger = setup_logger(log_path=os.path.join(".", "log"))
 
 
@@ -40,12 +45,12 @@ LARGE_BUYSITE_DATASET = [
     "JI_PURCHASE_ORDER",
     "JI_REQUISITION_AUDIT_TRAIL",
     "JI_REQUISITION_CUSTOM_FIELDS_GROUP_RESPONSE_16366401",
-    "JI_REQUISITION",   
+    "JI_REQUISITION",
 ]
 
 
-def index_dataset(dataset_name: str, metadata_available = False):
-    DATASET_DIR = f"../../data_src/{dataset_name}/dataset"
+def index_dataset(dataset_name: str, metadata_available=False):
+    DATASET_DIR = f"../../../../../data_src/{dataset_name}/dataset"
     documents: list[AbstractDocument] = []
     dataset = os.listdir(DATASET_DIR)
     for table_name in tqdm(dataset, desc="Loading dataset..."):
@@ -63,13 +68,15 @@ def index_dataset(dataset_name: str, metadata_available = False):
                 content=table,
                 metadata={
                     "table_name": f"{DATASET_DIR}/{table_name}",
-                    "dataset_name": dataset_name
-                }
+                    "dataset_name": dataset_name,
+                },
             )
         )
-    
+
     if metadata_available:
-        dataset_metadata = pd.read_csv(f"../../data_src/{dataset_name}/metadata.csv")
+        dataset_metadata = pd.read_csv(
+            f"../../../../../data_src/{dataset_name}/metadata.csv"
+        )
         for _, row in tqdm(dataset_metadata.iterrows(), desc="Loading metadata..."):
             table_name = row["table_name"]
             description = row["description"]
@@ -82,20 +89,14 @@ def index_dataset(dataset_name: str, metadata_available = False):
                         "table_name": f"{DATASET_DIR}/{table_name}",
                         "dataset_name": dataset_name,
                         "type": "description",
-                    }
+                    },
                 )
             )
 
     ir_sys = IRSystem(
-        config,
-        logger,
-        DBAPI(config, logger),
-        LanguageModelAPI(config, logger)
+        config, logger, DBAPI(config, logger), LanguageModelAPI(config, logger)
     )
-    ir_sys.index_documents(
-        RetrieverType.PNEUMA_RETRIEVER,
-        documents
-    )
+    ir_sys.index_documents(RetrieverType.PNEUMA_RETRIEVER, documents)
 
 
 if INDEXING_ARCHEOLOGY:
@@ -110,6 +111,8 @@ if INDEXING_BUYSITE:
     index_dataset("buysite", True)
 if INDEXING_FEDERAL_STUDENT_LOAN:
     index_dataset("federal_student_loan", True)
+if INDEXING_CSAIL_STATA_NEUTRON:
+    index_dataset("csail_stata_neutron", False)
 
 
 # Extra: Processing for TAG data
@@ -122,5 +125,3 @@ if INDEXING_FEDERAL_STUDENT_LOAN:
 #             print(f"=> {original_table_path} => {appended_table_path}")
 #             os.rename(original_table_path, appended_table_path)
 # Future-TODO: don't forget to move the tables outside (manually for now)
-
-
