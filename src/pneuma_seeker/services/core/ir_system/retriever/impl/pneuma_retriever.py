@@ -145,8 +145,21 @@ class PneumaRetriever(AbstractRetriever):
                     actual_table = con.execute(query_table).fetchdf()
 
                 if metadata is None:
-                    metadata = pd.read_csv(f"../../data_src/{dataset}/metadata.csv")
+                    metadata_path = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)),
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "..",
+                        "data_src",
+                        dataset,
+                        "metadata.csv",
+                    )
                 try:
+                    metadata = pd.read_csv(metadata_path)
                     table_description = (
                         metadata.loc[
                             metadata["table_name"] == Path(table).stem, "description"
