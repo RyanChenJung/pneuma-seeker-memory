@@ -29,7 +29,7 @@ INDEXING_FEDERAL_STUDENT_LOAN = False
 INDEXING_CSAIL_STATA_NEUTRON = False
 INDEXING_DW = False
 INDEXING_GEOQUERY = False
-INDEXING_ATIS = True
+INDEXING_ATIS = False
 
 
 config = Config("../../../../../.env")
@@ -109,7 +109,7 @@ if INDEXING_BIOMEDICAL:
 if INDEXING_ENVIRONMENT:
     index_dataset("environment", True)
 if INDEXING_TAG:
-    index_dataset("tag", True)
+    index_dataset("tag", False)
 if INDEXING_BUYSITE:
     index_dataset("buysite", True)
 if INDEXING_FEDERAL_STUDENT_LOAN:
