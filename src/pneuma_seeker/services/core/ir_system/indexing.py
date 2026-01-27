@@ -26,7 +26,8 @@ INDEXING_ENVIRONMENT = False
 INDEXING_TAG = False
 INDEXING_BUYSITE = False
 INDEXING_FEDERAL_STUDENT_LOAN = False
-INDEXING_CSAIL_STATA_NEUTRON = True
+INDEXING_CSAIL_STATA_NEUTRON = False
+INDEXING_DW = True
 
 
 config = Config("../../../../../.env")
@@ -113,6 +114,8 @@ if INDEXING_FEDERAL_STUDENT_LOAN:
     index_dataset("federal_student_loan", True)
 if INDEXING_CSAIL_STATA_NEUTRON:
     index_dataset("csail_stata_neutron", False)
+if INDEXING_DW:
+    index_dataset("dw", False)
 
 
 # Extra: Processing for TAG data
