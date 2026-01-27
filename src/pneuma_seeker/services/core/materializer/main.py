@@ -56,9 +56,7 @@ class Materializer:
 
         self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
-
         self.actions: list[str] = []
-        self.module_dir = os.path.dirname(os.path.abspath(__file__))
 
     def materialize_T(
         self,
@@ -991,7 +989,6 @@ class Materializer:
     def __save_new_or_updated_intermediate_table(self, table_id: str):
         """Save a new or updated intermediate table to a CSV file."""
         intermediate_table_dir_path = self._get_intermediate_table_dir_path()
-        os.makedirs(intermediate_table_dir_path, exist_ok=True)
         csv_path = os.path.join(intermediate_table_dir_path, f"{table_id}.csv")
         intermediate_table: DataFrame | None = None
         for table_doc in self.state.intermediate_tables:
@@ -1004,4 +1001,17 @@ class Materializer:
 
     def _get_intermediate_table_dir_path(self):
         """Get the directory path for storing intermediate table CSV files."""
-        return os.path.join(self.module_dir, "intermediate_data")
+        intermediate_table_dir_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "data_src",
+            "intermediate_data",
+            self.user_id,
+            self.chat_id,
+        )
+        os.makedirs(intermediate_table_dir_path, exist_ok=True)
+        return intermediate_table_dir_path
