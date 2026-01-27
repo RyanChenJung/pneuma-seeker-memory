@@ -1,0 +1,10 @@
+physical_network,vlan_id,allocated
+trunk,2112,0
+trunk,2114,0
+trunk,9,1
+trunk,2001,1
+trunk,2002,1
+trunk,2052,1
+trunk,2113,1
+trunk,2123,1
+trunk,3000,1
