@@ -27,7 +27,8 @@ INDEXING_TAG = False
 INDEXING_BUYSITE = False
 INDEXING_FEDERAL_STUDENT_LOAN = False
 INDEXING_CSAIL_STATA_NEUTRON = False
-INDEXING_DW = True
+INDEXING_DW = False
+INDEXING_GEOQUERY = True
 
 
 config = Config("../../../../../.env")
@@ -116,6 +117,8 @@ if INDEXING_CSAIL_STATA_NEUTRON:
     index_dataset("csail_stata_neutron", False)
 if INDEXING_DW:
     index_dataset("dw", False)
+if INDEXING_GEOQUERY:
+    index_dataset("geoquery", False)
 
 
 # Extra: Processing for TAG data
