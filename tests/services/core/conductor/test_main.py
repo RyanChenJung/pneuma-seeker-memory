@@ -2,6 +2,8 @@
 import logging
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
@@ -12,44 +14,33 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+from pneuma_seeker.provenance.graph import ProvenanceGraph
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+from pneuma_seeker.services.core.conductor.main import Conductor
+from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
     Text,
 )
-from pneuma_seeker.services.language_model.impl.mock_embed_model import MockEmbedModel
-from pneuma_seeker.services.language_model.impl.mock_llm import MockLLM
-from pneuma_seeker.provenance.graph import ProvenanceGraph
-from pneuma_seeker.shared.config import Config
 
 
 class ConductorTests(unittest.TestCase):
     def setUp(self):
-        import pneuma_seeker.services.core.conductor.main as conductor_mod
-
         config = Config(".env.test")
         config.ENABLE_WEB_SEARCH = True
         config.ENABLE_WEB_CRAWL = True
+        config.LLM_PATH = "mock"
+        config.EMBED_MODEL_PATH = "mock"
 
         self.logger = logging.getLogger("test_conductor")
         self.logger.setLevel(logging.ERROR)
 
-        self.mock_llm = MockLLM(config, self.logger)
-        self.mock_embed_model = MockEmbedModel()
-        self.patcher_get_llm = patch.object(
-            conductor_mod, "get_llm", lambda *a, **k: (lambda p, c, l: self.mock_llm)
-        )
-        self.patcher_get_embed = patch.object(
-            conductor_mod,
-            "get_embed_model",
-            lambda *a, **k: (lambda p, c, l: self.mock_embed_model),
-        )
-
-        self.patcher_get_llm.start()
-        self.patcher_get_embed.start()
-
-        from pneuma_seeker.services.core.conductor.main import Conductor
+        self.tmpdir = tempfile.mkdtemp()
+        dataset_db_path = Path(os.path.join(self.tmpdir, "datasets"))
+        workspace_db_path = Path(os.path.join(self.tmpdir, "workspaces"))
 
         self.conductor = Conductor(
             user_id="uX",
@@ -57,15 +48,21 @@ class ConductorTests(unittest.TestCase):
             config=config,
             logger=self.logger,
             prov_graph=ProvenanceGraph(self.logger),
-            db_api=MagicMock(),
-            language_model_api=MagicMock(),
+            db_api=DBAPI(
+                config,
+                self.logger,
+                dataset_db_path=str(dataset_db_path),
+                workspace_db_path=str(workspace_db_path),
+            ),
+            language_model_api=LanguageModelAPI(config, self.logger),
         )
 
     def tearDown(self):
         patch.stopall()
 
     def test_pneuma_retriever_updates_retrieved_tables(self):
-        self.mock_llm._responses = [
+        # set the queued responses on the underlying mock LLM instance
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"pneuma_retriever","args":{"prompt":"find tables"}},
             {"action":"communicate_with_user","message":"done"}
@@ -99,7 +96,7 @@ class ConductorTests(unittest.TestCase):
         )
 
     def test_web_search_sets_web_search_result(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"web_search","args":{"prompt":"web search query"}},
             {"action":"communicate_with_user","message":"web done"}
@@ -129,7 +126,7 @@ class ConductorTests(unittest.TestCase):
         )
 
     def test_web_crawl_sets_web_crawl_result(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"web_crawl","args":{"url":"http://example.com"}},
             {"action":"communicate_with_user","message":"web crawl done"}
@@ -162,7 +159,7 @@ class ConductorTests(unittest.TestCase):
         )
 
     def test_table_enumerator_updates_enumerated_ids(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"table_enumerator","args":{"pattern":"pattern"}},
             {"action":"communicate_with_user","message":"enum done"}
@@ -190,7 +187,7 @@ class ConductorTests(unittest.TestCase):
         self.assertIsInstance(self.conductor.enumerated_table_ids, list)
 
     def test_state_manipulation_sets_only_S(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"state_manipulation","args":{"S":"result = something"}},
             {"action":"communicate_with_user","message":"S set"}
@@ -212,7 +209,7 @@ class ConductorTests(unittest.TestCase):
         self.assertEqual(state.column_descriptions, {})
 
     def test_state_manipulation_sets_only_T(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}}}},
             {"action":"communicate_with_user","message":"T set"}
@@ -237,7 +234,7 @@ class ConductorTests(unittest.TestCase):
         self.assertFalse(state.is_S_executed)
 
     def test_state_manipulation_sets_S_and_T(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}},
             {"action":"communicate_with_user","message":"state done"}
@@ -262,7 +259,7 @@ class ConductorTests(unittest.TestCase):
         self.assertFalse(state.is_S_executed)
 
     def test_materializer_and_executor(self):
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}},
             {"action":"materializer","args":{"note":""}},
@@ -315,7 +312,7 @@ class ConductorTests(unittest.TestCase):
             )
         ]
 
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"column_info_extractor","args":{"id":"table1","columns":["A","B"]}},
             {"action":"communicate_with_user","message":"info provided"}
@@ -350,7 +347,7 @@ class ConductorTests(unittest.TestCase):
             return_value=[uploaded_table]
         )
 
-        self.mock_llm._responses = [
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
             {"action":"communicate_with_user","message":"External data read successfuly."}
         ]}"""

@@ -1,13 +1,18 @@
 from collections.abc import Generator
+from logging import Logger
 from typing import Optional
 
 from numpy import ndarray
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
+from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
 
 
 class MockEmbedModel(AbstractModel):
+    def __init__(self, config: Config, logger: Logger, **kwargs):
+        pass
+
     def load_model(self):
         """Loads the model's weight checkpoint."""
         pass
@@ -38,6 +43,3 @@ class MockEmbedModel(AbstractModel):
         embed_model_option: EmbeddingModelOption | None = None,
     ) -> ndarray:
         return ndarray(0)
-
-    def __init__(self):
-        pass

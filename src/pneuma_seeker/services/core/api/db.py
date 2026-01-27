@@ -9,7 +9,11 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.services.db.main import PneumaDB
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+)
 from pneuma_seeker.shared.schemas.db.table_type import TableType
 
 
@@ -18,10 +22,16 @@ class DBAPI:
     DBAPI communicates with DB Service for datasets and workspaces management.
     """
 
-    def __init__(self, config: Config, logger: Logger) -> None:
+    def __init__(
+        self,
+        config: Config,
+        logger: Logger,
+        dataset_db_path: str | None = None,
+        workspace_db_path: str | None = None,
+    ) -> None:
         self.config = config
         self.logger = logger
-        self.pneuma_db = PneumaDB(self.logger)
+        self.pneuma_db = PneumaDB(self.logger, dataset_db_path, workspace_db_path)
 
     # ------------------------------------------------------------------
     # Dataset Management (one .db per dataset)
@@ -282,7 +292,9 @@ class DBAPI:
 
             # Always re-fetch table from workspace DB
             content = self.execute_query(
-                user_id, chat_id, f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{T_id}";'
+                user_id,
+                chat_id,
+                f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{T_id}";',
             )
 
             if content is None:
@@ -313,7 +325,7 @@ class DBAPI:
             content = self.execute_query(
                 user_id,
                 chat_id,
-                f'SELECT * FROM "{self.config.DATA_SOURCES[0]}"."{doc["doc_id"]}";'
+                f'SELECT * FROM "{self.config.DATA_SOURCES[0]}"."{doc["doc_id"]}";',
             )
 
             retrieved_tables.append(
