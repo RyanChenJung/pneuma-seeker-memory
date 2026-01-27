@@ -17,7 +17,6 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
 from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.services.core.toolkit.main import Toolkit
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.services.language_model.model_factory import get_embed_model, get_llm
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json

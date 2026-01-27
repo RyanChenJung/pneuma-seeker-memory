@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
 
 import unittest
@@ -26,9 +26,16 @@ from pneuma_seeker.shared.config import Config
 
 class ConductorTests(unittest.TestCase):
     def setUp(self):
-        import pneuma_seeker.core.conductor.main as conductor_mod
+        import pneuma_seeker.services.core.conductor.main as conductor_mod
 
-        self.mock_llm = MockLLM()
+        config = Config(".env.test")
+        config.ENABLE_WEB_SEARCH = True
+        config.ENABLE_WEB_CRAWL = True
+
+        self.logger = logging.getLogger("test_conductor")
+        self.logger.setLevel(logging.ERROR)
+
+        self.mock_llm = MockLLM(config, self.logger)
         self.mock_embed_model = MockEmbedModel()
         self.patcher_get_llm = patch.object(
             conductor_mod, "get_llm", lambda *a, **k: (lambda p, c, l: self.mock_llm)
@@ -44,21 +51,14 @@ class ConductorTests(unittest.TestCase):
 
         from pneuma_seeker.services.core.conductor.main import Conductor
 
-        config = Config(".env.test")
-        config.ENABLE_WEB_SEARCH = True
-        config.ENABLE_WEB_CRAWL = True
-
-        self.logger = logging.getLogger("test_conductor")
-        self.logger.setLevel(logging.ERROR)
         self.conductor = Conductor(
-            llm_path="unused",
-            embed_model_path="unused",
-            logger=self.logger,
-            data_sources=[],
-            config=config,
-            prov_graph=ProvenanceGraph(self.logger),
             user_id="uX",
             chat_id="cX",
+            config=config,
+            logger=self.logger,
+            prov_graph=ProvenanceGraph(self.logger),
+            db_api=MagicMock(),
+            language_model_api=MagicMock(),
         )
 
     def tearDown(self):
