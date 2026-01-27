@@ -39,8 +39,20 @@ class Enumerator(AbstractRetriever):
         Retrieves a list of documents given a query, where the query is a regex pattern.
         """
         results: list[AbstractDocument] = []
-        for data_src in self.config.DATA_SOURCES:
-            dataset_path = f"../../data_src/{data_src}/dataset"
+        for dataset_name in self.config.DATA_SOURCES:
+            dataset_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "data_src",
+                dataset_name,
+                "dataset",
+            )
             all_table_paths = os.listdir(dataset_path)
             regex = re.compile(query)
             match_table_paths = [
@@ -59,7 +71,7 @@ class Enumerator(AbstractRetriever):
                         sample_size = 5
                     query_table += f" LIMIT {sample_size}"
                 with duckdb.connect(
-                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{data_src}.db")
+                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{dataset_name}.db")
                 ) as con:
                     actual_table = con.execute(query_table).fetchdf()
                 results.append(
