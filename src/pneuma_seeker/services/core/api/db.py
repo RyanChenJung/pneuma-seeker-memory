@@ -260,6 +260,8 @@ class DBAPI:
         Returns (info_need_state, retrieved_tables, enumerated_table_ids, provenance_graph).
         If no state is found, returns empty structures.
         """
+        self.link_dataset_tables(user_id, chat_id, self.config.DATA_SOURCES[0])
+
         state_data, retr_data, enumerated_table_ids, prov_data = (
             self.pneuma_db.load_state(user_id, chat_id)
         )
@@ -280,7 +282,7 @@ class DBAPI:
 
             # Always re-fetch table from workspace DB
             content = self.execute_query(
-                user_id, chat_id, f'SELECT * FROM "{T_id}";'
+                user_id, chat_id, f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{T_id}";'
             )
 
             if content is None:
@@ -306,8 +308,6 @@ class DBAPI:
 
         # ---- rebuild retrieved tables ----
         retrieved_tables: list[AbstractDocument] = []
-
-        self.link_dataset_tables(user_id, chat_id, self.config.DATA_SOURCES[0])
 
         for doc in retr_data:
             content = self.execute_query(

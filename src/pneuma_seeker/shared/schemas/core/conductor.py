@@ -1,6 +1,6 @@
 from enum import Enum
 
-from shared.schemas.core.ir_system import AbstractDocument
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 
 
 class InformationNeedState:
