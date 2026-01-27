@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch, Mock
+from unittest.mock import MagicMock, patch, Mock
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../src"))
@@ -18,7 +18,6 @@ class WebSearchTests(unittest.TestCase):
     def setUp(self):
         # Simple config object with a max char limit
         self.config = SimpleNamespace(WEB_CRAWL_MAX_CHARS=1000)
-        self.models = None
 
     def _mock_response(self, status_code=200, text=""):
         mock = Mock()
@@ -45,8 +44,8 @@ class WebSearchTests(unittest.TestCase):
         # session.get will be called twice: once for robots.txt, once for the page
         mock_get.side_effect = [robots_resp, page_resp]
 
-        crawler = WebCrawler(self.models, self.config)
-        results = crawler.retrieve("http://www.example.com", [], 1, False)
+        crawler = WebCrawler(self.config, MagicMock(), MagicMock())
+        results = crawler.retrieve("http://www.example.com", 1, False)
 
         # Should return a list with one Text document
         self.assertIsInstance(results, list)
@@ -67,12 +66,12 @@ class WebSearchTests(unittest.TestCase):
 
         mock_get.return_value = robots_resp
 
-        crawler = WebCrawler(self.config)
-        out = crawler.retrieve("http://www.example.com/anypath", [], 1)
+        crawler = WebCrawler(self.config, MagicMock(), MagicMock())
+        out = crawler.retrieve("http://www.example.com/anypath", 1, False)
 
         # When disallowed, retrieve returns a string error message
-        self.assertIsInstance(out, str)
-        self.assertIn("disallowed by robots.txt", out)
+        self.assertIsInstance(out[0], Text)
+        self.assertIn("disallowed by robots.txt", out[0].content)
 
 
 if __name__ == "__main__":
