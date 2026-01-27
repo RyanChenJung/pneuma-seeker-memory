@@ -6,6 +6,6 @@
     "idf_method": "lucene",
     "dtype": "float32",
     "int_dtype": "int32",
-    "num_docs": 110,
+    "num_docs": 88,
     "version": "0.1.10"
 }
