@@ -13,6 +13,11 @@ cd src/pneuma_seeker
 nohup fastapi dev main.py --host 0.0.0.0 --port 8000 >> main.out &
 ```
 
+Alternatively on MacOS,
+```bash
+fastapi dev main.py > main.out 2>&1
+```
+
 ## Extra: How to Run the ([UI](https://github.com/luthfibalaka/pneuma-seeker-ui/tree/stable-0.6.22))
 
 ```bash
