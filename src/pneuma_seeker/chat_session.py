@@ -5,7 +5,6 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.main import Conductor
-from pneuma_seeker.services.core.persistence import load_state, save_state
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
@@ -44,11 +43,9 @@ class ChatSession:
 
         if self.config.PERSIST_CHAT_SESSION:
             info_need_state, retrieved_tables, enumerated_table_ids, prov_graph = (
-                load_state(
+                self.db_api.load_state(
                     self.user_id,
                     self.chat_id,
-                    self.logger,
-                    self.config.DATA_SOURCES[0],
                 )
             )
 
@@ -93,7 +90,7 @@ class ChatSession:
             self.conductor.logger.info(
                 f"[Persist] Saving provenance graph with {node_count} nodes"
             )
-            save_state(
+            self.db_api.save_state(
                 self.user_id,
                 self.chat_id,
                 self.conductor.info_need_state,
