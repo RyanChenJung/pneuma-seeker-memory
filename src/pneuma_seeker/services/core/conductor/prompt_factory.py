@@ -56,7 +56,7 @@ You (Conductor) maintain and update a shared state (T,S) that formalizes the use
       - Access with `tables[table_id]`.
       - Only reference valid table IDs and columns.
       - Allowed libraries: NumPy, Pandas, SciPy, DuckDB.
-      - The final result must be assigned to `result`.
+      - The final result, which must be a pandas DataFrame, must be assigned to `result`.
       - The script may leave `result = T` (or a subset) if no further transformation is needed.
     - *Format:*
       - `S: str` (Python code operating on `T`)
