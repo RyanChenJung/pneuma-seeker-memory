@@ -100,7 +100,7 @@ class Materializer:
             curr_iteration += 1
 
             # Prevent forever loop in the worst-case scenario
-            if curr_iteration == self.config.MATERIALIZER_HARD_ITERATION_LIMIT:
+            if curr_iteration == self.config.MATERIALIZER_ITERATION_LIMIT:
                 break
 
             llm_messages.append(

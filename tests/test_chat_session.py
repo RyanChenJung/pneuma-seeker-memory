@@ -40,33 +40,29 @@ class ChatSessionTests(unittest.TestCase):
     def setUp(self) -> None:
         # Patch Conductor, load_state and save_state inside the chat_session module
         self._orig_conductor = getattr(chat_session_mod, "Conductor", None)
-        self._orig_load = getattr(chat_session_mod, "load_state", None)
-        self._orig_save = getattr(chat_session_mod, "save_state", None)
         self._orig_prov = getattr(chat_session_mod, "ProvenanceGraph", None)
 
         chat_session_mod.Conductor = DummyConductor
-        chat_session_mod.load_state = lambda user_id, chat_id, logger, src: (
-            {"state": "ok"},
-            [],
-            [],
-            types.SimpleNamespace(nodes={}),
-        )
-        chat_session_mod.save_state = MagicMock()
         chat_session_mod.ProvenanceGraph = lambda logger: types.SimpleNamespace()
 
         self.cfg = Config()
         self.logger = MagicMock()
         self.db_api = MagicMock()
         self.lm_api = MagicMock()
+        self.db_api.load_state = MagicMock(
+            return_value=(
+                {"state": "ok"},
+                [],
+                [],
+                types.SimpleNamespace(nodes={}),
+            )
+        )
+        self.db_api.save_state = MagicMock()
 
     def tearDown(self) -> None:
         # restore
         if self._orig_conductor is not None:
             chat_session_mod.Conductor = self._orig_conductor
-        if self._orig_load is not None:
-            chat_session_mod.load_state = self._orig_load
-        if self._orig_save is not None:
-            chat_session_mod.save_state = self._orig_save
         if self._orig_prov is not None:
             chat_session_mod.ProvenanceGraph = self._orig_prov
 
@@ -116,8 +112,8 @@ class ChatSessionTests(unittest.TestCase):
         cs.persist_session()
 
         # ensure save_state was called
-        self.assertTrue(chat_session_mod.save_state.called)
-        args = chat_session_mod.save_state.call_args[0]
+        self.assertTrue(self.db_api.save_state.called)
+        args = self.db_api.save_state.call_args[0]
         # expected args: user_id, chat_id, info_need_state, retrieved_tables, enumerated_table_ids, prov_graph
         self.assertEqual(args[0], "u2")
         self.assertEqual(args[1], "c2")

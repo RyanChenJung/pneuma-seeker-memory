@@ -18,21 +18,21 @@ class ModelFactoryTests(unittest.TestCase):
     def test_get_llm_returns_openai_by_default(self):
         cfg = Config()
         cfg.LLM_PATH = "gpt-4.1-mini"
-        cfg.USE_AZURE = False
+        cfg.USE_AZURE_LLM = False
         cls = model_factory.get_llm(cfg)
         self.assertIs(cls, OpenAILLM)
 
     def test_get_llm_returns_azure_when_use_azure_true(self):
         cfg = Config()
         cfg.LLM_PATH = "o4-something"
-        cfg.USE_AZURE = True
+        cfg.USE_AZURE_LLM = True
         cls = model_factory.get_llm(cfg)
         self.assertIs(cls, AzureOpenAILLM)
 
     def test_get_llm_raises_for_unknown(self):
         cfg = Config()
         cfg.LLM_PATH = "some-unsupported-model"
-        cfg.USE_AZURE = False
+        cfg.USE_AZURE_LLM = False
         with self.assertRaises(ValueError):
             model_factory.get_llm(cfg)
 

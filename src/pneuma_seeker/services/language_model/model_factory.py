@@ -23,7 +23,7 @@ def get_llm(config: Config) -> Type[AbstractModel]:
         or "o3" in normalized_model_path
         or "o4" in normalized_model_path
     ):
-        if config.USE_AZURE:
+        if config.USE_AZURE_LLM:
             return AzureOpenAILLM
         return OpenAILLM
     elif "mock" in normalized_model_path:
@@ -38,7 +38,7 @@ def get_embed_model(config: Config) -> Type[AbstractModel]:
     """Factory function to return the correct embedding model class."""
     normalized_model_path = config.EMBED_MODEL_PATH.lower()
     if "text-embedding-3-small" in normalized_model_path:
-        if config.USE_AZURE:
+        if config.USE_AZURE_EMBED_MODEL:
             return AzureOpenAIEmbedModel
         return OpenAIEmbedModel
     elif "mock" in normalized_model_path:
