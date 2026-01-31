@@ -261,7 +261,7 @@ class ConductorTests(unittest.TestCase):
     def test_materializer_and_executor(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             """{"plan": [
-            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = something"}},
+            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = pd.DataFrame({'sum': [tables['t1']['a'].sum()]})"}},
             {"action":"materializer","args":{"note":""}},
             {"action":"executor","args":{}},
             {"action":"communicate_with_user","message":"materialization and execution done"}

@@ -16,7 +16,7 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
 from pneuma_seeker.services.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.services.core.materializer.state import MaterializerState
 from pneuma_seeker.services.core.toolkit.main import Toolkit
-from pneuma_seeker.services.core.toolkit.semantic_operator import SyntacticSimMetric
+from pneuma_seeker.services.core.toolkit.tools.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
@@ -720,10 +720,8 @@ class Materializer:
                     id_docs[table_doc.doc_id] = table_doc
 
                 python_code: str = parse_code(op_args.get("code", ""))
-                python_executor_output = self.toolkit.execute_code(id_dfs, python_code)
-
-                exec_res = python_executor_output["exec_res"]
-                used_table_ids = python_executor_output["used_table_ids"]
+                exec_res = self.toolkit.execute_code(id_dfs, python_code)
+                used_table_ids = self.toolkit.extract_table_ids(python_code)
 
                 used_table_retrievers: list[RetrieverType] = []
                 parent_nodes: list[ProvenanceNode] = []
@@ -737,7 +735,7 @@ class Materializer:
                     if parent_node is not None:
                         parent_nodes.append(parent_node)
 
-                if isinstance(exec_res, DataFrame):
+                try:
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
                         python_code=self.toolkit.append_comment_to_existing_code(
@@ -778,41 +776,21 @@ class Materializer:
                     success_msg = f"Successfully executed the Python code, resulting in a table named {assign_to}"
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
-                elif isinstance(exec_res, Exception):
+                except Exception as exception:
                     self.__log(
-                        f"==> Exception occured during Python code execution: {exec_res}"
+                        f"==> Exception occured during Python code execution: {exception}"
                     )
                     diagnose_messages = [
                         LLMMessage(
                             role=Role.SYSTEM.value,
                             content=self.prompt_factory.get_fix_python_prompt(
-                                python_code, id_dfs, exec_res
+                                python_code, id_dfs, exception
                             ),
                         )
                     ]
-                    feedback = self.llm.chat(diagnose_messages)
+                    feedback = self.language_model_api.chat(diagnose_messages)
                     feedback = "".join(feedback)
                     self.actions.append(feedback)
-                else:
-                    if exec_res is None:
-                        error_msg = "The `result` variable is empty, which means the Python code did not assign the outcome (e.g., table) to the variable `result`."
-                        self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
-                    else:
-                        success_msg = f"Successfully executed the Python code, resulting in this: {exec_res}"
-                        self.__log(f"==> {success_msg}")
-                        self.actions.append(success_msg)
-                        new_node = ProvenanceNode(
-                            source_retriever=RetrieverType.MATERIALIZER,
-                            python_code=self.toolkit.append_comment_to_existing_code(
-                                python_code,
-                                "The execution did not result in a DataFrame, but something else.",
-                            ),
-                            description="Executes Python code.",
-                        )
-                        self.prov_graph.add_node(new_node, True)
-                        for parent_node in parent_nodes:
-                            self.prov_graph.connect(parent_node, new_node)
             case "sql_executor":
                 try:
                     sql_query: str = op_args["sql_query"]

@@ -8,9 +8,9 @@ from pneuma_seeker.shared.config import Config
 
 
 class AbstractTool(ABC):
-    @abstractmethod
     def __init__(self, config: Config, logger: Logger, **kwargs):
-        pass
+        self.config = config
+        self.logger = logger
 
     @abstractmethod
     def get_tool_name(self) -> str:

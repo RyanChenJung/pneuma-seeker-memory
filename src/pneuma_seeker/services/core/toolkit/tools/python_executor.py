@@ -1,41 +1,57 @@
 import ast
 import re
 from typing import Any
+
 import numpy as np
 import pandas as pd
 
-from logging import Logger
-
+from pneuma_seeker.services.core.toolkit.tools.abstract_tool import AbstractTool
+from pneuma_seeker.services.core.toolkit.tools.tool_names import ToolNames
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 
 
-class PythonExecutor:
+class PythonExecutor(AbstractTool):
     """
     Executes Python code snippets within a controlled environment,
     tracking used tables and integrating with the provenance graph.
     """
 
-    def __init__(self, logger: Logger) -> None:
-        self.logger = logger
+    def get_tool_name(self) -> str:
+        """Returns the name of the tool."""
+        return ToolNames.PYTHON_EXECUTOR.value
 
-    def execute_code(
+    def get_tool_description(self) -> str:
+        """Returns the description of the tool."""
+        return """Executes Python code snippets with access to pandas and numpy, returning results (DataFrame) and tracking used tables."""
+
+    def execute(
         self,
-        tables: dict[str, pd.DataFrame],
-        code: str,
-    ) -> dict[str, Any]:
-        """Executes the provided Python code in a controlled environment."""
-        self.logger.info(f"Executing this Python code: {code}")
-        try:
-            env = {"pd": pd, "np": np, "re": re, "tables": tables}
-            exec(code, env)
-        except Exception as e:
-            return {"exec_res": e, "used_table_ids": []}
-        return {
-            "exec_res": env.get("result", None),
-            "used_table_ids": self.__extract_table_ids(code),
-        }
+        tool_input: dict[str, Any],
+    ) -> pd.DataFrame:
+        """Executes the tool with the given input and returns the output."""
+        tables = tool_input.get("tables", {})
+        code = tool_input.get("code")
 
-    def __extract_table_ids(self, code: str):
+        if not isinstance(tables, dict) or not all(
+            isinstance(v, pd.DataFrame) for v in tables.values()
+        ):
+            raise ValueError("Input 'tables' must be a dictionary of DataFrames.")
+        if not isinstance(code, str):
+            raise ValueError("Input 'code' must be a string.")
+
+        env = {"pd": pd, "np": np, "re": re, "tables": tables}
+        exec(code, env)
+
+        print(f"env after exec: {env.keys()}")
+
+        if "result" not in env:
+            raise ValueError("Executed code did not set a 'result' variable.")
+        if not isinstance(env.get("result"), pd.DataFrame):
+            raise ValueError("The 'result' variable must be a pandas DataFrame.")
+
+        return env["result"]
+
+    def extract_table_ids(self, code: str):
         """Extracts table IDs accessed in the code by parsing 'tables[...]' subscripts."""
         tree = ast.parse(code)
         ids = []

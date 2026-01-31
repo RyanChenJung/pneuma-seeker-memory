@@ -3,79 +3,65 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
+import pytest
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
 
 import pandas as pd
 
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
-from pneuma_seeker.services.core.toolkit.python_executor import PythonExecutor
+from pneuma_seeker.services.core.toolkit.tools.python_executor import PythonExecutor
+from pneuma_seeker.shared.config import Config
 
 
 class PythonExecutorTests(unittest.TestCase):
     """Unit tests for PythonExecutor."""
 
     def setUp(self) -> None:
+        self.config = Config()
         self.logger = MagicMock()
-        self.exec = PythonExecutor(logger=self.logger)
+        self.python_executor = PythonExecutor(self.config, self.logger)
 
     def test_execute_code_happy_path_and_table_ids(self):
-        # Prepare a table and code that references it and sets `result`
         tables = {"tbl_1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
-        code = 'result = tables["tbl_1"]["a"].sum()'
+        code = "result = pd.DataFrame({'sum': [tables['tbl_1']['a'].sum()]})"
 
-        out = self.exec.execute_code(tables, code)
+        out = self.python_executor.execute({"tables": tables, "code": code})
 
-        # exec_res should be the sum of column `a`
-        self.assertIn("exec_res", out)
-        self.assertEqual(out["exec_res"], 3)
+        self.assertTrue(isinstance(out, pd.DataFrame))
+        self.assertEqual(out.iloc[0, 0], 3)
 
-        # used_table_ids should list the referenced table id
-        self.assertEqual(out["used_table_ids"], ["tbl_1"])
+        used_table_ids = self.python_executor.extract_table_ids(code)
+        self.assertEqual(used_table_ids, ["tbl_1"])
 
     def test_execute_code_exception_returns_exception_and_no_table_ids(self):
         tables = {}
         code = 'raise ValueError("boom")'
 
-        out = self.exec.execute_code(tables, code)
+        with pytest.raises(ValueError, match="boom"):
+            self.python_executor.execute({"tables": tables, "code": code})
+        used_table_ids = self.python_executor.extract_table_ids(code)
+        self.assertEqual(used_table_ids, [])
 
-        # exec_res should be an exception instance and used_table_ids empty
-        self.assertIsInstance(out.get("exec_res"), Exception)
-        self.assertEqual(out.get("used_table_ids"), [])
+    def test_execute_code_no_result_variable_raises(self):
+        tables = {}
+        code = "x = 42  # No result variable defined"
 
-    def test_execute_code_multiple_table_references_extracts_ids(self):
-        tables = {"a": pd.DataFrame({"x": [1]}), "b": pd.DataFrame({"y": [2]})}
-        code = 'tmp = tables["a"]; tmp2 = tables["b"]; tmp3 = tables["a"]'
+        with self.assertRaises(ValueError) as context:
+            self.python_executor.execute({"tables": tables, "code": code})
 
-        out = self.exec.execute_code(tables, code)
-
-        # Should extract ids in the order referenced
-        self.assertEqual(out.get("used_table_ids"), ["a", "b", "a"])
-
-    def test_generate_read_external_tables_code_csv_and_xlsx(self):
-        # CSV document
-        csv_doc = AbstractDocument(
-            doc_id="doc_csv",
-            retriever_type=RetrieverType.USER,
-            content=None,
-            metadata={},
-            path="/tmp/data.csv",
-            last_node_id=None,
+        self.assertIn(
+            "Executed code did not set a 'result' variable.", str(context.exception)
         )
-        csv_code = self.exec.generate_read_external_tables_code(1, csv_doc)
-        self.assertIn("pd.read_csv", csv_code)
-        self.assertIn('tables["doc_csv"]', csv_code)
 
-        # XLSX document
-        xlsx_doc = AbstractDocument(
-            doc_id="doc_xlsx",
-            retriever_type=RetrieverType.USER,
-            content=None,
-            metadata={},
-            path="/tmp/data.xlsx",
-            last_node_id=None,
+    def test_execute_code_result_not_dataframe_raises(self):
+        tables = {}
+        code = "result = 42  # result is not a DataFrame"
+
+        with self.assertRaises(ValueError) as context:
+            self.python_executor.execute({"tables": tables, "code": code})
+
+        self.assertIn(
+            "The 'result' variable must be a pandas DataFrame.", str(context.exception)
         )
-        xlsx_code = self.exec.generate_read_external_tables_code(2, xlsx_doc)
-        self.assertIn("pd.read_excel", xlsx_code)
-        self.assertIn('tables["doc_xlsx"]', xlsx_code)

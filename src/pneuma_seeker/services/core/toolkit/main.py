@@ -11,12 +11,12 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     RetrieverType,
 )
 from pneuma_seeker.services.core.ir_system.main import IRSystem
-from pneuma_seeker.services.core.toolkit.python_executor import PythonExecutor
-from pneuma_seeker.services.core.toolkit.semantic_operator import (
+from pneuma_seeker.services.core.toolkit.tools.python_executor import PythonExecutor
+from pneuma_seeker.services.core.toolkit.tools.semantic_operator import (
     SemanticOperator,
     SyntacticSimMetric,
 )
-from pneuma_seeker.services.core.toolkit.sql_executor import SQLExecutor
+from pneuma_seeker.services.core.toolkit.tools.sql_executor import SQLExecutor
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
 
@@ -39,7 +39,7 @@ class Toolkit:
         self.ir_system = IRSystem(
             self.config, self.logger, self.db_api, self.language_model_api
         )
-        self.python_executor = PythonExecutor(self.logger)
+        self.python_executor = PythonExecutor(self.config, self.logger)
         self.sql_executor = SQLExecutor()
         self.semantic_operator = SemanticOperator(
             self.config, self.db_api, self.language_model_api
@@ -100,7 +100,10 @@ class Toolkit:
         return self.sql_executor.execute_sql(sql_query, tables)
 
     def execute_code(self, tables: dict[str, DataFrame], code: str):
-        return self.python_executor.execute_code(tables, code)
+        return self.python_executor.execute({"tables": tables, "code": code})
+    
+    def extract_table_ids(self, code: str) -> list[str]:
+        return self.python_executor.extract_table_ids(code)
 
     def semantic_join(
         self,

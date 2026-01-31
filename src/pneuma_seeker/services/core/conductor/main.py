@@ -8,7 +8,8 @@ import pandas as pd
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
-from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction, InformationNeedState, ToolExecutionStatus
+from pneuma_seeker.services.core.toolkit.tools.tool_names import ToolExecutionStatus
+from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction, InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
@@ -483,7 +484,6 @@ class Conductor:
             return success_msg, ToolExecutionStatus.SUCCESS
         if tool == "executor":
             self.__log("Executor called")
-            execution_result: str = ""
             if not self.info_need_state.is_T_materialized:
                 if len(self.info_need_state.T.keys()) > 0:
                     self.__log(
@@ -503,9 +503,9 @@ class Conductor:
             for t_id, i in self.info_need_state.T.items():
                 T_df[t_id] = i.content
 
-            execution_result = self.toolkit.python_executor.execute_code(
-                T_df, self.info_need_state.S
-            )["exec_res"]
+            execution_result = self.toolkit.python_executor.execute(
+                {"tables": T_df, "code": self.info_need_state.S}
+            )
             self.__log(f"Script (S) execution result: {execution_result}")
 
             self.info_need_state.is_S_executed = True
