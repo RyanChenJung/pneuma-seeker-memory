@@ -1,15 +1,15 @@
 import re
+from typing import Any
 
 import duckdb
 from pandas import DataFrame
 
-from pneuma_seeker.services.core.toolkit.data_model import ExecutorOutput
 
 
 class SQLExecutor:
     def execute_sql(
         self, sql_query: str, tables: dict[str, DataFrame]
-    ) -> ExecutorOutput:
+    ) -> dict[str, Any]:
         db = duckdb.connect(database=":memory:")
 
         # Clear previous tables

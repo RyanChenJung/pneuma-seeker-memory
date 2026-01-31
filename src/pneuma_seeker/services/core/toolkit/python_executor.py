@@ -6,7 +6,6 @@ import pandas as pd
 
 from logging import Logger
 
-from pneuma_seeker.services.core.toolkit.data_model import ExecutorOutput
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 
 
@@ -23,7 +22,7 @@ class PythonExecutor:
         self,
         tables: dict[str, pd.DataFrame],
         code: str,
-    ) -> ExecutorOutput:
+    ) -> dict[str, Any]:
         """Executes the provided Python code in a controlled environment."""
         self.logger.info(f"Executing this Python code: {code}")
         try:

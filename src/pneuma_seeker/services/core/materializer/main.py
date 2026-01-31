@@ -16,7 +16,7 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
 from pneuma_seeker.services.core.materializer.prompt_factory import MaterializerPromptFactory
 from pneuma_seeker.services.core.materializer.state import MaterializerState
 from pneuma_seeker.services.core.toolkit.main import Toolkit
-from pneuma_seeker.services.core.toolkit.implementations.semantic_operator import SyntacticSimMetric
+from pneuma_seeker.services.core.toolkit.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption

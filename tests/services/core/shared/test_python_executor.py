@@ -10,7 +10,7 @@ sys.path.insert(
 import pandas as pd
 
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
-from pneuma_seeker.services.core.toolkit.implementations.python_executor import PythonExecutor
+from pneuma_seeker.services.core.toolkit.python_executor import PythonExecutor
 
 
 class PythonExecutorTests(unittest.TestCase):
