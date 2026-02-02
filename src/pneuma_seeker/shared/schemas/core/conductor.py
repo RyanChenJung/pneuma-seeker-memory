@@ -58,14 +58,14 @@ Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
 
 
 
-class HumanConductorInteraction:
+class UserConductorInteraction:
     """
-    Keeps track of pairs of human input-Conductor (final) response for the input
+    Keeps track of pairs of user input-Conductor (final) response for the input
     """
 
-    def __init__(self, human_input: str, llm_response: str) -> None:
-        self.human_input = human_input
+    def __init__(self, user_input: str, llm_response: str) -> None:
+        self.user_input = user_input
         self.llm_response = llm_response
 
     def __str__(self) -> str:
-        return f"""{{"human input": {self.human_input}, "llm response": {self.llm_response}}}"""
+        return f"""{{"user input": {self.user_input}, "llm response": {self.llm_response}}}"""

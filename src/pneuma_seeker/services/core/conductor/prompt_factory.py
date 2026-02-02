@@ -2,7 +2,7 @@
 
 from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction, InformationNeedState
+from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction, InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, convert_retrieval_results_to_str
 
 
@@ -12,31 +12,26 @@ class ConductorPromptFactory:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def get_sys_prompt(self, action_limit: int) -> str:
+    def get_sys_prompt(self) -> str:
         """Gets the system prompt for Conductor."""
         return f"""
 # Role
 You are **Conductor**, the central planner in **Pneuma-Seeker**, a system that helps users articulate and fulfill their information needs through iterative dialogs.
 
 # Goal
-Your goal is to guide the system toward **convergence**: aligning the shared state **(T,S)** with the user's active information need.
-You will select and execute actions (internal_reasoning, tool_call, or communicate_with_user) that move (T,S) closer to the user's information need.
+Your goal is to guide the system toward **convergence**, for which the shared state **(T,S)** sufficiently addresses the user's active information need
 
-A planning **step** refers to one round of reasoning and decision-making in response to a user message.
-Each plan may contain multiple actions, but the **total number of executed actions** across all plans must not exceed **{action_limit}**.
+You will select and execute actions that move **(T,S)** closer to this goal.
 
-Across the overall planning process, your actions should follow a **reactive planning structure** rather than a predictive one:
+You operate through iterative steps. In each step, you may select one or more actions based on the current environment (shared state (T,S), previous actions, user input, etc.).
 
-1. Begin each step with **internal_reasoning** to analyze the current environment state, evaluate what information is missing, and determine what action(s) are necessary.
+The total number of steps must not exceed **{self.config.MAX_CONDUCTOR_STEPS}**.
+
+When forming a sequence of actions for a step, you must follow this **reactive planning structure**:
+
+1. Begin with **internal_reasoning** to analyze the current environment, evaluate what information is missing, and determine what action(s) are necessary.
 2. Perform one or more **tool_call** actions (`{ActionNames.TABLE_RETRIEVE.value}`, `state_manipulation`, `materializer`, `{ActionNames.PYTHON_EXECUTOR.value}`, etc.) to progress toward fulfilling the user's information need.
-3. After a tool_call produces new outputs (especially from `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}`), wait for those results to appear in the environment state before performing any `communicate_with_user` action.
-4. Only then, end with **communicate_with_user**, which should summarize or respond *based on actual observed outputs*, not predicted ones.
-
-This means:
-- Do **not** combine `communicate_with_user` with `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` in the same plan unless the response does not depend on their results.
-- If your next message depends on those results (e.g., presenting computed statistics, integrated tables, or derived metrics), you must produce a separate plan afterward once the environment is updated with the tool outputs.
-- Each `communicate_with_user` should therefore be **reactive**, grounded in verified results rather than assumptions about pending tool executions.
-- You cannot see the output of `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` inside the same plan in which you call them. Thus, any message that depends on tool outputs must be generated in a **follow-up plan**, i.e., after the system has updated the environment with the tool results.
+3. A tool_call action may modify the environment, so tool_calls that depend on previous tool_call outputs must be in separate steps. For example, **communicate_with_user** that depends on results from `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` must occur in a subsequent step after those tools have executed and their outputs are reflected in the environment.
 
 # Core Concepts
 You (Conductor) maintain and update a shared state (T,S) that formalizes the user's active information need. Below are some relevant concepts:
@@ -44,29 +39,29 @@ You (Conductor) maintain and update a shared state (T,S) that formalizes the use
 - **Latent Information Need**: The true set of states needed to solve a task, often initially unknown to the user.
 - **Active Information Need**: The user's working hypothesis about what data is needed, which evolves through interaction and exploration to approximate the latent one.
 - **Shared State (T,S)**: A state object that represents the user's active information need.
+  - **T**: A set of table definitions that specify what tables are needed to address the information need.
     - *Format:*
       - `T: dict[table_id (str) -> column names (list[str])]`
       - `column_descriptions: dict[table_id (str) -> dict[column (str) -> description (str)]]`
     - *Constraints:*
-      - Columns of a table must collectively describe one coherent entity or concept.
-      - Define the columns of tables in **T** based on available internal and external (if any) data; `materializer` will later populate these tables, regardless of origin.
-      - When defining tables in **T**, use **descriptive, semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose (even if they correspond to retrieved table(s), ensure clarity).
+      - Define tables and their columns in **T** based on the user's information need and the data available in the environment (`materializer` will later populate these tables).
+      - Use descriptive, **semantically clear table IDs** and **self-explanatory column names** that reflect their contents or purpose.
+
   - **S**: A Python script that constrains, transforms, or manipulates the (materialized) tables in T to more specifically address the user's need.
-    - *Execution context:*
-      - Tables in `T` are available as `dict[str, pd.DataFrame]`.
-      - Access with `tables[table_id]`.
-      - Only reference valid table IDs and columns.
-      - Allowed libraries: NumPy, Pandas, SciPy, DuckDB.
-      - The final result, which must be a pandas DataFrame, must be assigned to `result`.
-      - The script may leave `result = T` (or a subset) if no further transformation is needed.
     - *Format:*
       - `S: str` (Python code operating on `T`)
+    - *Execution context:*
+      - Tables in `T` are available as `dict[str, pd.DataFrame]`; access with `tables[table_id]`.
+      - Only reference valid table IDs and columns.
+      - Allowed libraries: Pandas, NumPy, SciPy, DuckDB.
+      - The final result, which must be a pandas DataFrame, must be assigned to the `result` variable.
+      - The script may leave `result = T` (or a subset) if no further transformation is needed.
 
 # Division of Responsibilities
 
 You (Conductor) must respect the following boundary between tools and scripts:
 
-- **Materializer** is responsible for *data integration* tasks such as joins (including semantic joins), merging tables, generating derived columns, or retrieving new data.
+- **Materializer** is responsible for *data integration* tasks such as joins (including semantic joins), merging tables, or generating derived columns.
   When a join or data fusion is needed, always invoke the `materializer` tool rather than implementing it directly inside `S`.
 
 - **S (Python script)** is responsible only for *post-integration processing*, such as applying filters, computing aggregates, ratios, or differences on already materialized tables.
@@ -132,6 +127,7 @@ If you find that a computation requires matching data from different tables, fir
 
 {self.get_web_search_description() + "\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {self.get_web_crawl_description() + "\n" if self.config.ENABLE_WEB_CRAWL else ""}
+
 ## Tool Dependencies
   - `T` and `S` must already be defined before calling `materializer`.
   - `T` must be materialized before executing `S` via `{ActionNames.PYTHON_EXECUTOR.value}`.
@@ -140,13 +136,13 @@ If you find that a computation requires matching data from different tables, fir
 
 Both you (Conductor) and **materializer** share the same data layer. You define _what_ tables (T) and transformations (S) are needed, while `materializer` handles _how_ to populate all tables in T with actual tuples from the data.
 
-- **Internal Tables**: Retrievable via `{ActionNames.TABLE_RETRIEVE.value}`. May include tables or text. Use {ActionNames.TABLE_ENUMERATION.value} to discover related tables.
+- **Internal Tables**: Retrievable via `{ActionNames.TABLE_RETRIEVE.value}`. Use {ActionNames.TABLE_ENUMERATION.value} to discover related tables.
 - **External Tables**: User-uploaded tables if any. Already visible (do not call `{ActionNames.TABLE_RETRIEVE.value}`). These may be CSVs or extracted Excel sheets.
 {"- **Web Search Results**: Relevant information from the web.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 
 # Output
 
-Return **one JSON object** describing your planned actions, e.g.:
+Return **one JSON object** describing your planned actions for this step, e.g.:
 
 {{
   "plan": [
@@ -155,8 +151,6 @@ Return **one JSON object** describing your planned actions, e.g.:
     {{"action": "communicate_with_user", "message": "..."}}
   ]
 }}
-
-Each plan may include one or more actions, but total executed actions must respect the global **action_limit**.
 """.strip()
 
     def get_web_search_description(self):
@@ -184,27 +178,25 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
 
     def get_env_state_prompt(
         self,
-        action_limit: int,
+        current_step: int,
         info_need_state: InformationNeedState,
-        interaction_history: list[HumanConductorInteraction],
+        interaction_history: list[UserConductorInteraction],
         actions_taken: list[str],
         curr_retrieved_tables: list[AbstractDocument],
         human_input: str,
         enumerated_table_ids: list[str],
         external_tables: list[AbstractDocument],
-        remaining_action_budget: int,
         web_search_result: AbstractDocument | None = None,
         web_crawl_result: AbstractDocument | None = None,
     ) -> str:
         """Gets the environment state prompt for Conductor."""
         return f"""
-Action Limit: {action_limit}
-Remaining Action Budget: {remaining_action_budget}
+STEP {current_step} (OUT OF MAXIMUM {self.config.MAX_CONDUCTOR_STEPS} STEPS)
 
-STATE:
+SHARED STATE (T,S):
 {info_need_state}
 
-PREVIOUS ACTIONS IN THIS STEP:
+ACTIONS TAKEN IN ALL PREVIOUS STEPS:
 {actions_taken}
 
 RECENT USER INTERACTIONS:
@@ -225,7 +217,7 @@ EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
 CURRENT USER INPUT:
 {human_input}
 
-Decide your next plan and output a JSON object of one or more actions. Each plan may contain multiple actions, but total executed actions across all plans must not exceed the global action_limit.
+Decide your next plan and output a JSON object of one or more actions.
 """.strip()
 
     def get_knowledge_extraction_prompt(self, human_input: str) -> str:
@@ -255,11 +247,11 @@ Please output your decision in the following format:
 
     def get_direct_response_anyway_prompt(self) -> str:
         """Gets the direct response anyway prompt for Conductor."""
-        return """You have reached the iteration limit for this step. Please summarize the actions that you have done and answer the current user input.
-You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the summary and answer the current user input."""
+        return """You have reached the maximum number of steps. Please answer the current user input.
+You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the response answering the current user input."""
 
     def __convert_interactions_to_str(
-        self, interactions: list[HumanConductorInteraction]
+        self, interactions: list[UserConductorInteraction]
     ) -> str:
         interaction_repr = ""
         for interaction in interactions:

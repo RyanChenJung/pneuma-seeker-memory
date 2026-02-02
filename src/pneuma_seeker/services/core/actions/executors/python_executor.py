@@ -2,8 +2,10 @@ import ast
 import re
 from typing import Any
 
+import duckdb
 import numpy as np
 import pandas as pd
+import scipy
 
 from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.services.core.actions.interfaces.action import Action
@@ -22,7 +24,7 @@ class PythonExecutor(Action, Executable):
 
     def get_description(self) -> str:
         """Returns the description of the tool."""
-        return """Executes Python code snippets with access to pandas and numpy, returning results (DataFrame) and tracking used tables."""
+        return """Executes Python code snippets with access to pandas, numpy, duckdb, and scipy, returning results (DataFrame) and tracking used tables."""
 
     def get_input_schema(self) -> dict[str, str]:
         """Returns the input schema of the tool."""
@@ -30,7 +32,7 @@ class PythonExecutor(Action, Executable):
             "tables": "A dictionary mapping table IDs to pandas DataFrames.",
             "code": "A string containing the Python code to execute. The code should use the 'tables' dictionary to access DataFrames and must set a variable 'result' as the output DataFrame.",
         }
-    
+
     def get_notes(self) -> str:
         """Returns additional notes about the tool."""
         return "The executed code must define a variable 'result' containing the output DataFrame."
@@ -49,7 +51,14 @@ class PythonExecutor(Action, Executable):
         if not isinstance(code, str):
             raise ValueError("Input 'code' must be a string.")
 
-        env = {"pd": pd, "np": np, "re": re, "tables": tables}
+        env = {
+            "pd": pd,
+            "np": np,
+            "re": re,
+            "tables": tables,
+            "duckdb": duckdb,
+            "scipy": scipy,
+        }
         exec(code, env)
 
         if "result" not in env:

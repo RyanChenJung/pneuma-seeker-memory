@@ -6,7 +6,7 @@ from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.main import Conductor
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction
+from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 
@@ -61,14 +61,14 @@ class ChatSession:
     ):
         """Processes chat messages and yields responses from the Conductor."""
         external_data_paths = external_data_paths or []
-        interaction_history: list[HumanConductorInteraction] = []
+        interaction_history: list[UserConductorInteraction] = []
         for i in range(0, len(messages) - 1, 2):
             if (
                 messages[i]["role"] == Role.USER.value
                 and messages[i + 1]["role"] == Role.ASSISTANT.value
             ):
                 interaction_history.append(
-                    HumanConductorInteraction(
+                    UserConductorInteraction(
                         messages[i]["content"],
                         messages[i + 1]["content"],
                     )

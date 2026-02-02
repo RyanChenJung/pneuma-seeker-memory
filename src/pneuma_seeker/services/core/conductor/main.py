@@ -16,7 +16,7 @@ from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json
 from pneuma_seeker.shared.schemas.core.conductor import (
-    HumanConductorInteraction,
+    UserConductorInteraction,
     InformationNeedState,
 )
 from pneuma_seeker.shared.schemas.core.ir_system import (
@@ -108,7 +108,7 @@ class Conductor:
     def chat(
         self,
         user_input: str,
-        interaction_history: list[HumanConductorInteraction],
+        interaction_history: list[UserConductorInteraction],
         external_table_paths: list[str],
     ):
         """Processes user input and yields responses."""
@@ -136,31 +136,30 @@ class Conductor:
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
 
-        num_actions_taken = 0
         user_facing_response = ""
         is_user_facing_response = False
         actions_taken: list[str] = []
         llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
-                content=self.prompt_factory.get_sys_prompt(
-                    self.config.CONDUCTOR_ITERATION_LIMIT
-                ),
+                content=self.prompt_factory.get_sys_prompt(),
             )
         ]
+        current_step = 0
 
         while (
             not is_user_facing_response
-            and num_actions_taken < self.config.CONDUCTOR_ITERATION_LIMIT
+            and current_step < self.config.MAX_CONDUCTOR_STEPS
         ):
+            current_step += 1
             self.__log(
-                f"Asking the model to produce a sequence of actions (plan) (Total actions taken so far: {num_actions_taken}/{self.config.CONDUCTOR_ITERATION_LIMIT})..."
+                f"Asking the model to produce a sequence of actions (Current step: {current_step}/{self.config.MAX_CONDUCTOR_STEPS})..."
             )
             llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
-                        self.config.CONDUCTOR_ITERATION_LIMIT,
+                        current_step,
                         self.info_need_state,
                         interaction_history,
                         actions_taken,
@@ -168,7 +167,6 @@ class Conductor:
                         user_input,
                         self.enumerated_table_ids,
                         self.external_tables,
-                        self.config.CONDUCTOR_ITERATION_LIMIT - num_actions_taken,
                         self.web_search_result,
                         self.web_crawl_result,
                     ),
@@ -229,29 +227,16 @@ class Conductor:
                 ):
                     user_facing_response = action_message
                     is_user_facing_response = True
-                    num_actions_taken += 1
                 elif action_type == "internal_reasoning" and isinstance(
                     action_message, str
                 ):
                     yield "LOG: Reasoning internally..."
-                    if (
-                        num_actions_taken > 1
-                        and actions_taken[-1] == "internal_reasoning"
-                    ):
-                        llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content="You cannot select `internal_reasoning` consecutively. Please select a different action!",
-                            )
+                    llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=f"You did some internal reasoning: {action_message}",
                         )
-                    else:
-                        llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=f"You did some internal reasoning: {action_message}",
-                            )
-                        )
-                        num_actions_taken += 1
+                    )
                 elif args is not None:
                     tool = action_type
                     yield f"LOG: Calling tool: {tool}..."
@@ -261,8 +246,6 @@ class Conductor:
                     llm_messages.append(
                         LLMMessage(role=Role.USER.value, content=tool_outcome)
                     )
-                    if tool_execution_status == ActionExecutionStatus.SUCCESS:
-                        num_actions_taken += 1
 
         if not is_user_facing_response:
             self.__log("Force produce user-facing response")

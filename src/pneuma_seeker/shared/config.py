@@ -31,6 +31,7 @@ class Config:
         # System-Level Configurations
         self.DATA_SOURCES = ["buysite"]
         self.CONDUCTOR_ITERATION_LIMIT = int(getenv("CONDUCTOR_ITERATION_LIMIT", "7"))
+        self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "5"))
         self.MATERIALIZER_ITERATION_LIMIT = int(
             getenv("MATERIALIZER_ITERATION_LIMIT", "100")
         )
