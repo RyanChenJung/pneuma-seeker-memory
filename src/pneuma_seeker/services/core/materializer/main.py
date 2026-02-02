@@ -741,25 +741,25 @@ class Materializer:
                     id_dfs[table_doc.doc_id] = table_doc.content
                     id_docs[table_doc.doc_id] = table_doc
 
-                python_code: str = parse_code(op_args.get("code", ""))
-                exec_res = self.action_set.execute_code(id_dfs, python_code)
-                used_table_ids = self.action_set.extract_table_ids_from_code(
-                    python_code
-                )
-
-                used_table_retrievers: list[RetrieverType] = []
-                parent_nodes: list[ProvenanceNode] = []
-                for used_table_id in used_table_ids:
-                    used_table_retrievers.append(id_docs[used_table_id].retriever_type)
-
-                    used_table_doc = id_docs[used_table_id]
-                    parent_node = self.prov_graph.get_node_by_id(
-                        used_table_doc.last_node_id or ""
-                    )
-                    if parent_node is not None:
-                        parent_nodes.append(parent_node)
-
                 try:
+                    python_code: str = parse_code(op_args.get("code", ""))
+                    exec_res = self.action_set.execute_code(id_dfs, python_code)
+                    used_table_ids = self.action_set.extract_table_ids_from_code(
+                        python_code
+                    )
+
+                    used_table_retrievers: list[RetrieverType] = []
+                    parent_nodes: list[ProvenanceNode] = []
+                    for used_table_id in used_table_ids:
+                        used_table_retrievers.append(id_docs[used_table_id].retriever_type)
+
+                        used_table_doc = id_docs[used_table_id]
+                        parent_node = self.prov_graph.get_node_by_id(
+                            used_table_doc.last_node_id or ""
+                        )
+                        if parent_node is not None:
+                            parent_nodes.append(parent_node)
+
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
                         python_code=self.action_set.append_comment_to_existing_code(
@@ -804,17 +804,7 @@ class Materializer:
                     self.__log(
                         f"==> Exception occured during Python code execution: {exception}"
                     )
-                    diagnose_messages = [
-                        LLMMessage(
-                            role=Role.SYSTEM.value,
-                            content=self.prompt_factory.get_fix_python_prompt(
-                                python_code, id_dfs, exception
-                            ),
-                        )
-                    ]
-                    feedback = self.language_model_api.chat(diagnose_messages)
-                    feedback = "".join(feedback)
-                    self.actions.append(feedback)
+                    self.actions.append(str(exception))
             case ActionNames.SQL_EXECUTOR.value:
                 try:
                     sql_query: str = op_args["sql_query"]

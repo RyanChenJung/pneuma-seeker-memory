@@ -20,13 +20,12 @@ def get_operation_description(enable_web_search=False, enable_web_crawl=False) -
     - Example: {{"pattern": "^sales_\\d{4}$"}} will match all tables named like `sales_2020`, `sales_2021`, etc.
 
 - **{ActionNames.PYTHON_EXECUTOR.value}**
-    - Executes Python code to transform and/or combine data. Output is a new table (Pandas DataFrame).
+    - Executes Python code to transform and/or combine data. Output is a **SINGLE** new table (Pandas DataFrame).
     - All tables — whether internal, external, or intermediate — are available via `tables["<ID>"]` (Pandas DataFrame).
     - Never use `pd.read_csv`; tables are already provided in memory.
     - Pandas, NumPy, and SciPy are available for data manipulation (remember to add relevant import statements in the code if you need them).
-    - Common libraries like pandas and numpy are available for data manipulation (they are imported as pd and np, respectively), but to be safe, you can import it yourself in your code
     - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
-    - Make sure to assign the result, which must be a pandas DataFrame, to a variable named 'result'
+    - Make sure to assign the result, which must be a **SINGLE** pandas DataFrame, to a variable named 'result'
     - Args: {{"code": "<Python code string>"}}
 
 - **{ActionNames.TABLE_PROJECTION.value}**

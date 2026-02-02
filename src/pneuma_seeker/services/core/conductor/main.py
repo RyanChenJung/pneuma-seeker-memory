@@ -96,7 +96,7 @@ class Conductor:
             ActionNames.TABLE_RETRIEVE.value,
             ActionNames.TABLE_ENUMERATION.value,
             "state_manipulation",
-            "materializer",
+            ActionNames.MATERIALIZER.value,
             ActionNames.PYTHON_EXECUTOR.value,
             "column_info_extractor",
         ]
@@ -185,15 +185,18 @@ class Conductor:
             )
 
             try:
+                yield "LOG: Parsing plan..."
                 self.__log("==> Parsing plan...")
                 plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
                 for action_plan in plan:
                     if action_plan.get("action") is None:
-                        raise ValueError("Action specified is not valid.")
+                        error_msg = "Action specified is not valid (None)."
+                        self.__log(f"=> {error_msg}")
+                        raise ValueError(error_msg)
                     if action_plan.get("action") not in self.valid_actions:
-                        raise ValueError(
-                            f"The `action` must be one of the valid actions: {', '.join(self.valid_actions)}"
-                        )
+                        error_msg = f"Action specified is not valid: {action_plan.get('action')}"
+                        self.__log(f"=> {error_msg}")
+                        raise ValueError(error_msg)
                 self.__log("==> Plan parsed!")
             except Exception as exc:
                 self.__log(f"=> Unexpected error occurred: {exc}")
@@ -214,10 +217,12 @@ class Conductor:
                 args: None | dict = action_plan.get("args")
 
                 if action_type is None:
+                    error_msg = "Each action entry must have an `action` field specifying the action to take."
+                    self.__log(f"=> {error_msg}")
                     llm_messages.append(
                         LLMMessage(
                             role=Role.USER.value,
-                            content="Each action entry must have an `action` field specifying the action to take.",
+                            content=error_msg,
                         )
                     )
                     break
@@ -241,7 +246,7 @@ class Conductor:
                     tool = action_type
                     yield f"LOG: Calling tool: {tool}..."
                     tool_outcome, tool_execution_status = self.__execute_tool(
-                        tool, args, self.user_id, self.chat_id
+                        tool, args
                     )
                     llm_messages.append(
                         LLMMessage(role=Role.USER.value, content=tool_outcome)
@@ -262,20 +267,20 @@ class Conductor:
         yield user_facing_response
 
     def __execute_tool(
-        self, tool: str, args: str | dict, user_id: str, chat_id: str
+        self, tool: str, args: str | dict
     ) -> tuple[str, ActionExecutionStatus]:
         """Executes a specified tool with given arguments."""
         if tool == ActionNames.TABLE_RETRIEVE.value:
             self.__log(f"Table Retrieve request with params: {args}")
 
             if not isinstance(args, dict):
-                error_message = "=> `args` must be an object with a `prompt` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must be an object with a `prompt` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
             if "prompt" not in args:
-                error_message = "=> `args` must have a `prompt` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must have a `prompt` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             self.retrieved_tables = self.action_set.retrieve_documents(
                 args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
@@ -286,16 +291,16 @@ class Conductor:
                 success_msg,
                 ActionExecutionStatus.SUCCESS,
             )
-        if tool == "web_search" and self.config.ENABLE_WEB_SEARCH:
+        if tool == ActionNames.WEB_SEARCH.value and self.config.ENABLE_WEB_SEARCH:
             self.__log(f"Web Search request with params: {args}")
             if not isinstance(args, dict):
-                error_message = "=> `args` must be an object with a `prompt` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must be an object with a `prompt` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
             if "prompt" not in args:
-                error_message = "=> `args` must have a `prompt` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must have a `prompt` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             retrieved_docs = self.action_set.retrieve_documents(
                 args["prompt"], RetrieverType.WEB_SEARCH
@@ -312,16 +317,16 @@ class Conductor:
                 "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated.",
                 ActionExecutionStatus.SUCCESS,
             )
-        if tool == "web_crawl" and self.config.ENABLE_WEB_CRAWL:
+        if tool == ActionNames.WEB_CRAWL.value and self.config.ENABLE_WEB_CRAWL:
             self.__log(f"Web Crawl request with params: {args}")
             if not isinstance(args, dict):
-                error_message = "=> `args` must be an object with a `url` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must be an object with a `url` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
             if "url" not in args:
-                error_message = "=> `args` must have a `url` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "=> `args` must have a `url` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             retrieved_docs = self.action_set.retrieve_documents(
                 args["url"], RetrieverType.WEB_CRAWL
@@ -346,13 +351,13 @@ class Conductor:
             self.__log(f"Table Enumerator request with params: {args}")
 
             if not isinstance(args, dict):
-                error_message = "`args` must be an object with a `pattern` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "`args` must be an object with a `pattern` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
             if "pattern" not in args:
-                error_message = "`args` must have a `pattern` property"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "`args` must have a `pattern` property"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             enumerated_tables = self.action_set.retrieve_documents(
                 args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
@@ -368,9 +373,9 @@ class Conductor:
             self.__log(f"State Manipulation request with params: {args}")
 
             if not isinstance(args, dict):
-                error_message = "`args` must be an object"
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = "`args` must be an object"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             T: dict[str, list[str]] | None = args.get("T")
             column_descriptions: dict[str, dict[str, str]] | None = args.get(
@@ -387,8 +392,8 @@ class Conductor:
 
                         target_schema_path = os.path.join(
                             self.target_tables_path,
-                            user_id,
-                            chat_id,
+                            self.user_id,
+                            self.chat_id,
                             f"{schema_id}.csv",
                         )
                         os.makedirs(os.path.dirname(target_schema_path), exist_ok=True)
@@ -407,10 +412,10 @@ class Conductor:
                     self.info_need_state.is_T_materialized = False
                     is_T_modified = True
                 else:
-                    error_message = "If you want to change T, make sure to also define column_descriptions."
-                    self.__log(error_message)
+                    error_msg = "If you want to change T, make sure to also define column_descriptions."
+                    self.__log(error_msg)
                     return (
-                        error_message,
+                        error_msg,
                         ActionExecutionStatus.ERROR,
                     )
 
@@ -438,13 +443,13 @@ class Conductor:
             error_msg = "No modification is done."
             self.__log(error_msg)
             return error_msg, ActionExecutionStatus.ERROR
-        if tool == "materializer":
+        if tool == ActionNames.MATERIALIZER.value:
             if len(self.info_need_state.T.keys()) == 0:
-                error_message = (
+                error_msg = (
                     "T has to already be defined before calling Materializer"
                 )
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             note = ""
             if isinstance(args, dict) and "note" in args:
@@ -475,30 +480,36 @@ class Conductor:
                     self.__log(
                         f"=> Self-triggered materialization from calling {ActionNames.PYTHON_EXECUTOR.value}..."
                     )
-                    self.__execute_tool("materializer", {}, user_id, chat_id)
+                    self.__execute_tool(ActionNames.MATERIALIZER.value, {})
                 else:
-                    error_message = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
-                    self.__log(f"=> {error_message}")
-                    return error_message, ActionExecutionStatus.ERROR
+                    error_msg = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
             if len(self.info_need_state.S) == 0:
-                error_message = f"S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call {ActionNames.PYTHON_EXECUTOR.value} again."
-                self.__log(f"=> {error_message}")
-                return error_message, ActionExecutionStatus.ERROR
+                error_msg = f"S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call {ActionNames.PYTHON_EXECUTOR.value} again."
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
 
             T_df: dict[str, pd.DataFrame] = {}
             for t_id, i in self.info_need_state.T.items():
                 T_df[t_id] = i.content
 
-            execution_result = self.action_set.execute_code(
-                T_df, self.info_need_state.S
-            )
-            self.__log(f"Script (S) execution result: {execution_result}")
+            try:
+                execution_result = self.action_set.execute_code(
+                    T_df, self.info_need_state.S
+                )
+                self.__log(f"Script (S) execution result: {execution_result}")
 
-            self.info_need_state.is_S_executed = True
-            return (
-                f"Executed S, which resulted in this output: {execution_result}",
-                ActionExecutionStatus.SUCCESS,
-            )
+                self.info_need_state.is_S_executed = True
+                return (
+                    f"Executed S, which resulted in this output: {execution_result}",
+                    ActionExecutionStatus.SUCCESS,
+                )
+            except Exception as e:
+                error_msg = f"Error during script (S) execution: {e}"
+                self.__log(f"=> {error_msg}")
+                return error_msg, ActionExecutionStatus.ERROR
+
         if tool == "column_info_extractor":
             if isinstance(args, dict):
                 self.__log(f"Column Info Extractor request with params: {args}")
