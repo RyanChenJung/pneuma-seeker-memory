@@ -1,5 +1,6 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
 
+from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.conductor import HumanConductorInteraction, InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, convert_retrieval_results_to_str
@@ -27,15 +28,15 @@ Each plan may contain multiple actions, but the **total number of executed actio
 Across the overall planning process, your actions should follow a **reactive planning structure** rather than a predictive one:
 
 1. Begin each step with **internal_reasoning** to analyze the current environment state, evaluate what information is missing, and determine what action(s) are necessary.
-2. Perform one or more **tool_call** actions (`pneuma_retriever`, `state_manipulation`, `materializer`, `executor`, etc.) to progress toward fulfilling the user's information need.
-3. After a tool_call produces new outputs (especially from `materializer` or `executor`), wait for those results to appear in the environment state before performing any `communicate_with_user` action.
+2. Perform one or more **tool_call** actions (`{ActionNames.TABLE_RETRIEVE.value}`, `state_manipulation`, `materializer`, `{ActionNames.PYTHON_EXECUTOR.value}`, etc.) to progress toward fulfilling the user's information need.
+3. After a tool_call produces new outputs (especially from `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}`), wait for those results to appear in the environment state before performing any `communicate_with_user` action.
 4. Only then, end with **communicate_with_user**, which should summarize or respond *based on actual observed outputs*, not predicted ones.
 
 This means:
-- Do **not** combine `communicate_with_user` with `materializer` or `executor` in the same plan unless the response does not depend on their results.
+- Do **not** combine `communicate_with_user` with `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` in the same plan unless the response does not depend on their results.
 - If your next message depends on those results (e.g., presenting computed statistics, integrated tables, or derived metrics), you must produce a separate plan afterward once the environment is updated with the tool outputs.
 - Each `communicate_with_user` should therefore be **reactive**, grounded in verified results rather than assumptions about pending tool executions.
-- You cannot see the output of `materializer` or `executor` inside the same plan in which you call them. Thus, any message that depends on tool outputs must be generated in a **follow-up plan**, i.e., after the system has updated the environment with the tool results.
+- You cannot see the output of `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` inside the same plan in which you call them. Thus, any message that depends on tool outputs must be generated in a **follow-up plan**, i.e., after the system has updated the environment with the tool results.
 
 # Core Concepts
 You (Conductor) maintain and update a shared state (T,S) that formalizes the user's active information need. Below are some relevant concepts:
@@ -77,7 +78,7 @@ If you find that a computation requires matching data from different tables, fir
 
 ## Available Tools
 
-- **pneuma_retriever**:
+- **{ActionNames.TABLE_RETRIEVE.value}**:
   Retrieve internal tables.
   - **Args**: {{"prompt": "<retrieval query>"}}
   - **Notes**:
@@ -110,7 +111,7 @@ If you find that a computation requires matching data from different tables, fir
       - If a column requires semantic reasoning or external knowledge (e.g. classification, labeling, geographic lookup), mark it as (`semantically_derived`).
       - Unless well-defined, do not hardcode explicit lists or values of semantic columns inside the `note` argument; just describe their meaning.
 
-- **executor**:
+- **{ActionNames.PYTHON_EXECUTOR.value}**:
   Execute `S` on `T` to produce the final information that will be communicated to the user via `communicate_with_user`.
   - **Args**: {{}}
 
@@ -121,26 +122,26 @@ If you find that a computation requires matching data from different tables, fir
   - Categorical columns: returns the top-k most frequent values and includes a 'truncated (X values left)' indicator when more unique values exist.
   - **Args**: {{"id": "<retrieved_table_id>", "columns": ["col1", "col2"]}}
 
-- **table_enumerator**:
+- **{ActionNames.TABLE_ENUMERATION.value}**:
   List all available internal tables whose names match a regex pattern.
   - **Args**: {{"pattern": "<regex>"}}
   - **Notes**:
-    - May only be called after at least one table is retrieved with `pneuma_retriever`.
+    - May only be called after at least one table is retrieved with `{ActionNames.TABLE_RETRIEVE.value}`.
     - Returns names only (not data), but `materializer` will access the actual data.
-    - E.g., if `pneuma_retriever` retrieves a table named "topic_2020", you may call table_enumerator with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
+    - E.g., if `{ActionNames.TABLE_RETRIEVE.value}` retrieves a table named "topic_2020", you may call {ActionNames.TABLE_ENUMERATION.value} with {{"pattern": "topic_\\d{4}"}} to find "topic_2021", "topic_2022", etc.
 
 {self.get_web_search_description() + "\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {self.get_web_crawl_description() + "\n" if self.config.ENABLE_WEB_CRAWL else ""}
 ## Tool Dependencies
   - `T` and `S` must already be defined before calling `materializer`.
-  - `T` must be materialized before executing `S` via `executor`.
+  - `T` must be materialized before executing `S` via `{ActionNames.PYTHON_EXECUTOR.value}`.
 
 # Available Data
 
 Both you (Conductor) and **materializer** share the same data layer. You define _what_ tables (T) and transformations (S) are needed, while `materializer` handles _how_ to populate all tables in T with actual tuples from the data.
 
-- **Internal Tables**: Retrievable via `pneuma_retriever`. May include tables or text. Use `table_enumerator` to discover related tables.
-- **External Tables**: User-uploaded tables if any. Already visible (do not call `pneuma_retriever`). These may be CSVs or extracted Excel sheets.
+- **Internal Tables**: Retrievable via `{ActionNames.TABLE_RETRIEVE.value}`. May include tables or text. Use {ActionNames.TABLE_ENUMERATION.value} to discover related tables.
+- **External Tables**: User-uploaded tables if any. Already visible (do not call `{ActionNames.TABLE_RETRIEVE.value}`). These may be CSVs or extracted Excel sheets.
 {"- **Web Search Results**: Relevant information from the web.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 
 # Output

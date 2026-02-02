@@ -5,6 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
@@ -14,10 +15,11 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
+from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.materializer.main import Materializer
-from pneuma_seeker.services.core.toolkit.main import Toolkit
+from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table, Text
 
@@ -43,7 +45,7 @@ class MaterializerTests(unittest.TestCase):
         )
         self.lm_api = LanguageModelAPI(self.config, self.logger)
 
-        self.toolkit = Toolkit(
+        self.action_set = ActionSet(
             self.config,
             self.logger,
             self.prov_graph,
@@ -57,7 +59,7 @@ class MaterializerTests(unittest.TestCase):
             config=self.config,
             logger=self.logger,
             prov_graph=self.prov_graph,
-            toolkit=self.toolkit,
+            action_set=self.action_set,
             db_api=self.db_api,
             language_model_api=self.lm_api,
         )
@@ -65,10 +67,10 @@ class MaterializerTests(unittest.TestCase):
     def tearDown(self):
         patch.stopall()
 
-    def test_pneuma_retriever_and_table_select_materializes_T(self):
-        # LLM will ask to call pneuma_retriever then table_select to materialize t1
-        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+    def test_table_retrieve_and_table_projection_materializes_T(self):
+        # LLM will ask to call table_retrieve then table_projection to materialize t1
+        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
         self.lm_api.llm._responses = [plan1, plan2]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -79,8 +81,8 @@ class MaterializerTests(unittest.TestCase):
             metadata={},
         )
 
-        # First call to retrieve_documents returns the table for pneuma_retriever
-        self.toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
+        # First call to retrieve_documents returns the table for table_retrieve
+        self.action_set.retrieve_documents = MagicMock(return_value=[table_doc])
 
         # Define target T (schema only) so materializer knows it needs t1
         T = {"t1": pd.DataFrame(columns=["a", "b"])}
@@ -93,8 +95,8 @@ class MaterializerTests(unittest.TestCase):
         self.assertTrue(len(self.materializer.prov_graph.nodes) == 3)
         prov_graph_code_lines = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         self.assertEqual(
             "\n\n".join(prov_graph_code_lines),
@@ -102,12 +104,12 @@ class MaterializerTests(unittest.TestCase):
         )
 
     def test_web_search_sets_web_search_result(self):
-        # LLM will call pneuma_retriever, web_search, then table_select to finish
-        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
+        # LLM will call table_retrieve, web_search, then table_projection to finish
+        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
         plan2 = (
-            '{"action_type":"operation","name":"web_search","args":{"prompt":"query"}}'
+            f'{{"action_type":"operation","name":"{ActionNames.WEB_SEARCH.value}","args":{{"prompt":"query"}}}}'
         )
-        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
         self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -126,7 +128,7 @@ class MaterializerTests(unittest.TestCase):
         )
 
         # First call returns the table, second call returns the web result
-        self.toolkit.retrieve_documents = MagicMock(
+        self.action_set.retrieve_documents = MagicMock(
             side_effect=[[table_doc], [web_text]]
         )
 
@@ -148,15 +150,15 @@ class MaterializerTests(unittest.TestCase):
         self.assertTrue(len(self.materializer.prov_graph.nodes) == 4)
         prov_graph_code_lines_1 = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_view_textual_document_code(web_text),
-            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_view_textual_document_code(web_text),
+            self.action_set.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         prov_graph_code_lines_2 = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_view_textual_document_code(web_text),
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+            self.action_set.generate_view_textual_document_code(web_text),
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         self.assertIn(
             self.materializer.prov_graph.get_graph_code(),
@@ -167,10 +169,10 @@ class MaterializerTests(unittest.TestCase):
         )
 
     def test_web_crawl_sets_web_crawl_result(self):
-        # LLM will call pneuma_retriever, web_crawl, then table_select to finish
-        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"action_type":"operation","name":"web_crawl","args":{"url":"http://example.com"}}'
-        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b"]}}}'
+        # LLM will call table_retrieve, web_crawl, then table_projection to finish
+        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action_type":"operation","name":"{ActionNames.WEB_CRAWL.value}","args":{{"url":"http://example.com"}}}}'
+        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
         self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
@@ -189,7 +191,7 @@ class MaterializerTests(unittest.TestCase):
         )
 
         # First call returns the table, second call returns the web result
-        self.toolkit.retrieve_documents = MagicMock(
+        self.action_set.retrieve_documents = MagicMock(
             side_effect=[[table_doc], [web_text]]
         )
 
@@ -211,15 +213,15 @@ class MaterializerTests(unittest.TestCase):
         self.assertTrue(len(self.materializer.prov_graph.nodes) == 4)
         prov_graph_code_lines_1 = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_view_textual_document_code(web_text),
-            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_view_textual_document_code(web_text),
+            self.action_set.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         prov_graph_code_lines_2 = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_view_textual_document_code(web_text),
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_table_select_code("t1", "table_1", ["a", "b"]),
+            self.action_set.generate_view_textual_document_code(web_text),
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_table_select_code("t1", "table_1", ["a", "b"]),
         ]
         self.assertIn(
             self.materializer.prov_graph.get_graph_code(),
@@ -230,10 +232,10 @@ class MaterializerTests(unittest.TestCase):
         )
 
     def test_semantic_column_generator_adds_column(self):
-        # LLM will call pneuma_retriever, semantic_column_generator, then table_select
-        plan1 = '{"action_type":"operation","name":"pneuma_retriever","args":{"prompt":"find tables"}}'
-        plan2 = '{"action_type":"operation","name":"semantic_column_generator","args":{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}'
-        plan3 = '{"action_type":"operation","name":"table_select","args":{"t1":{"id":"table_1","columns":["a","b","newcol"]}}}'
+        # LLM will call table_retrieve, semantic_column_generator, then table_projection
+        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action_type":"operation","name":"{ActionNames.SEMANTIC_COLUMN_GENERATION.value}","args":{{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}}}'
+        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b","newcol"]}}}}}}'
         self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [10, 20]})
@@ -244,10 +246,12 @@ class MaterializerTests(unittest.TestCase):
             metadata={},
         )
 
-        self.toolkit.retrieve_documents = MagicMock(return_value=[table_doc])
+        self.action_set.retrieve_documents = MagicMock(return_value=[table_doc])
 
         # Mock generation of semantic column
-        self.toolkit.generate_semantic_column = MagicMock(return_value=[100, 200])
+        augmented_table = table_df.copy()
+        augmented_table["newcol"] = [100, 200]
+        self.action_set.generate_semantic_column = MagicMock(return_value=augmented_table)
 
         T = {"t1": pd.DataFrame(columns=["a", "b", "newcol"])}
 
@@ -261,8 +265,8 @@ class MaterializerTests(unittest.TestCase):
         self.assertTrue(len(self.materializer.prov_graph.nodes) == 4)
         prov_graph_code_lines_1 = [
             self.materializer.prov_graph.ROOT_NODE_CODE,
-            self.toolkit.generate_pandas_read_csv_code(table_doc),
-            self.toolkit.generate_semantic_col_generator_code(
+            self.action_set.generate_pandas_read_csv_code(table_doc),
+            self.action_set.generate_semantic_col_generator_code(
                 ["b"],
                 table_doc,
                 "newcol",
@@ -272,7 +276,7 @@ class MaterializerTests(unittest.TestCase):
                     f"{table_doc.doc_id}.csv",
                 ),
             ),
-            self.toolkit.generate_table_select_code(
+            self.action_set.generate_table_select_code(
                 "t1", "table_1", ["a", "b", "newcol"]
             ),
         ]

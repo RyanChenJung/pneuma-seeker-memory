@@ -5,6 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
@@ -15,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
+from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.main import Conductor
@@ -60,15 +62,15 @@ class ConductorTests(unittest.TestCase):
     def tearDown(self):
         patch.stopall()
 
-    def test_pneuma_retriever_updates_retrieved_tables(self):
+    def test_table_retrieve_updates_retrieved_tables(self):
         # set the queued responses on the underlying mock LLM instance
         self.conductor.language_model_api.llm._responses = [  # type: ignore
-            """{"plan": [
-            {"action":"pneuma_retriever","args":{"prompt":"find tables"}},
-            {"action":"communicate_with_user","message":"done"}
-        ]}"""
+            f"""{{"plan": [
+            {{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}},
+            {{"action":"communicate_with_user","message":"done"}}
+        ]}}"""
         ]
-        self.conductor.toolkit.retrieve_documents = MagicMock(
+        self.conductor.action_set.retrieve_documents = MagicMock(
             return_value=[
                 Table(
                     doc_id="table1",
@@ -97,12 +99,12 @@ class ConductorTests(unittest.TestCase):
 
     def test_web_search_sets_web_search_result(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
-            """{"plan": [
-            {"action":"web_search","args":{"prompt":"web search query"}},
-            {"action":"communicate_with_user","message":"web done"}
-        ]}"""
+            f"""{{"plan": [
+            {{"action":"{ActionNames.WEB_SEARCH.value}","args":{{"prompt":"web search query"}}}},
+            {{"action":"communicate_with_user","message":"web done"}}
+        ]}}"""
         ]
-        self.conductor.toolkit.retrieve_documents = MagicMock(
+        self.conductor.action_set.retrieve_documents = MagicMock(
             return_value=[
                 Text(
                     doc_id="web_result_1",
@@ -127,13 +129,13 @@ class ConductorTests(unittest.TestCase):
 
     def test_web_crawl_sets_web_crawl_result(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
-            """{"plan": [
-            {"action":"web_crawl","args":{"url":"http://example.com"}},
-            {"action":"communicate_with_user","message":"web crawl done"}
-        ]}"""
+            f"""{{"plan": [
+            {{"action":"{ActionNames.WEB_CRAWL.value}","args":{{"url":"http://example.com"}}}},
+            {{"action":"communicate_with_user","message":"web crawl done"}}
+        ]}}"""
         ]
 
-        self.conductor.toolkit.retrieve_documents = MagicMock(
+        self.conductor.action_set.retrieve_documents = MagicMock(
             return_value=[
                 Text(
                     doc_id="web_result_1",
@@ -160,13 +162,13 @@ class ConductorTests(unittest.TestCase):
 
     def test_table_enumerator_updates_enumerated_ids(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
-            """{"plan": [
-            {"action":"table_enumerator","args":{"pattern":"pattern"}},
-            {"action":"communicate_with_user","message":"enum done"}
-        ]}"""
+            f"""{{"plan": [
+            {{"action":"{ActionNames.TABLE_ENUMERATION.value}","args":{{"pattern":"pattern"}}}},
+            {{"action":"communicate_with_user","message":"enum done"}}
+        ]}}"""
         ]
 
-        self.conductor.toolkit.retrieve_documents = MagicMock(
+        self.conductor.action_set.retrieve_documents = MagicMock(
             return_value=[
                 Table(
                     doc_id="table1",
@@ -260,17 +262,17 @@ class ConductorTests(unittest.TestCase):
 
     def test_materializer_and_executor(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
-            """{"plan": [
-            {"action":"state_manipulation","args":{"T":{"t1":["a","b"]},"column_descriptions":{"t1":{"a":"col a"}},"S":"result = pd.DataFrame({'sum': [tables['t1']['a'].sum()]})"}},
-            {"action":"materializer","args":{"note":""}},
-            {"action":"executor","args":{}},
-            {"action":"communicate_with_user","message":"materialization and execution done"}
-        ]}"""
+            f"""{{"plan": [
+            {{"action":"state_manipulation","args":{{"T":{{"t1":["a","b"]}},"column_descriptions":{{"t1":{{"a":"col a"}}}},"S":"result = pd.DataFrame({{'sum': [tables['t1']['a'].sum()]}})"}}}},
+            {{"action":"materializer","args":{{"note":""}}}},
+            {{"action":"{ActionNames.PYTHON_EXECUTOR.value}","args":{{}}}},
+            {{"action":"communicate_with_user","message":"materialization and execution done"}}
+        ]}}"""
         ]
         self.conductor.materializer.materialize_T = MagicMock(
             return_value={"t1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
         )
-        self.conductor.toolkit.execute_code = MagicMock(
+        self.conductor.action_set.execute_code = MagicMock(
             return_value={
                 "exec_res": "ran:result = something",
                 "used_table_ids": ["t1"],
@@ -362,7 +364,7 @@ class ConductorTests(unittest.TestCase):
         self.assertTrue(len(self.conductor.prov_graph.nodes) == 2)
         prov_graph_code_lines = [
             self.conductor.prov_graph.ROOT_NODE_CODE,
-            self.conductor.toolkit.generate_read_external_tables_code(
+            self.conductor.action_set.generate_read_external_tables_code(
                 1, uploaded_table
             ),
         ]

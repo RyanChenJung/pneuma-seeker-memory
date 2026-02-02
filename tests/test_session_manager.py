@@ -41,7 +41,7 @@ class SessionManagerTests(unittest.TestCase):
         self.sm.get_chat_session("user1", "chat1")
         self.sm.get_chat_session("user1", "chat1")
 
-        self.assertEqual(cs_mock.call_count, 1)
+        self.assertEqual(cs_mock.call_count, 1) # type: ignore
 
     def tearDown(self) -> None:
         import pneuma_seeker.session_manager as sm_mod

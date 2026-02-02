@@ -6,12 +6,12 @@ from unittest.mock import MagicMock
 import pytest
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../src"))
 )
 
 import pandas as pd
 
-from pneuma_seeker.services.core.toolkit.tools.python_executor import PythonExecutor
+from pneuma_seeker.services.core.actions.executors.python_executor import PythonExecutor
 from pneuma_seeker.shared.config import Config
 
 
@@ -21,7 +21,11 @@ class PythonExecutorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = Config()
         self.logger = MagicMock()
-        self.python_executor = PythonExecutor(self.config, self.logger)
+        self.db_api = MagicMock()
+        self.lm_api = MagicMock()
+        self.python_executor = PythonExecutor(
+            self.config, self.logger, self.db_api, self.lm_api
+        )
 
     def test_execute_code_happy_path_and_table_ids(self):
         tables = {"tbl_1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}

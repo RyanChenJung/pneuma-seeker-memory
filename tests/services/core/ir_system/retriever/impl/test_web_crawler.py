@@ -1,8 +1,8 @@
 import os
 import sys
 import unittest
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, Mock
+
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../src"))
@@ -11,14 +11,16 @@ sys.path.insert(
 import requests
 
 from pneuma_seeker.services.core.ir_system.retriever.impl.web_crawler import WebCrawler
+from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Text
 
 
 class WebSearchTests(unittest.TestCase):
     def setUp(self):
         # Simple config object with a max char limit
-        self.config = SimpleNamespace(WEB_CRAWL_MAX_CHARS=1000)
-
+        self.config = Config()
+        self.config.WEB_CRAWL_MAX_CHARS = 1000
+        
     def _mock_response(self, status_code=200, text=""):
         mock = Mock()
         mock.status_code = status_code

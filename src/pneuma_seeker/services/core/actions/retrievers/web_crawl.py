@@ -1,0 +1,21 @@
+from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.services.core.actions.interfaces.action import Action
+
+
+class WebCrawl(Action):
+    def get_name(self) -> str:
+        return ActionNames.WEB_CRAWL.value
+
+    def get_description(self) -> str:
+        return "Crawls the web based on the input query."
+
+    def get_input_schema(self) -> dict[str, str]:
+        return {
+            "prompt": "The input query to crawl the web.",
+            "k": "The number of results to retrieve.",
+            "sample_only": "Whether to sample the results only.",
+            "sample_size": "The size of the sample if sample_only is True.",
+        }
+
+    def get_notes(self) -> str:
+        return "This action uses the IR system to crawl the web."

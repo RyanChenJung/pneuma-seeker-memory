@@ -6,6 +6,11 @@ from typing import Any
 
 from pandas import DataFrame
 
+from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.services.core.actions.main import ActionSet
+from pneuma_seeker.services.core.actions.operators.semantic_join import (
+    SyntacticSimMetric,
+)
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.shared.schemas.core.ir_system import (
@@ -13,10 +18,10 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     RetrieverType,
     Table,
 )
-from pneuma_seeker.services.core.materializer.prompt_factory import MaterializerPromptFactory
+from pneuma_seeker.services.core.materializer.prompt_factory import (
+    MaterializerPromptFactory,
+)
 from pneuma_seeker.services.core.materializer.state import MaterializerState
-from pneuma_seeker.services.core.toolkit.main import Toolkit
-from pneuma_seeker.services.core.toolkit.tools.semantic_operator import SyntacticSimMetric
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
@@ -39,7 +44,7 @@ class Materializer:
         config: Config,
         logger: Logger,
         prov_graph: ProvenanceGraph,
-        toolkit: Toolkit,
+        action_set: ActionSet,
         db_api: DBAPI,
         language_model_api: LanguageModelAPI,
     ):
@@ -48,11 +53,13 @@ class Materializer:
         self.config = config
         self.logger = logger
         self.prov_graph = prov_graph
-        self.toolkit = toolkit
+        self.action_set = action_set
         self.db_api = db_api
         self.language_model_api = language_model_api
 
-        self.__log(f"Initializing Materializer for user_id: {self.user_id}, chat_id: {self.chat_id}")
+        self.__log(
+            f"Initializing Materializer for user_id: {self.user_id}, chat_id: {self.chat_id}"
+        )
 
         self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
@@ -63,7 +70,7 @@ class Materializer:
         T: dict[str, DataFrame],
         column_descriptions: dict[str, dict[str, str]],
         S: str,
-        user_side_note="",
+        client_note="",
         external_tables: list[AbstractDocument] = [],
         prefetched_tables: list[AbstractDocument] = [],
         prefetched_web_search_result: AbstractDocument | None = None,
@@ -111,7 +118,7 @@ class Materializer:
                         list(self.state.intermediate_tables),
                         self.actions,
                         curr_iteration,
-                        user_side_note,
+                        client_note,
                         external_tables,
                         self.state.web_search_result,
                         self.state.web_crawl_result,
@@ -119,7 +126,9 @@ class Materializer:
                 )
             )
 
-            response = "".join(self.language_model_api.chat(llm_messages, LLMOption(json_mode=True)))
+            response = "".join(
+                self.language_model_api.chat(llm_messages, LLMOption(json_mode=True))
+            )
             self.__log(f"=> Materialization action selected: {response}")
 
             if response == prev_response:
@@ -243,9 +252,9 @@ class Materializer:
                 return None
 
         match op_name:
-            case "pneuma_retriever":
+            case ActionNames.TABLE_RETRIEVE.value:
                 prompt = op_args.get("prompt", "")
-                self.state.retrieved_tables = self.toolkit.retrieve_documents(
+                self.state.retrieved_tables = self.action_set.retrieve_documents(
                     prompt, RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 if len(self.state.retrieved_tables) == 0:
@@ -263,81 +272,83 @@ class Materializer:
                         node_id = _create_or_get_read_node(
                             doc,
                             RetrieverType.PNEUMA_RETRIEVER,
-                            self.toolkit.generate_pandas_read_csv_code(doc),
+                            self.action_set.generate_pandas_read_csv_code(doc),
                             "Retrieves an internal table from Pneuma-Retriever.",
                         )
                         if node_id is not None:
                             doc.last_node_id = node_id
-            case "web_search":
+            case ActionNames.WEB_SEARCH.value:
                 if not self.config.ENABLE_WEB_SEARCH:
-                    error_msg = "Web search is not enabled in the configuration."
+                    error_msg = f"{ActionNames.WEB_SEARCH.value} is not enabled in the configuration."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 prompt = op_args.get("prompt", "")
-                web_search_results = self.toolkit.retrieve_documents(
+                web_search_results = self.action_set.retrieve_documents(
                     prompt, RetrieverType.WEB_SEARCH
                 )
                 if len(web_search_results) == 0:
-                    error_msg = "No relevant information was found from web search."
+                    error_msg = f"No relevant information was found from {ActionNames.WEB_SEARCH.value}."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 self.state.web_search_result = web_search_results[0]
-                success_msg = f'Successfully retrieved information from Web Search using this prompt: ```{prompt}```. Notice that the "Web search result" have been filled.'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_SEARCH,
-                    python_code=self.toolkit.generate_view_textual_document_code(
+                    python_code=self.action_set.generate_view_textual_document_code(
                         self.state.web_search_result
                     ),
                     description=f"Searches the web using this query: {prompt}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
-            case "web_crawl":
+            case ActionNames.WEB_CRAWL.value:
                 if not self.config.ENABLE_WEB_CRAWL:
-                    error_msg = "Web crawl is not enabled in the configuration."
+                    error_msg = f"{ActionNames.WEB_CRAWL.value} is not enabled in the configuration."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 prompt = op_args.get("url", "")
-                web_crawl_results = self.toolkit.retrieve_documents(
+                web_crawl_results = self.action_set.retrieve_documents(
                     prompt, RetrieverType.WEB_CRAWL
                 )
                 if len(web_crawl_results) == 0:
-                    error_msg = "No relevant information was found from web crawl."
+                    error_msg = f"No relevant information was found from {ActionNames.WEB_CRAWL.value}."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                     return
                 self.state.web_crawl_result = web_crawl_results[0]
-                success_msg = f'Successfully retrieved information from Web Crawl using this URL: ```{prompt}```. Notice that the "Web crawl result" have been filled.'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_CRAWL.value} using this URL: ```{prompt}```. Notice that the "{ActionNames.WEB_CRAWL.value} result" have been filled.'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_CRAWL,
-                    python_code=self.toolkit.generate_view_textual_document_code(
+                    python_code=self.action_set.generate_view_textual_document_code(
                         self.state.web_crawl_result
                     ),
                     description=f"Crawls the web page with this URL: {prompt}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_crawl_result.last_node_id = new_node.id
-            case "table_enumerator":
+            case ActionNames.TABLE_ENUMERATION.value:
                 pattern = op_args.get("pattern", "")
-                extra_tables: list[AbstractDocument] = self.toolkit.retrieve_documents(
-                    pattern, RetrieverType.ENUMERATOR, 10, True, 5
+                extra_tables: list[AbstractDocument] = (
+                    self.action_set.retrieve_documents(
+                        pattern, RetrieverType.ENUMERATOR, 10, True, 5
+                    )
                 )
 
                 if len(extra_tables) > 0:
-                    success_msg = f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called pneuma_retriever before, as these tables have been included to "retrieved internal tables".'
+                    success_msg = f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called {ActionNames.TABLE_RETRIEVE.value} before, as these tables have been included to "retrieved internal tables".'
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
 
-                    read_code = self.toolkit.generate_pandas_read_multi_doc_code(
+                    read_code = self.action_set.generate_pandas_read_multi_doc_code(
                         extra_tables
                     )
                     new_node = ProvenanceNode(
@@ -365,8 +376,10 @@ class Materializer:
                     error_msg = "There are no tables that match the pattern."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
-            case "table_select":
+            case ActionNames.TABLE_PROJECTION.value:
+                all_table_doc_ids = [i.doc_id for i in all_tables]
                 for target_table_id, retrieved_table_info in op_args.items():
+                    # BEGIN INPUT VALIDATION
                     if isinstance(retrieved_table_info, list):
                         if len(retrieved_table_info) == 0:
                             msg = f"Skipping {target_table_id!r}: empty list provided as value."
@@ -381,100 +394,107 @@ class Materializer:
                         self.actions.append(msg)
                         continue
 
-                    table_id_to_select = str(retrieved_table_info.get("id", "")).strip()
-                    if table_id_to_select.startswith("Table "):
-                        table_id_to_select = table_id_to_select[6:].strip()
+                    table_id_to_project = str(retrieved_table_info.get("id", "")).strip()
+                    if table_id_to_project.startswith("Table "):
+                        table_id_to_project = table_id_to_project[6:].strip()
                     relevant_columns = retrieved_table_info.get("columns", [])
                     target_table_id = target_table_id.strip()
 
-                    all_table_doc_ids = [i.doc_id for i in all_tables]
-                    if table_id_to_select not in all_table_doc_ids:
+                    if table_id_to_project not in all_table_doc_ids:
                         error_msg = (
                             "Invalid table ID to select. Ensure the table exists."
                         )
                         self.__log(f"==> {error_msg}")
                         self.actions.append(error_msg)
                         return
-
-                    if target_table_id in T:
-                        matches = [
-                            i for i in all_tables if i.doc_id == table_id_to_select
-                        ]
-                        if not matches:
-                            error_msg = f"Table {table_id_to_select!r} not found in the available tables."
-                            self.__log(f"==> {error_msg}")
-                            self.actions.append(error_msg)
-                            return
-
-                        table_to_select_doc = matches[0]
-                        self.__log(
-                            f"==> target_table_id: {target_table_id}; table_id_to_select: {table_id_to_select}"
-                        )
-
-                        try:
-                            table_to_select: DataFrame = table_to_select_doc.content[
-                                relevant_columns
-                            ]
-                        except Exception as e:
-                            error_msg = f"Failed selecting columns {relevant_columns!r} from table {table_id_to_select!r}: {e}"
-                            self.__log(f"==> {error_msg}")
-                            self.actions.append(error_msg)
-                            return
-
-                        # Always create a materializer node representing the select operation
-                        select_code = self.toolkit.generate_table_select_code(
-                            target_table_id,
-                            table_to_select_doc.doc_id,
-                            relevant_columns,
-                        )
-
-                        # Try to create/get a read node for the source doc to connect from
-                        parent_node_id = _create_or_get_read_node(
-                            table_to_select_doc,
-                            table_to_select_doc.retriever_type,
-                            self.toolkit.generate_pandas_read_csv_code(
-                                table_to_select_doc
-                            ),
-                            "",
-                        )
-
-                        child_node_desc = f"Directly selects a table (ID: `{table_id_to_select}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
-                        if set(relevant_columns) != set(T[target_table_id].columns):
-                            child_node_desc += " (partially)."
-                        else:
-                            child_node_desc += "."
-
-                        child_node = ProvenanceNode(
-                            source_retriever=RetrieverType.MATERIALIZER,
-                            python_code=select_code,
-                            description=child_node_desc,
-                        )
-
-                        self.prov_graph.add_node(child_node, True)
-                        new_node_id = child_node.id
-                        if parent_node_id is not None:
-                            parent_node = self.prov_graph.get_node_by_id(parent_node_id)
-                            if parent_node is not None:
-                                self.prov_graph.connect(parent_node, child_node)
-
-                        self.state.add_intermediate_table(
-                            Table(
-                                doc_id=target_table_id,
-                                retriever_type=RetrieverType.MATERIALIZER,
-                                content=table_to_select,
-                                metadata={},
-                                last_node_id=new_node_id,
-                            )
-                        )
-                        self.__save_new_or_updated_intermediate_table(target_table_id)
-                        success_msg = "Successfully selected retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
-                        self.__log(f"==> {success_msg}")
-                        self.actions.append(success_msg)
-                    else:
-                        error_msg = f"Error: The ID {target_table_id} does not exist in T. Please fix it."
+                    
+                    if target_table_id not in T:
+                        error_msg = f"Error: The ID {target_table_id} does not exist in T."
                         self.__log(f"==> {error_msg}")
                         self.actions.append(error_msg)
-            case "semantic_column_generator":
+                        return
+
+                    matches = [
+                        i for i in all_tables if i.doc_id == table_id_to_project
+                    ]
+                    if not matches:
+                        error_msg = f"Table {table_id_to_project!r} not found in the available tables."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+
+                    table_to_project = matches[0].content
+                    if not isinstance(table_to_project, DataFrame):
+                        error_msg = f"Content of table {table_id_to_project!r} is not a valid DataFrame."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+                    # END INPUT VALIDATION
+
+                    self.__log(
+                        f"==> target_table_id: {target_table_id}; table_id_to_project: {table_id_to_project}"
+                    )
+
+                    try:
+                        projected_table = self.action_set.project_table(
+                            table_to_project, relevant_columns
+                        )
+                    except Exception as e:
+                        error_msg = f"Failed selecting columns {relevant_columns!r} from table {table_id_to_project!r}: {e}"
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+
+                    # Always create a materializer node representing the select operation
+                    select_code = self.action_set.generate_table_select_code(
+                        target_table_id,
+                        table_id_to_project,
+                        relevant_columns,
+                    )
+
+                    # Try to create/get a read node for the source doc to connect from
+                    parent_node_id = _create_or_get_read_node(
+                        matches[0],
+                        matches[0].retriever_type,
+                        self.action_set.generate_pandas_read_csv_code(
+                            matches[0]
+                        ),
+                        "",
+                    )
+
+                    child_node_desc = f"Directly selects a table (ID: `{table_id_to_project}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
+                    if set(relevant_columns) != set(T[target_table_id].columns):
+                        child_node_desc += " (partially)."
+                    else:
+                        child_node_desc += "."
+
+                    child_node = ProvenanceNode(
+                        source_retriever=RetrieverType.MATERIALIZER,
+                        python_code=select_code,
+                        description=child_node_desc,
+                    )
+
+                    self.prov_graph.add_node(child_node, True)
+                    new_node_id = child_node.id
+                    if parent_node_id is not None:
+                        parent_node = self.prov_graph.get_node_by_id(parent_node_id)
+                        if parent_node is not None:
+                            self.prov_graph.connect(parent_node, child_node)
+
+                    self.state.add_intermediate_table(
+                        Table(
+                            doc_id=target_table_id,
+                            retriever_type=RetrieverType.MATERIALIZER,
+                            content=projected_table,
+                            metadata={},
+                            last_node_id=new_node_id,
+                        )
+                    )
+                    self.__save_new_or_updated_intermediate_table(target_table_id)
+                    success_msg = "Successfully selected retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
+                    self.__log(f"==> {success_msg}")
+                    self.actions.append(success_msg)
+            case ActionNames.SEMANTIC_COLUMN_GENERATION.value:
                 table_id: str | None = op_args.get("table_id")
                 new_column_name: str | None = op_args.get("new_column_name")
                 table_relevant_columns: list[str] | None = op_args.get(
@@ -516,21 +536,21 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
 
-                new_column_values = self.toolkit.generate_semantic_column(
+                augmented_table = self.action_set.generate_semantic_column(
                     conditioned_table[table_relevant_columns],
                     new_column_name,
                     instruction,
                 )
-                conditioned_table[new_column_name] = new_column_values
+                conditioned_table_doc.content = augmented_table
                 success_msg = f"Successfully added a new column named {new_column_name} to table with ID {table_id}."
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
-                sem_col_code = self.toolkit.generate_semantic_col_generator_code(
+                sem_col_code = self.action_set.generate_semantic_col_generator_code(
                     table_relevant_columns,
                     conditioned_table_doc,
                     new_column_name,
-                    new_column_values,
+                    list(augmented_table[new_column_name]),
                     os.path.join(
                         self._get_intermediate_table_dir_path(),
                         f"{conditioned_table_doc.doc_id}.csv",
@@ -540,7 +560,9 @@ class Materializer:
                 parent_node_id = _create_or_get_read_node(
                     conditioned_table_doc,
                     conditioned_table_doc.retriever_type,
-                    self.toolkit.generate_pandas_read_csv_code(conditioned_table_doc),
+                    self.action_set.generate_pandas_read_csv_code(
+                        conditioned_table_doc
+                    ),
                     "",
                 )
 
@@ -559,7 +581,7 @@ class Materializer:
                 self.__save_new_or_updated_intermediate_table(
                     conditioned_table_doc.doc_id
                 )
-            case "semantic_join":
+            case ActionNames.SEMANTIC_JOIN.value:
                 left_table_id: str | None = op_args.get("left_table_id")
                 right_table_id: str | None = op_args.get("right_table_id")
                 relevant_left_cols: list[str] | None = op_args.get("relevant_left_cols")
@@ -651,7 +673,7 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
 
-                joined_table = self.toolkit.semantic_join(
+                joined_table = self.action_set.join_semantic(
                     left_table,
                     right_table,
                     relevant_left_cols,
@@ -660,7 +682,7 @@ class Materializer:
                     top_k=self.config.SEMANTIC_JOIN_TOP_K,
                 )
 
-                join_code = self.toolkit.generate_semantic_join_generator_code(
+                join_code = self.action_set.generate_semantic_join_generator_code(
                     left_table_doc,
                     right_table_doc,
                     relevant_left_cols,
@@ -674,13 +696,13 @@ class Materializer:
                 parent_node_1_id = _create_or_get_read_node(
                     left_table_doc,
                     left_table_doc.retriever_type,
-                    self.toolkit.generate_pandas_read_csv_code(left_table_doc),
+                    self.action_set.generate_pandas_read_csv_code(left_table_doc),
                     "",
                 )
                 parent_node_2_id = _create_or_get_read_node(
                     right_table_doc,
                     right_table_doc.retriever_type,
-                    self.toolkit.generate_pandas_read_csv_code(right_table_doc),
+                    self.action_set.generate_pandas_read_csv_code(right_table_doc),
                     "",
                 )
 
@@ -712,7 +734,7 @@ class Materializer:
                 success_msg = "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
-            case "python_executor":
+            case ActionNames.PYTHON_EXECUTOR.value:
                 id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
                 for table_doc in all_tables:
@@ -720,8 +742,10 @@ class Materializer:
                     id_docs[table_doc.doc_id] = table_doc
 
                 python_code: str = parse_code(op_args.get("code", ""))
-                exec_res = self.toolkit.execute_code(id_dfs, python_code)
-                used_table_ids = self.toolkit.extract_table_ids(python_code)
+                exec_res = self.action_set.execute_code(id_dfs, python_code)
+                used_table_ids = self.action_set.extract_table_ids_from_code(
+                    python_code
+                )
 
                 used_table_retrievers: list[RetrieverType] = []
                 parent_nodes: list[ProvenanceNode] = []
@@ -738,7 +762,7 @@ class Materializer:
                 try:
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
-                        python_code=self.toolkit.append_comment_to_existing_code(
+                        python_code=self.action_set.append_comment_to_existing_code(
                             python_code,
                             f"Result path: {os.path.join(
                                 self._get_intermediate_table_dir_path(),
@@ -791,7 +815,7 @@ class Materializer:
                     feedback = self.language_model_api.chat(diagnose_messages)
                     feedback = "".join(feedback)
                     self.actions.append(feedback)
-            case "sql_executor":
+            case ActionNames.SQL_EXECUTOR.value:
                 try:
                     sql_query: str = op_args["sql_query"]
                     self.logger.info(f"Executing this SQL query: {sql_query}")
@@ -801,10 +825,16 @@ class Materializer:
                     for doc in all_tables:
                         id_dfs[doc.doc_id] = doc.content
                         id_docs[doc.doc_id] = doc
-                    sql_executor_output = self.toolkit.execute_sql_df(sql_query, id_dfs)
+                    sql_executor_output = self.action_set.execute_sql_df(
+                        sql_query, id_dfs
+                    )
 
-                    exec_res: DataFrame = sql_executor_output["exec_res"]
-                    used_table_ids = sql_executor_output["used_table_ids"]
+                    exec_res: DataFrame = sql_executor_output
+                    used_table_ids = self.action_set.extract_table_ids_from_sql(
+                        sql_query
+                    )
+
+                    sql_executor_output["used_table_ids"]
 
                     source_retrievers: list[RetrieverType] = []
                     parent_nodes: list[ProvenanceNode] = []
@@ -819,7 +849,7 @@ class Materializer:
 
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
-                        python_code=self.toolkit.generate_sql_executor_code(
+                        python_code=self.action_set.generate_sql_executor_code(
                             sql_query,
                             id_dfs,
                             os.path.join(

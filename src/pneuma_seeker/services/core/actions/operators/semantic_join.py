@@ -2,18 +2,17 @@ from enum import Enum
 from typing import Any
 
 import numpy as np
-import pandas as pd
+from pandas import DataFrame
 from pyxdameraulevenshtein import damerau_levenshtein_distance
 from sklearn.feature_extraction.text import CountVectorizer
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
-from pneuma_seeker.services.core.api.db import DBAPI
-from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.language_model.abstract_model import AbstractModel
-from pneuma_seeker.shared.config import Config
+from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.services.core.actions.interfaces.action import Action
+from pneuma_seeker.services.core.actions.interfaces.applicable import Applicable
+from pneuma_seeker.shared.parser import augmented_literal_eval
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
-from pneuma_seeker.shared.parser import augmented_literal_eval
 
 
 class SyntacticSimMetric(Enum):
@@ -22,91 +21,77 @@ class SyntacticSimMetric(Enum):
     JACCARD_QGRAM = "Jaccard QGram"
 
 
-class SemanticOperator:
-    def __init__(
-        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
-    ) -> None:
-        self.config = config
-        self.db_api = db_api
-        self.language_model_api = language_model_api
+class SemanticJoin(Action, Applicable):
+    def get_name(self) -> str:
+        return ActionNames.SEMANTIC_JOIN.value
 
-    def generate_semantic_column(
-        self,
-        source_table: pd.DataFrame,
-        new_column_name: str,
-        instruction: str,  # Explanation includes the possible values, i.e., the domain
-    ) -> list[Any]:
+    def get_description(self) -> str:
+        return "Join two tables based on semantic similarity between specified columns."
+
+    def get_input_schema(self) -> dict[str, str]:
+        return {
+            "left_df": "Pandas DataFrame representing the left table.",
+            "right_df": "Pandas DataFrame representing the right table.",
+            "left_cols": "List of column names from left_df to use for semantic comparison.",
+            "right_cols": "List of column names from right_df to use for semantic comparison.",
+            "alpha": "Float (0 to 1) weighting cosine vs syntactic similarity (default=0.5).",
+            "top_k": "Integer number of best matches to keep per left row (default=3).",
+            "delimiter": "String delimiter used when concatenating text (default=' [SEP] ').",
+            "embed_batch_size": "Integer batch size for embedding calls (default=30).",
+            "syntactic_sim_metric": "Syntactic similarity metric to use: NONE, EDIT_DIST, or JACCARD_QGRAM (default=EDIT_DIST).",
+            "use_llm": "Boolean indicating whether to use LLM filtering for matches (default=False).",
+        }
+
+    def get_notes(self) -> str:
+        return """
+        This action performs a semantic join between two pandas DataFrames based on specified columns.
+        It computes semantic similarity using embeddings and optionally syntactic similarity metrics.
+        The result is a DataFrame containing joined rows along with their similarity scores.
         """
-        Produces a new semantically-induced column using the values from
-        `source_table` based on the specified instruction.
 
-        **Assumption**:
-            - All columns in the source table are relevant to get values of the new column
-              (meaning that the irrelevant columns have been removed)
-            - The instruction already includes the expected values
+    def apply(self, input: dict[str, Any]) -> DataFrame:
+        left_df: DataFrame | None = input.get("left_df")
+        right_df: DataFrame | None = input.get("right_df")
+        left_cols: list[str] | None = input.get("left_cols")
+        right_cols: list[str] | None = input.get("right_cols")
+        alpha: float = input.get("alpha", 0.5)
+        top_k: int = input.get("top_k", 3)
+        delimiter: str = input.get("delimiter", " [SEP] ")
+        embed_batch_size: int = input.get("embed_batch_size", 30)
+        syntactic_sim_metric: SyntacticSimMetric = input.get(
+            "syntactic_sim_metric", SyntacticSimMetric.EDIT_DIST
+        )
+        use_llm: bool = input.get("use_llm", False)
 
-        Parameters:
-            source_table: The table to generate a new column for.
-            new_column_name: The name of the new column.
-            instruction: The instruction for the LLM to produce values for the new column.
-        """
-        if len(source_table) == 0:
-            return []
+        if not isinstance(left_df, DataFrame):
+            raise ValueError("left_df must be a pandas DataFrame.")
+        if not isinstance(right_df, DataFrame):
+            raise ValueError("right_df must be a pandas DataFrame.")
+        if not isinstance(left_cols, list) or not all(
+            isinstance(c, str) for c in left_cols
+        ):
+            raise ValueError("left_cols must be a list of strings.")
+        if not isinstance(right_cols, list) or not all(
+            isinstance(c, str) for c in right_cols
+        ):
+            raise ValueError("right_cols must be a list of strings.")
+        return self.join(
+            left_df,
+            right_df,
+            left_cols,
+            right_cols,
+            alpha,
+            top_k,
+            delimiter,
+            embed_batch_size,
+            syntactic_sim_metric,
+            use_llm,
+        )
 
-        cached_values: dict[str, str] = {}
-        formatted_values = self.__format_values(source_table)
-
-        unique_values = list(dict.fromkeys(formatted_values))
-        for i in range(0, len(unique_values), self.config.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE):
-            batch = unique_values[i : i + self.config.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE]
-            encoded_prompt = [
-                LLMMessage(
-                    role=Role.SYSTEM.value,
-                    content="You are given a list of values from a table, and your task is to generate a new column. Output the values directly as a Python list of strings/integers/floats WITHOUT any extra formatting or explanation.",
-                ),
-                LLMMessage(
-                    role=Role.USER.value,
-                    content=f"User-defined instruction to form the new column named {new_column_name}: {instruction}",
-                ),
-                LLMMessage(
-                    role=Role.USER.value,
-                    content=f"Values to transform: {batch}",
-                ),
-            ]
-
-            raw_output = "".join(self.language_model_api.chat(encoded_prompt)).strip()
-            start = raw_output.find("[")
-            end = raw_output.rfind("]")
-
-            if start != -1 and end != -1 and start < end:
-                list_str = raw_output[start : end + 1]  # include the closing bracket
-                try:
-                    transformed_values = augmented_literal_eval(list_str)
-                except (SyntaxError, ValueError):
-                    # fallback if the content is not valid Python literal
-                    transformed_values = []
-            else:
-                # no valid list delimiters found
-                transformed_values = []
-
-            for val_idx, value in enumerate(transformed_values):
-                cached_values[batch[val_idx]] = value
-
-        return [cached_values[val] for val in formatted_values]
-
-    def __format_values(self, table: pd.DataFrame):
-        formatted_values: list[str] = []
-        for _, row in table.iterrows():
-            row_values: list[str] = []
-            for col_name in table.columns:
-                row_values.append(f"{col_name}: {row[col_name]}")
-            formatted_values.append("; ".join(row_values))
-        return formatted_values
-
-    def semantic_join(
+    def join(
         self,
-        left_df: pd.DataFrame,
-        right_df: pd.DataFrame,
+        left_df: DataFrame,
+        right_df: DataFrame,
         left_cols: list[str],
         right_cols: list[str],
         alpha: float = 0.5,
@@ -115,7 +100,7 @@ class SemanticOperator:
         embed_batch_size=30,
         syntactic_sim_metric: SyntacticSimMetric = SyntacticSimMetric.EDIT_DIST,
         use_llm=False,
-    ) -> pd.DataFrame:
+    ) -> DataFrame:
         """
         Join rows from left_df and right_df using semantic similarity.
 
@@ -138,7 +123,7 @@ class SemanticOperator:
 
         # Edge case: at least one of the tables has no rows
         if len(left_df) == 0 or len(right_df) == 0:
-            return pd.DataFrame(
+            return DataFrame(
                 columns=[
                     *(f"left_{c}" for c in left_df.columns),
                     *(f"right_{c}" for c in right_df.columns),
@@ -217,10 +202,10 @@ class SemanticOperator:
                         }
                     )
 
-        return pd.DataFrame(joined_rows)
+        return DataFrame(joined_rows)
 
     def __concat_relevant_values(
-        self, df: pd.DataFrame, relevant_cols: list[str], delimiter: str
+        self, df: DataFrame, relevant_cols: list[str], delimiter: str
     ) -> list[str]:
         """Builds per-row concatenated values of the relevant columns once."""
         texts: list[str] = []
@@ -404,6 +389,8 @@ RIGHT candidates:
 {[r.to_dict() for r in right_rows]}"""
 
         response = "".join(
-            self.language_model_api.chat([LLMMessage(role=Role.SYSTEM.value, content=prompt)])
+            self.language_model_api.chat(
+                [LLMMessage(role=Role.SYSTEM.value, content=prompt)]
+            )
         )
         return augmented_literal_eval(response)
