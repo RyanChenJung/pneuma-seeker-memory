@@ -11,6 +11,7 @@ class ActionNames(Enum):
     TABLE_PROJECTION = "table_projection"
     WEB_SEARCH = "web_search"
     WEB_CRAWL = "web_crawl"
+    MATERIALIZER = "materializer"
 
 
 class ActionExecutionStatus(Enum):
