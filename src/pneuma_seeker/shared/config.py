@@ -44,6 +44,11 @@ class Config:
             getenv("ENABLE_JOIN_PATH_EXTRACTION", "true").lower() == "true"
         )
 
+        self.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = (
+            getenv("ENABLE_MULTI_TOPIC_TABLE_RETRIEVE", "true").lower() == "true"
+        )
+        self.TABLE_RETRIEVE_MAX_TOPICS = int(getenv("TABLE_RETRIEVE_MAX_TOPICS", "3"))
+
         self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))
         self.PERSIST_CHAT_SESSION = (
             getenv("PERSIST_CHAT_SESSION", "true").lower() == "true"

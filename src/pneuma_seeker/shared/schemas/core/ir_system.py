@@ -158,17 +158,21 @@ class Text(AbstractDocument):
         super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
 
-def convert_multi_retriever_results_to_str(
-    retrieval_results: dict[RetrieverType, list[AbstractDocument]],
-):
+def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument], multi_topic_mode: bool = False):
     representation = ""
-    for retriever_type in retrieval_results.keys():
-        representation += f"Retriever {retriever_type}:\n{convert_retrieval_results_to_str(retrieval_results[retriever_type])}\n"
-    return representation
+    if multi_topic_mode:
+        topic_documents: dict[str, list[AbstractDocument]] = {}
+        for result in retrieval_results:
+            topic = result.metadata.get("topic", "unknown")
+            if topic not in topic_documents:
+                topic_documents[topic] = []
+            topic_documents[topic].append(result)
 
-
-def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument]):
-    representation = ""
-    for result in retrieval_results:
-        representation += f"- ```{str(result)}```\n"
+        for topic, docs in topic_documents.items():
+            representation += f"- Topic: {topic}\n"
+            for doc in docs:
+                representation += f"  - ```{str(doc)}```\n"
+    else:
+        for result in retrieval_results:
+            representation += f"- ```{str(result)}```\n"
     return representation.strip()

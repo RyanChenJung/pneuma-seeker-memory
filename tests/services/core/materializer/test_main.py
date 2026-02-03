@@ -31,6 +31,8 @@ class MaterializerTests(unittest.TestCase):
         self.config = Config(".env.test")
         self.prov_graph = ProvenanceGraph(self.logger)
 
+        self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = False
+
         self.tmpdir = tempfile.mkdtemp()
         dataset_db_path = Path(os.path.join(self.tmpdir, "datasets"))
         workspace_db_path = Path(os.path.join(self.tmpdir, "workspaces"))

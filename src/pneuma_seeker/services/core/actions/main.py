@@ -105,10 +105,31 @@ class ActionSet:
         k=10,
         sample_only=False,
         sample_size=None,
-    ):
+    ) -> list[AbstractDocument]:
         return self.ir_system.retrieve_documents(
             retriever_type, prompt, k, sample_only, sample_size
         )
+
+    def retrieve_multi_topic_documents(
+        self,
+        prompts: list[str],
+        retriever_type: RetrieverType,
+        k=10,
+        sample_only=False,
+        sample_size=None,
+    ) -> list[AbstractDocument]:
+        multi_topic_docs: dict[str, list[AbstractDocument]] = (
+            self.ir_system.retrieve_multi_topic_documents(
+                retriever_type, prompts, k, sample_only, sample_size
+            )
+        )
+
+        aggregated_docs: list[AbstractDocument] = []
+        for topic, docs in multi_topic_docs.items():
+            for doc in docs:
+                doc.metadata["topic"] = topic
+            aggregated_docs.extend(docs)
+        return aggregated_docs
 
     def discover_join_paths(self, tables: list[AbstractDocument]) -> str:
         tables_df: dict[str, DataFrame] = {doc.doc_id: doc.content for doc in tables}

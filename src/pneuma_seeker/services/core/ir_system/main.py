@@ -6,7 +6,6 @@ from pneuma_seeker.services.core.ir_system.prompt_factory import PromptFactory
 from pneuma_seeker.services.core.ir_system.retriever.retriever_factory import (
     RetrieverFactory,
 )
-from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
@@ -61,6 +60,28 @@ class IRSystem:
         retriever = self.retriever_factory.get_retriever(retriever_type)
         documents = retriever.retrieve(prompt, k, sample_only, sample_size)
         return documents
+
+    def retrieve_multi_topic_documents(
+        self,
+        retriever_type: RetrieverType,
+        prompts: list[str],
+        k: int = 10,
+        sample_only: bool = False,
+        sample_size: int | None = None,
+    ) -> dict[str, list[AbstractDocument]]:
+        """
+        Retrieves documents from the specified retriever on multiple topics.
+
+        - prompts (list[str]): The queries corresponding to different topics to be given to the retriever.
+        - sample_only (bool): Whether to retrieve only a sample of documents.
+        - sample_size (int | None): The number of documents to retrieve if sample_only is True.
+        """
+        retriever = self.retriever_factory.get_retriever(retriever_type)
+        output: dict[str, list[AbstractDocument]] = {}
+        for prompt in prompts:
+            documents = retriever.retrieve(prompt, k, sample_only, sample_size)
+            output[prompt] = documents
+        return output
 
     def __log(self, text: str):
         formatted_log(self.logger, "IR System", text)

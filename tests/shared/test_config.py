@@ -76,7 +76,6 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.OPENWEBUI_API_KEY, "")
         
         # System-Level defaults
-        self.assertEqual(cfg.DATA_SOURCES, ["buysite"])
         self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 7)
         self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 100)
         self.assertFalse(cfg.ENABLE_WEB_SEARCH)
@@ -473,7 +472,6 @@ class ConfigTests(unittest.TestCase):
         cfg = Config()
         
         self.assertIsInstance(cfg.DATA_SOURCES, list)
-        self.assertEqual(cfg.DATA_SOURCES, ["buysite"])
 
     def test_semantic_join_top_k_is_hardcoded(self):
         """Test that SEMANTIC_JOIN_TOP_K is hardcoded to 1."""

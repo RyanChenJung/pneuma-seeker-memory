@@ -7,7 +7,10 @@ from pneuma_seeker.services.core.materializer.operation_description import (
     get_operation_description,
 )
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, convert_retrieval_results_to_str
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    convert_retrieval_results_to_str,
+)
 
 
 class MaterializerPromptFactory:
@@ -41,11 +44,7 @@ REFERENCE SCRIPT (for value format guidance only — not to execute directly):
 {S}
 
 AVAILABLE OPERATIONS:
-{get_operation_description(
-    self.config.ENABLE_WEB_SEARCH,
-    self.config.ENABLE_WEB_CRAWL,
-    self.config.ENABLE_ASSUMPTION_CHECK,
-)}
+{get_operation_description(self.config)}
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
@@ -96,7 +95,7 @@ This is iteration {num_iterations} of materializing the target tables.
 CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
-- Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables)}
+- Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}
     {f"- Potential join paths between retrieved tables: {join_paths}" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
 - User-uploaded external tables: {convert_retrieval_results_to_str(user_uploaded_external_tables)}
 - User note: {user_side_note}

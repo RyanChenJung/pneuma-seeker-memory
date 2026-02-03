@@ -17,6 +17,7 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
+    convert_retrieval_results_to_str,
 )
 from pneuma_seeker.services.core.materializer.prompt_factory import (
     MaterializerPromptFactory,
@@ -257,22 +258,57 @@ class Materializer:
 
         match op_name:
             case ActionNames.TABLE_RETRIEVE.value:
-                prompt = op_args.get("prompt", "")
-                self.state.retrieved_tables = self.action_set.retrieve_documents(
-                    prompt, RetrieverType.PNEUMA_RETRIEVER, 10
-                )
-                if len(self.state.retrieved_tables) == 0:
-                    error_msg = (
-                        f"No tables were retrieved using this prompt: ```{prompt}```."
+                if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
+                    prompts = op_args.get("prompts", [])
+                    if not isinstance(prompts, list) or not all(
+                        isinstance(p, str) for p in prompts
+                    ):
+                        error_msg = "The 'prompts' argument must be a list of strings."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+                    if len(prompts) == 0:
+                        error_msg = "The 'prompts' list cannot be empty."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+                    self.state.retrieved_tables = (
+                        self.action_set.retrieve_multi_topic_documents(
+                            prompts, RetrieverType.PNEUMA_RETRIEVER, 10
+                        )
                     )
+                else:
+                    prompt = op_args.get("prompt")
+                    if not isinstance(prompt, str):
+                        error_msg = "The 'prompt' argument must be a string."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+                    if len(prompt.strip()) == 0:
+                        error_msg = "The 'prompt' argument cannot be empty."
+                        self.__log(f"==> {error_msg}")
+                        self.actions.append(error_msg)
+                        return
+                    self.state.retrieved_tables = self.action_set.retrieve_documents(
+                        prompt, RetrieverType.PNEUMA_RETRIEVER, 10
+                    )
+
+                if len(self.state.retrieved_tables) == 0:
+                    error_msg = f"No tables were retrieved."
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                 else:
                     if self.config.ENABLE_JOIN_PATH_EXTRACTION:
-                        self.state.join_paths = self.action_set.discover_join_paths(self.state.retrieved_tables)
-                    success_msg = f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "retrieved internal tables" have been filled.'
+                        self.state.join_paths = self.action_set.discover_join_paths(
+                            self.state.retrieved_tables
+                        )
+                    success_msg = f'Successfully retrieved tables. Notice that the "retrieved internal tables" have been filled.'
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
+
+                    self.__log(
+                        f"Retrieved tables:\n {convert_retrieval_results_to_str(self.state.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
+                    )
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
                         node_id = _create_or_get_read_node(
@@ -299,7 +335,7 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 self.state.web_search_result = web_search_results[0]
-                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.{" Join paths have been updated accordingly." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value}. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.{" Join paths have been updated accordingly." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
@@ -328,7 +364,7 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 self.state.web_crawl_result = web_crawl_results[0]
-                success_msg = f'Successfully retrieved information from {ActionNames.WEB_CRAWL.value} using this URL: ```{prompt}```. Notice that the "{ActionNames.WEB_CRAWL.value} result" have been filled.'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_CRAWL.value}. Notice that the "{ActionNames.WEB_CRAWL.value} result" have been filled.'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
@@ -337,7 +373,7 @@ class Materializer:
                     python_code=self.action_set.generate_view_textual_document_code(
                         self.state.web_crawl_result
                     ),
-                    description=f"Crawls the web page with this URL: {prompt}.",
+                    description=f"Crawls the web page with this URL.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_crawl_result.last_node_id = new_node.id
@@ -378,6 +414,9 @@ class Materializer:
                     self.state.retrieved_tables = list(
                         set(existing_tables).union(set(extra_tables))
                     )
+                    self.__log(
+                        f"Retrieved tables:\n {convert_retrieval_results_to_str(self.state.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
+                    )
                 else:
                     error_msg = "There are no tables that match the pattern."
                     self.__log(f"==> {error_msg}")
@@ -400,7 +439,9 @@ class Materializer:
                         self.actions.append(msg)
                         continue
 
-                    table_id_to_project = str(retrieved_table_info.get("id", "")).strip()
+                    table_id_to_project = str(
+                        retrieved_table_info.get("id", "")
+                    ).strip()
                     if table_id_to_project.startswith("Table "):
                         table_id_to_project = table_id_to_project[6:].strip()
                     relevant_columns = retrieved_table_info.get("columns", [])
@@ -413,16 +454,16 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.actions.append(error_msg)
                         return
-                    
+
                     if target_table_id not in T:
-                        error_msg = f"Error: The ID {target_table_id} does not exist in T."
+                        error_msg = (
+                            f"Error: The ID {target_table_id} does not exist in T."
+                        )
                         self.__log(f"==> {error_msg}")
                         self.actions.append(error_msg)
                         return
 
-                    matches = [
-                        i for i in all_tables if i.doc_id == table_id_to_project
-                    ]
+                    matches = [i for i in all_tables if i.doc_id == table_id_to_project]
                     if not matches:
                         error_msg = f"Table {table_id_to_project!r} not found in the available tables."
                         self.__log(f"==> {error_msg}")
@@ -462,9 +503,7 @@ class Materializer:
                     parent_node_id = _create_or_get_read_node(
                         matches[0],
                         matches[0].retriever_type,
-                        self.action_set.generate_pandas_read_csv_code(
-                            matches[0]
-                        ),
+                        self.action_set.generate_pandas_read_csv_code(matches[0]),
                         "",
                     )
 
@@ -757,7 +796,9 @@ class Materializer:
                     used_table_retrievers: list[RetrieverType] = []
                     parent_nodes: list[ProvenanceNode] = []
                     for used_table_id in used_table_ids:
-                        used_table_retrievers.append(id_docs[used_table_id].retriever_type)
+                        used_table_retrievers.append(
+                            id_docs[used_table_id].retriever_type
+                        )
 
                         used_table_doc = id_docs[used_table_id]
                         parent_node = self.prov_graph.get_node_by_id(

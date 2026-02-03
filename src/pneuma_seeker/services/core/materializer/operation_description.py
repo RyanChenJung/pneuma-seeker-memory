@@ -1,18 +1,13 @@
 from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.shared.config import Config
 
 
 def get_operation_description(
-    enable_web_search=False,
-    enable_web_crawl=False,
-    enable_assumption_check=False,
+    config: Config,
 ) -> str:
     return (
         f"""
-- **{ActionNames.TABLE_RETRIEVE.value}**
-    - Retrieves relevant tables from the internal database based on natural-language prompts.
-    - Does not affect user-provided external tables. However, previously retrieved internal tables are replaced each time this tool is called.
-    - Args: {{"prompt": "<retrieval query string, contextualized with columns of the target tables (T), not just using the target table IDs>"}}
-    - Example: {{"prompt": "Get sales data for Q1 2025 with columns like order_id, product_name, and sale_amount"}}
+{get_table_retrieve_description(config)}
 
 - **{ActionNames.TABLE_ENUMERATION.value}**
     - **Precondition — MUST NOT be called unless there is at least one internal table already retrieved.**
@@ -31,7 +26,7 @@ def get_operation_description(
     - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result, which must be a **SINGLE** pandas DataFrame, to a variable named 'result'
     - Args: {{"code": "<Python code string>"}}
-{get_assumption_check_description() if enable_assumption_check else ""}
+{get_assumption_check_description() if config.ENABLE_ASSUMPTION_CHECK else ""}
 
 - **{ActionNames.TABLE_PROJECTION.value}**
     - Directly maps an existing table (internal, external, or intermediate) to a target table (or a subset of its columns).
@@ -88,9 +83,29 @@ def get_operation_description(
         "instruction": "Classify each product into 'Electronics', 'Furniture', or 'Clothing'."
       }}
 """.strip()
-        + (get_web_search_description() if enable_web_search else "")
-        + (get_web_crawl_description() if enable_web_crawl else "")
+        + (get_web_search_description() if config.ENABLE_WEB_SEARCH else "")
+        + (get_web_crawl_description() if config.ENABLE_WEB_CRAWL else "")
     )
+
+
+def get_table_retrieve_description(config: Config) -> str:
+    if not config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
+        return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
+    Retrieve internal tables.
+    - **Args**: {{"prompt": "<retrieval query>"}}
+    - **Notes**:
+        - Avoid retrying the same or slightly modified queries repeatedly.
+        - However, for different topics or aspects of an information need, feel free to call multiple times.
+        - Previously retrieved tables will be replaced with new retrievals; does not affect user-provided external tables.
+        {"- Potential join paths between retrieved tables will be provided for reference." if config.ENABLE_JOIN_PATH_EXTRACTION else ""}"""
+    else:
+        return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
+    Retrieve internal tables.
+    - **Args**: {{"prompts": "[<retrieval query 1>, <retrieval query 2>, ...]"}}
+    - **Notes**:
+        - You may provide multiple retrieval queries in a single call to retrieve tables on different topics (at most {config.TABLE_RETRIEVE_MAX_TOPICS} topics).
+        - Previously retrieved tables will be replaced with new retrievals; does not affect user-provided external tables.
+        {"- Potential join paths between retrieved tables will be provided for reference." if config.ENABLE_JOIN_PATH_EXTRACTION else ""}"""
 
 
 def get_assumption_check_description():

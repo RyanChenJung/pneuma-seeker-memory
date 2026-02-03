@@ -73,16 +73,7 @@ If you find that a computation requires matching data from different tables, fir
 
 ## Available Tools
 
-- **{ActionNames.TABLE_RETRIEVE.value}**:
-  Retrieve internal tables.
-  - **Args**: {{"prompt": "<retrieval query>"}}
-  - **Notes**:
-    - Avoid retrying the same or slightly modified queries repeatedly.
-    - However, for different topics or aspects of an information need, feel free to call multiple times.
-    {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
-    - In relation to defining columns of tables in T:
-      - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
-      - If the approximation is uncertain, explicitly warn the user before continuing.
+{self.get_table_retrieve_description()}
 
 - **{ActionNames.STATE_MANIPULATION.value}**:
   Update T, S, or both.
@@ -147,6 +138,31 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
   ]
 }}
 """.strip()
+    
+    def get_table_retrieve_description(self):
+        if not self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
+          return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
+  Retrieve internal tables.
+  - **Args**: {{"prompt": "<retrieval query>"}}
+  - **Notes**:
+    - Avoid retrying the same or slightly modified queries repeatedly.
+    - However, for different topics or aspects of an information need, feel free to call multiple times.
+    - Previously retrieved tables will be replaced with new retrievals.
+    {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
+    - In relation to defining columns of tables in T:
+      - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
+      - If the approximation is uncertain, explicitly warn the user before continuing."""
+        else:
+            return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
+  Retrieve internal tables.
+  - **Args**: {{"prompts": "[<retrieval query 1>, <retrieval query 2>, ...]"}}
+  - **Notes**:
+    - You may provide multiple retrieval queries in a single call to retrieve tables on different topics (at most {self.config.TABLE_RETRIEVE_MAX_TOPICS} topics).
+    - Previously retrieved tables will be replaced with new retrievals.
+    {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
+    - In relation to defining columns of tables in T:
+      - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
+      - If the approximation is uncertain, explicitly warn the user before continuing."""
 
     def get_web_search_description(self):
         """Gets the web search tool description for Conductor."""
@@ -191,8 +207,8 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
         info_need_state: InformationNeedState,
         interaction_history: list[UserConductorInteraction],
         actions_taken: list[str],
-        curr_retrieved_tables: list[AbstractDocument],
-        human_input: str,
+        retrieved_tables: list[AbstractDocument],
+        user_input: str,
         enumerated_table_ids: list[str],
         external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None = None,
@@ -215,29 +231,23 @@ RECENT USER INTERACTIONS:
 {self.__convert_interactions_to_str(interaction_history)}
 
 RETRIEVED TABLES:
-{convert_retrieval_results_to_str(curr_retrieved_tables)}
-
-{f"\nPOTENTIAL JOIN PATHS BETWEEN RETRIEVED TABLES:\n{join_paths}\n" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
-
-OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
-{enumerated_table_ids}
-
-EXTERNAL TABLES (UPLOADED BY USER, IF ANY):
-{convert_retrieval_results_to_str(external_tables)}
-
-{f"WEB SEARCH RESULT (IF ANY):\n {convert_retrieval_results_to_str([web_search_result] if web_search_result else [])}" if self.config.ENABLE_WEB_SEARCH else ""}
-{f"WEB CRAWL RESULT (IF ANY):\n {convert_retrieval_results_to_str([web_crawl_result] if web_crawl_result else [])}" if self.config.ENABLE_WEB_CRAWL else ""}
+{convert_retrieval_results_to_str(retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}
+{f"\n- POTENTIAL JOIN PATHS BETWEEN RETRIEVED TABLES:\n{join_paths}\n" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
+{f"\nOTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (FOR REFERENCE):\n{enumerated_table_ids}\n" if len(enumerated_table_ids) > 0 else ""}
+{f"\nEXTERNAL TABLES (UPLOADED BY USER):\n{convert_retrieval_results_to_str(external_tables)}\n" if len(external_tables) > 0 else ""}
+{f"\nWEB SEARCH RESULT (IF ANY):\n{convert_retrieval_results_to_str([web_search_result] if web_search_result else [])}\n" if self.config.ENABLE_WEB_SEARCH else ""}
+{f"\nWEB CRAWL RESULT (IF ANY):\n{convert_retrieval_results_to_str([web_crawl_result] if web_crawl_result else [])}" if self.config.ENABLE_WEB_CRAWL else ""}
 
 CURRENT USER INPUT:
-{human_input}
+{user_input}
 
 Decide your next plan and output a JSON object of one or more actions.
 """.strip()
 
-    def get_knowledge_extraction_prompt(self, human_input: str) -> str:
+    def get_knowledge_extraction_prompt(self, user_input: str) -> str:
         """Gets the knowledge extraction prompt for Conductor."""
         return f"""You are very talented in inferring knowledge from a text.
-You are given a human input to a question-answering system: ```{human_input}```
+You are given a human input to a question-answering system: ```{user_input}```
 Please consider whether it consists domain knowledge that will be helpful for other people using the system. Make sure you only extract general knowledge that does not just apply to a specific user. If there is none, then do not force for there to be any.
 
 When you find multiple pieces of related information, combine them into a single comprehensive knowledge statement rather than splitting them into separate points. The goal is to capture the complete context and relationships in one cohesive statement.

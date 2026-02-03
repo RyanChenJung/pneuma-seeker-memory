@@ -36,6 +36,7 @@ class ConductorTests(unittest.TestCase):
         config.ENABLE_WEB_CRAWL = True
         config.LLM_PATH = "mock"
         config.EMBED_MODEL_PATH = "mock"
+        config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = False
 
         self.logger = logging.getLogger("test_conductor")
         self.logger.setLevel(logging.ERROR)

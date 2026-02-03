@@ -25,6 +25,7 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
+    convert_retrieval_results_to_str,
 )
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
@@ -207,16 +208,22 @@ class Conductor:
                         raise ValueError(error_msg)
                     if action_plan.get("action") == ActionNames.PYTHON_EXECUTOR.value:
                         executor_part_of_plan = True
-                    if action_plan.get("action") == ActionNames.USER_FACING_COMMUNICATION.value:
+                    if (
+                        action_plan.get("action")
+                        == ActionNames.USER_FACING_COMMUNICATION.value
+                    ):
                         user_facing_communication_part_of_plan = True
-                
+
                 # Ensure there is no user-facing communication in the same plan as code execution (simply remove the user-facing part)
                 if executor_part_of_plan and user_facing_communication_part_of_plan:
-                    self.__log("==> Removing user-facing communication from plan due to presence of code execution.")
+                    self.__log(
+                        "==> Removing user-facing communication from plan due to presence of code execution."
+                    )
                     plan = [
                         action_plan
                         for action_plan in plan
-                        if action_plan.get("action") != ActionNames.USER_FACING_COMMUNICATION.value
+                        if action_plan.get("action")
+                        != ActionNames.USER_FACING_COMMUNICATION.value
                     ]
                 self.__log("==> Plan parsed!")
             except Exception as exc:
@@ -301,17 +308,54 @@ class Conductor:
                     error_msg = "=> `args` must be an object with a `prompt` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-                if "prompt" not in args:
-                    error_msg = "=> `args` must have a `prompt` property"
-                    self.__log(f"=> {error_msg}")
-                    return error_msg, ActionExecutionStatus.ERROR
 
-                self.retrieved_tables = self.action_set.retrieve_documents(
-                    args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
+                if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
+                    if "prompts" not in args:
+                        error_msg = "=> `args` must have a `prompts` property"
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+
+                    if not isinstance(args["prompts"], list) or not all(
+                        isinstance(p, str) for p in args["prompts"]
+                    ):
+                        error_msg = "=> `prompts` must be a list of strings"
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+
+                    self.retrieved_tables = (
+                        self.action_set.retrieve_multi_topic_documents(
+                            args["prompts"], RetrieverType.PNEUMA_RETRIEVER, 10
+                        )
+                    )
+                else:
+                    if "prompt" not in args:
+                        error_msg = "=> `args` must have a `prompt` property"
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+
+                    if not isinstance(args["prompt"], str):
+                        error_msg = "=> `prompt` must be a string"
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+                    
+                    if len(args["prompt"].strip()) == 0:
+                        error_msg = "=> `prompt` must be a non-empty string"
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+
+                    self.retrieved_tables = self.action_set.retrieve_documents(
+                        args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
+                    )
+
+                self.__log(
+                    f"Retrieved tables:\n {convert_retrieval_results_to_str(self.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
                 )
+
                 try:
                     if self.config.ENABLE_JOIN_PATH_EXTRACTION:
-                        self.join_paths = self.action_set.discover_join_paths(self.retrieved_tables)
+                        self.join_paths = self.action_set.discover_join_paths(
+                            self.retrieved_tables
+                        )
                 except Exception as e:
                     self.__log(f"=> Error during join path extraction: {e}")
 
