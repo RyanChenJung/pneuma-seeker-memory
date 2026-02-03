@@ -2,11 +2,13 @@ import os
 from logging import Logger
 from typing import Any
 
-import duckdb
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.services.core.actions.action_names import ActionExecutionStatus, ActionNames
+from pneuma_seeker.services.core.actions.action_names import (
+    ActionExecutionStatus,
+    ActionNames,
+)
 from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
@@ -16,8 +18,8 @@ from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json
 from pneuma_seeker.shared.schemas.core.conductor import (
-    UserConductorInteraction,
     InformationNeedState,
+    UserConductorInteraction,
 )
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
@@ -91,19 +93,20 @@ class Conductor:
         )
 
         self.valid_actions: list[str] = [
-            "communicate_with_user",
-            "internal_reasoning",
+            ActionNames.USER_FACING_COMMUNICATION.value,
+            ActionNames.SITUATIONAL_ANALYSIS.value,
             ActionNames.TABLE_RETRIEVE.value,
             ActionNames.TABLE_ENUMERATION.value,
-            "state_manipulation",
+            ActionNames.STATE_MANIPULATION.value,
             ActionNames.MATERIALIZER.value,
             ActionNames.PYTHON_EXECUTOR.value,
-            "column_info_extractor",
         ]
         if self.config.ENABLE_WEB_SEARCH:
-            self.valid_actions.append("web_search")
+            self.valid_actions.append(ActionNames.WEB_SEARCH.value)
         if self.config.ENABLE_WEB_CRAWL:
-            self.valid_actions.append("web_crawl")
+            self.valid_actions.append(ActionNames.WEB_CRAWL.value)
+        if self.config.ENABLE_ASSUMPTION_CHECK:
+            self.valid_actions.append(ActionNames.ASSUMPTION_CHECK.value)
 
     def chat(
         self,
@@ -227,13 +230,15 @@ class Conductor:
                     )
                     break
 
-                if action_type == "communicate_with_user" and isinstance(
-                    action_message, str
+                if (
+                    action_type == ActionNames.USER_FACING_COMMUNICATION.value
+                    and isinstance(action_message, str)
                 ):
                     user_facing_response = action_message
                     is_user_facing_response = True
-                elif action_type == "internal_reasoning" and isinstance(
-                    action_message, str
+                elif (
+                    action_type == ActionNames.SITUATIONAL_ANALYSIS.value
+                    and isinstance(action_message, str)
                 ):
                     yield "LOG: Reasoning internally..."
                     llm_messages.append(
@@ -270,405 +275,286 @@ class Conductor:
         self, tool: str, args: str | dict
     ) -> tuple[str, ActionExecutionStatus]:
         """Executes a specified tool with given arguments."""
-        if tool == ActionNames.TABLE_RETRIEVE.value:
-            self.__log(f"Table Retrieve request with params: {args}")
+        match tool:
+            case ActionNames.TABLE_RETRIEVE.value:
+                self.__log(f"Table Retrieve request with params: {args}")
 
-            if not isinstance(args, dict):
-                error_msg = "=> `args` must be an object with a `prompt` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-            if "prompt" not in args:
-                error_msg = "=> `args` must have a `prompt` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            self.retrieved_tables = self.action_set.retrieve_documents(
-                args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
-            )
-            success_msg = "Successfully retrieved tables from Table Retrieve. Notice that the `RETRIEVED TABLES` has been updated."
-            self.__log(success_msg)
-            return (
-                success_msg,
-                ActionExecutionStatus.SUCCESS,
-            )
-        if tool == ActionNames.WEB_SEARCH.value and self.config.ENABLE_WEB_SEARCH:
-            self.__log(f"Web Search request with params: {args}")
-            if not isinstance(args, dict):
-                error_msg = "=> `args` must be an object with a `prompt` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-            if "prompt" not in args:
-                error_msg = "=> `args` must have a `prompt` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            retrieved_docs = self.action_set.retrieve_documents(
-                args["prompt"], RetrieverType.WEB_SEARCH
-            )
-            self.web_search_result = (
-                retrieved_docs[0] if len(retrieved_docs) > 0 else None
-            )
-            if self.web_search_result is None:
-                return (
-                    "No relevant information was found from Web Search.",
-                    ActionExecutionStatus.SUCCESS,
-                )
-            return (
-                "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated.",
-                ActionExecutionStatus.SUCCESS,
-            )
-        if tool == ActionNames.WEB_CRAWL.value and self.config.ENABLE_WEB_CRAWL:
-            self.__log(f"Web Crawl request with params: {args}")
-            if not isinstance(args, dict):
-                error_msg = "=> `args` must be an object with a `url` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-            if "url" not in args:
-                error_msg = "=> `args` must have a `url` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            retrieved_docs = self.action_set.retrieve_documents(
-                args["url"], RetrieverType.WEB_CRAWL
-            )
-            self.web_crawl_result = (
-                retrieved_docs[0] if len(retrieved_docs) > 0 else None
-            )
-            if self.web_crawl_result is None:
-                success_msg = "No relevant information was found from Web Crawl."
-                self.__log(success_msg)
-                return (
-                    success_msg,
-                    ActionExecutionStatus.SUCCESS,
-                )
-            success_msg = "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated."
-            self.__log(success_msg)
-            return (
-                success_msg,
-                ActionExecutionStatus.SUCCESS,
-            )
-        if tool == ActionNames.TABLE_ENUMERATION.value:
-            self.__log(f"Table Enumerator request with params: {args}")
-
-            if not isinstance(args, dict):
-                error_msg = "`args` must be an object with a `pattern` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-            if "pattern" not in args:
-                error_msg = "`args` must have a `pattern` property"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            enumerated_tables = self.action_set.retrieve_documents(
-                args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
-            )
-            self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
-            success_msg = f"Enumerated table IDs based on this pattern: {args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
-            self.__log(success_msg)
-            return (
-                success_msg,
-                ActionExecutionStatus.SUCCESS,
-            )
-        if tool == "state_manipulation":
-            self.__log(f"State Manipulation request with params: {args}")
-
-            if not isinstance(args, dict):
-                error_msg = "`args` must be an object"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            T: dict[str, list[str]] | None = args.get("T")
-            column_descriptions: dict[str, dict[str, str]] | None = args.get(
-                "column_descriptions"
-            )
-            S: str | None = args.get("S")
-
-            is_T_modified = False
-            if T is not None and len(T) > 0:
-                if column_descriptions is not None:
-                    T_docs: dict[str, AbstractDocument] = dict()
-                    for schema_id in T:
-                        target_schema_df = pd.DataFrame(columns=T[schema_id])
-
-                        target_schema_path = os.path.join(
-                            self.target_tables_path,
-                            self.user_id,
-                            self.chat_id,
-                            f"{schema_id}.csv",
-                        )
-                        os.makedirs(os.path.dirname(target_schema_path), exist_ok=True)
-
-                        target_schema_df.to_csv(target_schema_path, index=False)
-                        T_docs[schema_id] = Table(
-                            doc_id=schema_id,
-                            retriever_type=RetrieverType.CONDUCTOR,
-                            content=target_schema_df,
-                            metadata={},
-                            path=target_schema_path,
-                        )
-
-                    self.info_need_state.T = T_docs
-                    self.info_need_state.column_descriptions = column_descriptions
-                    self.info_need_state.is_T_materialized = False
-                    is_T_modified = True
-                else:
-                    error_msg = "If you want to change T, make sure to also define column_descriptions."
-                    self.__log(error_msg)
-                    return (
-                        error_msg,
-                        ActionExecutionStatus.ERROR,
-                    )
-
-            is_S_modified = False
-            if S is not None:
-                self.info_need_state.S = S
-                self.info_need_state.is_S_executed = False
-                is_S_modified = True
-
-            if is_T_modified and is_S_modified:
-                success_msg = "Successfully modified both T and S."
-                self.__log(success_msg)
-                return (
-                    success_msg,
-                    ActionExecutionStatus.SUCCESS,
-                )
-            if is_T_modified:
-                success_msg = "Successfully modified T."
-                self.__log(success_msg)
-                return success_msg, ActionExecutionStatus.SUCCESS
-            if is_S_modified:
-                success_msg = "Successfully modified S."
-                self.__log(success_msg)
-                return success_msg, ActionExecutionStatus.SUCCESS
-            error_msg = "No modification is done."
-            self.__log(error_msg)
-            return error_msg, ActionExecutionStatus.ERROR
-        if tool == ActionNames.MATERIALIZER.value:
-            if len(self.info_need_state.T.keys()) == 0:
-                error_msg = (
-                    "T has to already be defined before calling Materializer"
-                )
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
-
-            note = ""
-            if isinstance(args, dict) and "note" in args:
-                note = args["note"]
-
-            self.__log(f"Materializer called (note: {note})")
-
-            self.info_need_state.T = self.__materialize_T_driver(
-                self.info_need_state.T,
-                self.info_need_state.column_descriptions,
-                self.info_need_state.S,
-                note,
-                self.external_tables,
-            )
-            self.info_need_state.is_T_materialized = True
-
-            for _, T_doc in self.info_need_state.T.items():
-                updated_content: pd.DataFrame = T_doc.content
-                updated_content.to_csv(T_doc.path, index=False)
-
-            success_msg = "Successfully materialized T."
-            self.__log(success_msg)
-            return success_msg, ActionExecutionStatus.SUCCESS
-        if tool == ActionNames.PYTHON_EXECUTOR.value:
-            self.__log(f"{ActionNames.PYTHON_EXECUTOR.value} called")
-            if not self.info_need_state.is_T_materialized:
-                if len(self.info_need_state.T.keys()) > 0:
-                    self.__log(
-                        f"=> Self-triggered materialization from calling {ActionNames.PYTHON_EXECUTOR.value}..."
-                    )
-                    self.__execute_tool(ActionNames.MATERIALIZER.value, {})
-                else:
-                    error_msg = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
+                if not isinstance(args, dict):
+                    error_msg = "=> `args` must be an object with a `prompt` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-            if len(self.info_need_state.S) == 0:
-                error_msg = f"S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call {ActionNames.PYTHON_EXECUTOR.value} again."
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
+                if "prompt" not in args:
+                    error_msg = "=> `args` must have a `prompt` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-            T_df: dict[str, pd.DataFrame] = {}
-            for t_id, i in self.info_need_state.T.items():
-                T_df[t_id] = i.content
-
-            try:
-                execution_result = self.action_set.execute_code(
-                    T_df, self.info_need_state.S
+                self.retrieved_tables = self.action_set.retrieve_documents(
+                    args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
                 )
-                self.__log(f"Script (S) execution result: {execution_result}")
-
-                self.info_need_state.is_S_executed = True
+                success_msg = "Successfully retrieved tables from Table Retrieve. Notice that the `RETRIEVED TABLES` has been updated."
+                self.__log(success_msg)
                 return (
-                    f"Executed S, which resulted in this output: {execution_result}",
+                    success_msg,
                     ActionExecutionStatus.SUCCESS,
                 )
-            except Exception as e:
-                error_msg = f"Error during script (S) execution: {e}"
-                self.__log(f"=> {error_msg}")
-                return error_msg, ActionExecutionStatus.ERROR
+            case ActionNames.WEB_SEARCH.value:
+                self.__log(f"Web Search request with params: {args}")
+                if not isinstance(args, dict):
+                    error_msg = "=> `args` must be an object with a `prompt` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if "prompt" not in args:
+                    error_msg = "=> `args` must have a `prompt` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-        if tool == "column_info_extractor":
-            if isinstance(args, dict):
-                self.__log(f"Column Info Extractor request with params: {args}")
-                table_id: str | None = args.get("id")
-                table_columns: list[str] | None = args.get("columns")
-                if table_id is None:
-                    msg = "The `id` field must not be empty."
-                    self.__log(f"=> {msg}")
-                    return msg, ActionExecutionStatus.ERROR
-
-                if table_columns is None:
-                    msg = "The `columns` field must not be empty."
-                    self.__log(f"=> {msg}")
-                    return msg, ActionExecutionStatus.ERROR
-
-                if not isinstance(table_columns, list) or len(table_columns) == 0:
-                    msg = "The `columns` field must be a non-empty list of valid column name strings."
-                    self.__log(f"=> {msg}")
-                    return msg, ActionExecutionStatus.ERROR
-
-                table_exists = any(
-                    doc.doc_id == table_id for doc in self.retrieved_tables
+                retrieved_docs = self.action_set.retrieve_documents(
+                    args["prompt"], RetrieverType.WEB_SEARCH
                 )
-                if not table_exists:
-                    msg = (
-                        f"ID {table_id} does not exist in retrieval results; "
-                        f"ensure it exists in the current retrieval results."
+                self.web_search_result = (
+                    retrieved_docs[0] if len(retrieved_docs) > 0 else None
+                )
+                if self.web_search_result is None:
+                    return (
+                        "No relevant information was found from Web Search.",
+                        ActionExecutionStatus.SUCCESS,
                     )
-                    self.__log(msg)
-                    return msg, ActionExecutionStatus.ERROR
+                return (
+                    "Successfully retrieved information from Web Search. Notice that the `WEB SEARCH RESULT` has been updated.",
+                    ActionExecutionStatus.SUCCESS,
+                )
+            case ActionNames.WEB_CRAWL.value:
+                self.__log(f"Web Crawl request with params: {args}")
+                if not isinstance(args, dict):
+                    error_msg = "=> `args` must be an object with a `url` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if "url" not in args:
+                    error_msg = "=> `args` must have a `url` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                info_output = f"Column information for table `{table_id}`:\n"
-                found_in_any_db = False
-                try:
-                    for data_source in self.config.DATA_SOURCES:
-                        db_path = os.path.join(
-                            self.config.DB_BACKEND_PATH, f"{data_source}.db"
-                        )
+                retrieved_docs = self.action_set.retrieve_documents(
+                    args["url"], RetrieverType.WEB_CRAWL
+                )
+                self.web_crawl_result = (
+                    retrieved_docs[0] if len(retrieved_docs) > 0 else None
+                )
+                if self.web_crawl_result is None:
+                    success_msg = "No relevant information was found from Web Crawl."
+                    self.__log(success_msg)
+                    return (
+                        success_msg,
+                        ActionExecutionStatus.SUCCESS,
+                    )
+                success_msg = "Successfully retrieved information from Web Crawl. Notice that the `WEB CRAWL RESULT` has been updated."
+                self.__log(success_msg)
+                return (
+                    success_msg,
+                    ActionExecutionStatus.SUCCESS,
+                )
+            case ActionNames.TABLE_ENUMERATION.value:
+                self.__log(f"Table Enumerator request with params: {args}")
 
-                        with duckdb.connect(db_path, read_only=True) as con:
-                            exists_check = con.execute(
-                                "SELECT table_name FROM information_schema.tables WHERE table_name = ?",
-                                [table_id],
-                            ).fetchall()
+                if not isinstance(args, dict):
+                    error_msg = "`args` must be an object with a `pattern` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if "pattern" not in args:
+                    error_msg = "`args` must have a `pattern` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                            if len(exists_check) == 0:
-                                continue
+                enumerated_tables = self.action_set.retrieve_documents(
+                    args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
+                )
+                self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
+                success_msg = f"Enumerated table IDs based on this pattern: {args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+                self.__log(success_msg)
+                return (
+                    success_msg,
+                    ActionExecutionStatus.SUCCESS,
+                )
+            case ActionNames.STATE_MANIPULATION.value:
+                self.__log(f"State Manipulation request with params: {args}")
 
-                            found_in_any_db = True
-                            schema_df = con.execute(
-                                f"PRAGMA table_info('{table_id}');"
-                            ).fetchdf()
-                            schema_lookup = dict(
-                                zip(schema_df["name"], schema_df["type"])
+                if not isinstance(args, dict):
+                    error_msg = "`args` must be an object"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+
+                T: dict[str, list[str]] | None = args.get("T")
+                column_descriptions: dict[str, dict[str, str]] | None = args.get(
+                    "column_descriptions"
+                )
+                S: str | None = args.get("S")
+
+                is_T_modified = False
+                if T is not None and len(T) > 0:
+                    if column_descriptions is not None:
+                        T_docs: dict[str, AbstractDocument] = dict()
+                        for schema_id in T:
+                            target_schema_df = pd.DataFrame(columns=T[schema_id])
+
+                            target_schema_path = os.path.join(
+                                self.target_tables_path,
+                                self.user_id,
+                                self.chat_id,
+                                f"{schema_id}.csv",
+                            )
+                            os.makedirs(
+                                os.path.dirname(target_schema_path), exist_ok=True
                             )
 
-                            for col in table_columns:
-                                if col not in schema_lookup:
-                                    info_output += (
-                                        f"- `{col}`: Column does not exist.\n"
-                                    )
-                                    continue
+                            target_schema_df.to_csv(target_schema_path, index=False)
+                            T_docs[schema_id] = Table(
+                                doc_id=schema_id,
+                                retriever_type=RetrieverType.CONDUCTOR,
+                                content=target_schema_df,
+                                metadata={},
+                                path=target_schema_path,
+                            )
 
-                                duck_type = schema_lookup[col].lower()
-                                is_numeric = any(
-                                    t in duck_type
-                                    for t in [
-                                        "int",
-                                        "decimal",
-                                        "double",
-                                        "real",
-                                        "float",
-                                    ]
-                                )
+                        self.info_need_state.T = T_docs
+                        self.info_need_state.column_descriptions = column_descriptions
+                        self.info_need_state.is_T_materialized = False
+                        is_T_modified = True
+                    else:
+                        error_msg = "If you want to change T, make sure to also define column_descriptions."
+                        self.__log(error_msg)
+                        return (
+                            error_msg,
+                            ActionExecutionStatus.ERROR,
+                        )
 
-                                if is_numeric:
-                                    stats_query = f"""
-                                        SELECT 
-                                            COUNT(*) AS count,
-                                            MIN("{col}") AS min,
-                                            MAX("{col}") AS max,
-                                            AVG("{col}") AS mean,
-                                            STDDEV("{col}") AS stddev,
-                                            QUANTILE_CONT("{col}", 0.25) AS q25,
-                                            QUANTILE_CONT("{col}", 0.50) AS median,
-                                            QUANTILE_CONT("{col}", 0.75) AS q75
-                                        FROM "{table_id}";
-                                    """
-                                    stats = con.execute(stats_query).fetchdf().iloc[0]
+                is_S_modified = False
+                if S is not None:
+                    self.info_need_state.S = S
+                    self.info_need_state.is_S_executed = False
+                    is_S_modified = True
 
-                                    info_output += (
-                                        f"- `{col}` (numeric):\n"
-                                        f"    count = {stats['count']}\n"
-                                        f"    min = {stats['min']}\n"
-                                        f"    max = {stats['max']}\n"
-                                        f"    mean = {stats['mean']}\n"
-                                        f"    stddev = {stats['stddev']}\n"
-                                        f"    q25 = {stats['q25']}\n"
-                                        f"    median = {stats['median']}\n"
-                                        f"    q75 = {stats['q75']}\n"
-                                    )
-                                    continue
+                if is_T_modified and is_S_modified:
+                    success_msg = "Successfully modified both T and S."
+                    self.__log(success_msg)
+                    return (
+                        success_msg,
+                        ActionExecutionStatus.SUCCESS,
+                    )
+                if is_T_modified:
+                    success_msg = "Successfully modified T."
+                    self.__log(success_msg)
+                    return success_msg, ActionExecutionStatus.SUCCESS
+                if is_S_modified:
+                    success_msg = "Successfully modified S."
+                    self.__log(success_msg)
+                    return success_msg, ActionExecutionStatus.SUCCESS
+                error_msg = "No modification is done."
+                self.__log(error_msg)
+                return error_msg, ActionExecutionStatus.ERROR
+            case ActionNames.MATERIALIZER.value:
+                if len(self.info_need_state.T.keys()) == 0:
+                    error_msg = (
+                        "T has to already be defined before calling Materializer"
+                    )
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                                unique_count_query = f"""
-                                    SELECT COUNT(DISTINCT "{col}") FROM "{table_id}";
-                                """
-                                unique_count = con.execute(
-                                    unique_count_query
-                                ).fetchone()
+                note = ""
+                if isinstance(args, dict) and "note" in args:
+                    note = args["note"]
 
-                                if unique_count is None:
-                                    msg = f"Execution returned no results for unique count of column `{col}`."
-                                    self.__log(msg)
-                                    return msg, ActionExecutionStatus.ERROR
-                                unique_count = unique_count[0]
+                self.__log(f"Materializer called (note: {note})")
 
-                                topk = 10
-                                topk_query = f"""
-                                    SELECT "{col}" AS value, COUNT(*) AS count
-                                    FROM "{table_id}"
-                                    GROUP BY "{col}"
-                                    ORDER BY count DESC
-                                    LIMIT {topk};
-                                """
-                                df_top = con.execute(topk_query).fetchdf()
+                self.info_need_state.T = self.__materialize_T_driver(
+                    self.info_need_state.T,
+                    self.info_need_state.column_descriptions,
+                    self.info_need_state.S,
+                    note,
+                    self.external_tables,
+                )
+                self.info_need_state.is_T_materialized = True
 
-                                values = df_top["value"].tolist()
-                                topk_count = len(values)
-                                if unique_count > topk_count:
-                                    remaining = unique_count - topk_count
-                                    values.append(
-                                        f"truncated ({remaining} values left)"
-                                    )
+                for _, T_doc in self.info_need_state.T.items():
+                    updated_content: pd.DataFrame = T_doc.content
+                    updated_content.to_csv(T_doc.path, index=False)
 
-                                values_str = ", ".join(str(v) for v in values)
-                                info_output += (
-                                    f"- `{col}` (categorical): {values_str}\n"
-                                )
+                success_msg = "Successfully materialized T."
+                self.__log(success_msg)
+                return success_msg, ActionExecutionStatus.SUCCESS
+            case ActionNames.PYTHON_EXECUTOR.value:
+                self.__log(f"{ActionNames.PYTHON_EXECUTOR.value} called")
+                if not self.info_need_state.is_T_materialized:
+                    if len(self.info_need_state.T.keys()) > 0:
+                        self.__log(
+                            f"=> Self-triggered materialization from calling {ActionNames.PYTHON_EXECUTOR.value}..."
+                        )
+                        self.__execute_tool(ActionNames.MATERIALIZER.value, {})
+                    else:
+                        error_msg = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
+                        self.__log(f"=> {error_msg}")
+                        return error_msg, ActionExecutionStatus.ERROR
+                if len(self.info_need_state.S) == 0:
+                    error_msg = f"S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call {ActionNames.PYTHON_EXECUTOR.value} again."
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                            break
+                T_df: dict[str, pd.DataFrame] = {}
+                for t_id, i in self.info_need_state.T.items():
+                    T_df[t_id] = i.content
 
-                    if not found_in_any_db:
-                        msg = f"Table `{table_id}` does not exist in any available data source."
-                        self.__log(msg)
-                        return msg, ActionExecutionStatus.ERROR
+                try:
+                    execution_result = self.action_set.execute_code(
+                        T_df, self.info_need_state.S
+                    )
+                    self.__log(f"Script (S) execution result: {execution_result}")
 
+                    self.info_need_state.is_S_executed = True
+                    return (
+                        f"Executed S, which resulted in this output: {execution_result}",
+                        ActionExecutionStatus.SUCCESS,
+                    )
                 except Exception as e:
-                    msg = f"Error computing column info: {e}"
-                    self.__log(msg)
-                    return msg, ActionExecutionStatus.ERROR
+                    error_msg = f"Error during script (S) execution: {e}"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+            case ActionNames.ASSUMPTION_CHECK.value:
+                self.__log(f"Assumption Check request with params: {args}")
+                if not isinstance(args, dict):
+                    error_msg = "=> `args` must be an object with a `code` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if "code" not in args:
+                    error_msg = "=> `args` must have a `code` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                self.__log(info_output)
-                return info_output, ActionExecutionStatus.SUCCESS
-            else:
-                msg = "Argument must be a dict with keys: `id`, `columns`."
-                self.__log(msg)
-                return msg, ActionExecutionStatus.ERROR
+                all_tables: dict[str, pd.DataFrame] = {}
+                for table in self.retrieved_tables:
+                    all_tables[table.doc_id] = table.content
+                for table in self.external_tables:
+                    all_tables[table.doc_id] = table.content
+                if self.info_need_state.is_T_materialized:
+                    for table_id, table in self.info_need_state.T.items():
+                        all_tables[table_id] = table.content
 
-        return f"Tool calling failed; {tool} is unknown", ActionExecutionStatus.ERROR
+                try:
+                    execution_result = self.action_set.execute_code(
+                        all_tables, args["code"]
+                    )
+                    self.__log(f"Assumption Check execution result: {execution_result}")
+                    return (
+                        f"Executed Assumption Check, which resulted in this output: {execution_result}",
+                        ActionExecutionStatus.SUCCESS,
+                    )
+                except Exception as e:
+                    error_msg = f"Error during Assumption Check execution: {e}"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+            case _:
+                return (
+                    f"Tool calling failed; {tool} is unknown",
+                    ActionExecutionStatus.ERROR,
+                )
 
     def __materialize_T_driver(
         self,

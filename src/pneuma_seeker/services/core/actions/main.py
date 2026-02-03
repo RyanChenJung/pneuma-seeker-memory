@@ -133,7 +133,7 @@ class ActionSet:
                             columns=["error"],
                             data=[
                                 [
-                                    f"Error encountered when executing this SQL: ```{sql}``` on the target schemas: {e}. Please proceed with internal_reasoning to think what causes the issue (e.g., referencing non-existent tables, non-standard SQL, etc.) and how to fix it."
+                                    f"Error encountered when executing this SQL: ```{sql}``` on the target schemas: {e}."
                                 ]
                             ],
                         )
