@@ -338,13 +338,25 @@
 
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
-      Object.keys(rows[0] || {}).forEach(col => {
+      const columns =
+        rows && rows.length > 0
+          ? Object.keys(rows[0])
+          : Object.keys(state.column_descriptions?.[tableName] || {});
+
+      if (columns.length === 0) {
         const th = document.createElement("th");
-        th.textContent = col;
-        th.setAttribute("data-bs-toggle", "tooltip");
-        th.setAttribute("title", state.column_descriptions?.[tableName]?.[col] || "");
+        th.textContent = "(empty table)";
+        th.classList.add("text-muted");
         headerRow.appendChild(th);
-      });
+      } else {
+        columns.forEach(col => {
+          const th = document.createElement("th");
+          th.textContent = col;
+          th.setAttribute("data-bs-toggle", "tooltip");
+          th.setAttribute("title", state.column_descriptions?.[tableName]?.[col] || "");
+          headerRow.appendChild(th);
+        });
+      }
       thead.appendChild(headerRow);
       tableEl.appendChild(thead);
 
