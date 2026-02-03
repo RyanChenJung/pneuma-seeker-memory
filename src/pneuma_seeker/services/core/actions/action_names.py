@@ -10,6 +10,7 @@ class ActionNames(Enum):
     WEB_CRAWL = "web_crawl"
     ASSUMPTION_CHECK = "assumption_check"
     SITUATIONAL_ANALYSIS = "situational_analysis"
+    JOIN_PATH_EXTRACTION = "join_path_extraction"
 
     # Materializer-only actions
     SEMANTIC_COLUMN_GENERATION = "semantic_column_generation"

@@ -30,11 +30,11 @@ class Config:
 
         # System-Level Configurations
         self.DATA_SOURCES = ["buysite"]
-        self.CONDUCTOR_ITERATION_LIMIT = int(getenv("CONDUCTOR_ITERATION_LIMIT", "7"))
         self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "7"))
         self.MATERIALIZER_ITERATION_LIMIT = int(
             getenv("MATERIALIZER_ITERATION_LIMIT", "100")
         )
+
         self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
         self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
         self.ENABLE_ASSUMPTION_CHECK = (
@@ -59,7 +59,15 @@ class Config:
         )
         self.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE = max(
             1, int(getenv("SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE", "10"))
-        )        
+        )
+
+        # Join Path Extraction Settings
+        self.JOIN_PATH_EXTRACTION_ALPHA = float(
+            getenv("JOIN_PATH_EXTRACTION_NAME_SIMILARITY_WEIGHT", "0.6")
+        )
+        self.JOIN_PATH_EXTRACTION_TOP_K = int(
+            getenv("JOIN_PATH_EXTRACTION_TOP_K", "5")
+        )
 
         self.DB_BACKEND_PATH = getenv(
             "DB_BACKEND_PATH",

@@ -77,7 +77,7 @@ class ConfigTests(unittest.TestCase):
         
         # System-Level defaults
         self.assertEqual(cfg.DATA_SOURCES, ["buysite"])
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 7)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 7)
         self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 100)
         self.assertFalse(cfg.ENABLE_WEB_SEARCH)
         self.assertTrue(cfg.ENABLE_WEB_CRAWL)
@@ -113,7 +113,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.LLM_PATH, "gpt-4o")
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 2048)
         self.assertFalse(cfg.USE_AZURE_LLM)
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 10)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 10)
 
     def test_config_loads_from_env_file(self):
         """Test that config loads from .env file when path is provided."""
@@ -133,7 +133,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(cfg.LLM_PATH, "claude-3")
             self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 512)
             self.assertFalse(cfg.USE_AZURE_EMBED_MODEL)
-            self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 5)
+            self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 5)
         finally:
             os.unlink(env_file)
 
@@ -233,7 +233,7 @@ class ConfigTests(unittest.TestCase):
         cfg = Config()
         
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 3000)
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 15)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 15)
         self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 200)
         self.assertEqual(cfg.WEB_CRAWL_MAX_CHARS, 10000)
         self.assertEqual(cfg.SEMANTIC_JOIN_BATCH_SIZE, 50)
@@ -248,7 +248,7 @@ class ConfigTests(unittest.TestCase):
         cfg = Config()
         
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 0)
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, -5)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, -5)
 
     def test_batch_size_minimum_value_enforced(self):
         """Test that batch sizes are enforced to be at least 1."""
@@ -455,7 +455,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.ALLOWED_ORIGINS, ["http://localhost:3000", "https://prod.example.com"])
         self.assertEqual(cfg.OPENWEBUI_BASE_URL, "http://openwebui:8080/")
         self.assertEqual(cfg.OPENWEBUI_API_KEY, "openwebui-key")
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 10)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 10)
         self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 150)
         self.assertTrue(cfg.ENABLE_WEB_SEARCH)
         self.assertFalse(cfg.ENABLE_WEB_CRAWL)
@@ -503,7 +503,7 @@ class ConfigTests(unittest.TestCase):
         cfg = Config()
         
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 999999)
-        self.assertEqual(cfg.CONDUCTOR_ITERATION_LIMIT, 1000000)
+        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 1000000)
 
     def test_config_value_types(self):
         """Test that config values have correct types."""
@@ -519,7 +519,7 @@ class ConfigTests(unittest.TestCase):
         
         # Integer types
         self.assertIsInstance(cfg.EMBEDDING_MAX_TOKENS, int)
-        self.assertIsInstance(cfg.CONDUCTOR_ITERATION_LIMIT, int)
+        self.assertIsInstance(cfg.MAX_CONDUCTOR_STEPS, int)
         self.assertIsInstance(cfg.MATERIALIZER_ITERATION_LIMIT, int)
         self.assertIsInstance(cfg.WEB_CRAWL_MAX_CHARS, int)
         self.assertIsInstance(cfg.SEMANTIC_JOIN_TOP_K, int)
