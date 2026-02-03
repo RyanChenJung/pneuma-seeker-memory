@@ -1,4 +1,5 @@
 # services/core/api/db.py
+import os
 from logging import Logger
 from typing import Any
 
@@ -32,6 +33,16 @@ class DBAPI:
         self.config = config
         self.logger = logger
         self.pneuma_db = PneumaDB(self.logger, dataset_db_path, workspace_db_path)
+        self.target_tables_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "data_src",
+            "target_tables",
+        )
 
     # ------------------------------------------------------------------
     # Dataset Management (one .db per dataset)
@@ -291,10 +302,13 @@ class DBAPI:
             last_node_id = T_dict.get("last_node_id")
 
             # Always re-fetch table from workspace DB
-            content = self.execute_query(
-                user_id,
-                chat_id,
-                f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{T_id}";',
+            # content = self.execute_query(
+            #     user_id,
+            #     chat_id,
+            #     f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{T_id}";',
+            # )
+            content = pd.read_csv(
+                os.path.join(self.target_tables_path, user_id, chat_id, f"{T_id}.csv")
             )
 
             if content is None:

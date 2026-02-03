@@ -9,6 +9,7 @@ import uuid
 
 import pandas as pd
 
+
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
@@ -18,6 +19,7 @@ from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import Table, RetrieverType
+from pneuma_seeker.shared.schemas.db.table_type import TableType
 
 
 class TestDBAPIPersistence(unittest.TestCase):
@@ -35,8 +37,28 @@ class TestDBAPIPersistence(unittest.TestCase):
         self.dbapi.pneuma_db.workspace_db_path = Path(
             os.path.join(self.tmpdir, "workspaces")
         )
+        self.dbapi.target_tables_path = os.path.join(self.tmpdir, "target_tables")
         os.makedirs(self.dbapi.pneuma_db.dataset_db_path, exist_ok=True)
         os.makedirs(self.dbapi.pneuma_db.workspace_db_path, exist_ok=True)
+        os.makedirs(self.dbapi.target_tables_path, exist_ok=True)
+
+        dataset_name = self.config.DATA_SOURCES[0]
+        ds_con = self.dbapi.pneuma_db.get_dataset_connection(
+            dataset_name, read_only=False
+        )
+        try:
+            # create a table inside the dataset DB
+            ds_df = pd.DataFrame({"x": [10, 20]})
+            ds_con.register("tmp_ds", ds_df)
+            ds_con.execute(
+                f'CREATE OR REPLACE TABLE "ds_table" AS SELECT * FROM tmp_ds;'
+            )
+            try:
+                ds_con.unregister("tmp_ds")
+            except Exception:
+                pass
+        finally:
+            ds_con.close()
 
     def tearDown(self):
         try:
@@ -55,15 +77,18 @@ class TestDBAPIPersistence(unittest.TestCase):
         table_name = "t_state"
 
         os.makedirs(
-            os.path.join(self.tmpdir, self.config.DATA_SOURCES[0]), exist_ok=True
+            os.path.join(self.dbapi.target_tables_path, user_id, chat_id), exist_ok=True
         )
         df.to_csv(
-            os.path.join(self.tmpdir, self.config.DATA_SOURCES[0], f"{table_name}.csv"),
+            os.path.join(self.dbapi.target_tables_path, user_id, chat_id, f"{table_name}.csv"),
             index=False,
         )
-        self.dbapi.register_dataset_table(
-            self.config.DATA_SOURCES[0],
-            os.path.join(self.tmpdir, self.config.DATA_SOURCES[0]),
+        self.dbapi.register_table(
+            user_id,
+            chat_id,
+            table_name,
+            df,
+            TableType.TARGET,
         )
 
         # Build InformationNeedState with T containing a Table entry referencing the uploaded table
@@ -97,25 +122,6 @@ class TestDBAPIPersistence(unittest.TestCase):
         self.assertEqual(len(loaded_table.content), 3)
 
     def test_save_and_load_state_retrieved_tables_from_dataset(self):
-        # Ensure there is a dataset matching config.DATA_SOURCES[0]
-        dataset_name = self.config.DATA_SOURCES[0]
-        ds_con = self.dbapi.pneuma_db.get_dataset_connection(
-            dataset_name, read_only=False
-        )
-        try:
-            # create a table inside the dataset DB
-            ds_df = pd.DataFrame({"x": [10, 20]})
-            ds_con.register("tmp_ds", ds_df)
-            ds_con.execute(
-                f'CREATE OR REPLACE TABLE "ds_table" AS SELECT * FROM tmp_ds;'
-            )
-            try:
-                ds_con.unregister("tmp_ds")
-            except Exception:
-                pass
-        finally:
-            ds_con.close()
-
         # Prepare retrieved_tables list: a Table doc referencing the dataset table
         retrieved_doc = Table(
             doc_id="ds_table",
