@@ -35,7 +35,7 @@ def dedupe_columns(cols):
     return result
 
 
-DATASET_NAME = "federal_student_loan"
+DATASET_NAME = "buysite"
 DATASET_PATH = f"../{DATASET_NAME}/dataset"
 OVERWRITE_DB = True
 
@@ -66,7 +66,7 @@ else:
                     FROM read_csv_auto(
                         '{file_path}',
                         HEADER=TRUE,
-                        SAMPLE_SIZE=0
+                        SAMPLE_SIZE=1
                     )
                     LIMIT 0
                     """
