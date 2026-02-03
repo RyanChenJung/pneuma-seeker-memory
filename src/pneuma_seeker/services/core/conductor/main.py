@@ -310,7 +310,8 @@ class Conductor:
                     args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
                 )
                 try:
-                    self.join_paths = self.action_set.discover_join_paths(self.retrieved_tables)
+                    if self.config.ENABLE_JOIN_PATH_EXTRACTION:
+                        self.join_paths = self.action_set.discover_join_paths(self.retrieved_tables)
                 except Exception as e:
                     self.__log(f"=> Error during join path extraction: {e}")
 

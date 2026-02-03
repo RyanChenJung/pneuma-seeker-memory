@@ -40,6 +40,9 @@ class Config:
         self.ENABLE_ASSUMPTION_CHECK = (
             getenv("ENABLE_ASSUMPTION_CHECK", "true").lower() == "true"
         )
+        self.ENABLE_JOIN_PATH_EXTRACTION = (
+            getenv("ENABLE_JOIN_PATH_EXTRACTION", "true").lower() == "true"
+        )
 
         self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))
         self.PERSIST_CHAT_SESSION = (

@@ -268,7 +268,8 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                 else:
-                    self.state.join_paths = self.action_set.discover_join_paths(self.state.retrieved_tables)
+                    if self.config.ENABLE_JOIN_PATH_EXTRACTION:
+                        self.state.join_paths = self.action_set.discover_join_paths(self.state.retrieved_tables)
                     success_msg = f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "retrieved internal tables" have been filled.'
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
@@ -298,7 +299,7 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 self.state.web_search_result = web_search_results[0]
-                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled. Join paths have been updated accordingly.'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.{" Join paths have been updated accordingly." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
