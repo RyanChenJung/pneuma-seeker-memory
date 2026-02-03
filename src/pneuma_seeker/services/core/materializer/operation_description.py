@@ -1,7 +1,11 @@
 from pneuma_seeker.services.core.actions.action_names import ActionNames
 
 
-def get_operation_description(enable_web_search=False, enable_web_crawl=False) -> str:
+def get_operation_description(
+    enable_web_search=False,
+    enable_web_crawl=False,
+    enable_assumption_check=False,
+) -> str:
     return (
         f"""
 - **{ActionNames.TABLE_RETRIEVE.value}**
@@ -27,6 +31,7 @@ def get_operation_description(enable_web_search=False, enable_web_crawl=False) -
     - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result, which must be a **SINGLE** pandas DataFrame, to a variable named 'result'
     - Args: {{"code": "<Python code string>"}}
+{get_assumption_check_description() if enable_assumption_check else ""}
 
 - **{ActionNames.TABLE_PROJECTION.value}**
     - Directly maps an existing table (internal, external, or intermediate) to a target table (or a subset of its columns).
@@ -86,6 +91,21 @@ def get_operation_description(enable_web_search=False, enable_web_crawl=False) -
         + (get_web_search_description() if enable_web_search else "")
         + (get_web_crawl_description() if enable_web_crawl else "")
     )
+
+
+def get_assumption_check_description():
+    return f"""\n- **{ActionNames.ASSUMPTION_CHECK.value}**
+    - Executes Python code to explore, inspect, or test assumptions about the data.
+    - This tool is used ONLY to gather evidence, perform sanity checks, or confirm suspicions. There are no side effects.
+    - It MUST NOT be used to construct final outputs or pipeline tables.
+    - All tables are available via `tables[\"<ID>\"]` as Pandas DataFrames.
+    - The code must assign a SINGLE pandas DataFrame to a variable named `result`.
+    - Typical uses:
+        - Checking whether a condition holds
+        - Inspecting column value distributions or edge cases
+        - Counting, filtering, sampling, or summarizing to confirm a belief
+    - The output is considered *ephemeral* and used only for reasoning.
+    - Args: {{\"code\": \"<Python code string>\"}}"""
 
 
 def get_web_search_description():

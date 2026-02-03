@@ -31,12 +31,16 @@ class Config:
         # System-Level Configurations
         self.DATA_SOURCES = ["buysite"]
         self.CONDUCTOR_ITERATION_LIMIT = int(getenv("CONDUCTOR_ITERATION_LIMIT", "7"))
-        self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "5"))
+        self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "7"))
         self.MATERIALIZER_ITERATION_LIMIT = int(
             getenv("MATERIALIZER_ITERATION_LIMIT", "100")
         )
         self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
         self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
+        self.ENABLE_ASSUMPTION_CHECK = (
+            getenv("ENABLE_ASSUMPTION_CHECK", "true").lower() == "true"
+        )
+
         self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))
         self.PERSIST_CHAT_SESSION = (
             getenv("PERSIST_CHAT_SESSION", "true").lower() == "true"

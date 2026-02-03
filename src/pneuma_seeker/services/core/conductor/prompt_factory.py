@@ -29,9 +29,9 @@ The total number of steps must not exceed **{self.config.MAX_CONDUCTOR_STEPS}**.
 
 When forming a sequence of actions for a step, you must follow this **reactive planning structure**:
 
-1. Begin with **internal_reasoning** to analyze the current environment, evaluate what information is missing, and determine what action(s) are necessary.
-2. Perform one or more **tool_call** actions (`{ActionNames.TABLE_RETRIEVE.value}`, `state_manipulation`, `materializer`, `{ActionNames.PYTHON_EXECUTOR.value}`, etc.) to progress toward fulfilling the user's information need.
-3. A tool_call action may modify the environment, so tool_calls that depend on previous tool_call outputs must be in separate steps. For example, **communicate_with_user** that depends on results from `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` must occur in a subsequent step after those tools have executed and their outputs are reflected in the environment.
+1. Begin with **{ActionNames.SITUATIONAL_ANALYSIS.value}** to analyze the current environment, evaluate what information is missing, and determine what action(s) are necessary.
+2. Perform one or more **tool_call** actions (`{ActionNames.TABLE_RETRIEVE.value}`, `{ActionNames.STATE_MANIPULATION.value}`, `materializer`, `{ActionNames.PYTHON_EXECUTOR.value}`, etc.) to progress toward fulfilling the user's information need.
+3. A tool_call action may modify the environment, so tool_calls that depend on previous tool_call outputs must be in separate steps. For example, **{ActionNames.USER_FACING_COMMUNICATION.value}** that depends on results from `materializer` or `{ActionNames.PYTHON_EXECUTOR.value}` must occur in a subsequent step after those tools have executed and their outputs are reflected in the environment.
 
 # Core Concepts
 You (Conductor) maintain and update a shared state (T,S) that formalizes the user's active information need. Below are some relevant concepts:
@@ -83,14 +83,14 @@ If you find that a computation requires matching data from different tables, fir
       - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
       - If the approximation is uncertain, explicitly warn the user before continuing.
 
-- **state_manipulation**:
+- **{ActionNames.STATE_MANIPULATION.value}**:
   Update T, S, or both.
   - **Args**:
   {{"T": {{...}}, "column_descriptions": {{...}}}}
   OR {{ "S": "..." }}
   OR {{"T": {{...}}, "column_descriptions": {{...}}, "S": "..."}}.
   - **Notes**:
-    - A `state_manipulation` call resets previous T rather than appending.
+    - A `{ActionNames.STATE_MANIPULATION.value}` call resets previous T rather than appending.
 
 - **materializer**:
   Populate tables in T with rows based on data integration and processing.
@@ -107,15 +107,9 @@ If you find that a computation requires matching data from different tables, fir
       - Unless well-defined, do not hardcode explicit lists or values of semantic columns inside the `note` argument; just describe their meaning.
 
 - **{ActionNames.PYTHON_EXECUTOR.value}**:
-  Execute `S` on `T` to produce the final information that will be communicated to the user via `communicate_with_user`.
+  Execute `S` on `T` to produce the final information that will be communicated to the user via `{ActionNames.USER_FACING_COMMUNICATION.value}`.
   - **Args**: {{}}
-
-- **column_info_extractor**:
-  Extract summary information for selected columns in a retrieved table.
-  Automatically handles both numeric and categorical columns.
-  - Numeric columns: returns count, min, max, mean, stddev, and quartiles (Q1, median, Q3).
-  - Categorical columns: returns the top-k most frequent values and includes a 'truncated (X values left)' indicator when more unique values exist.
-  - **Args**: {{"id": "<retrieved_table_id>", "columns": ["col1", "col2"]}}
+{self.get_assumption_check_description() if self.config.ENABLE_ASSUMPTION_CHECK else ""}
 
 - **{ActionNames.TABLE_ENUMERATION.value}**:
   List all available internal tables whose names match a regex pattern.
@@ -146,9 +140,9 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
 
 {{
   "plan": [
-    {{"action": "internal_reasoning", "message": "..."}},
+    {{"action": "{ActionNames.SITUATIONAL_ANALYSIS.value}", "message": "..."}},
     {{"action": "<one of tool names>", "args": {{...}}}},
-    {{"action": "communicate_with_user", "message": "..."}}
+    {{"action": "{ActionNames.USER_FACING_COMMUNICATION.value}", "message": "..."}}
   ]
 }}
 """.strip()
@@ -175,6 +169,20 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
   - Returned content is raw extracted text from the page (no summarization).
   - Use this when the user specifically requests information from a particular URL.
 """
+
+    def get_assumption_check_description(self):
+      return f"""\n- **{ActionNames.ASSUMPTION_CHECK.value}**
+  - Executes Python code to explore, inspect, or test assumptions about the retrieved or external tables.
+  - If T has been materialized, those tables are also available.
+  - This tool is used ONLY to gather evidence, perform sanity checks, or confirm suspicions. There are no side effects.
+  - All tables are available via `tables["<ID>"]` as Pandas DataFrames.
+  - The code must assign a SINGLE pandas DataFrame to a variable named `result`.
+  - Typical uses:
+      - Checking whether a condition holds
+      - Inspecting column value distributions or edge cases
+      - Counting, filtering, sampling, or summarizing to confirm a belief
+  - The output is considered *ephemeral* and used only for reasoning.
+  - Args: {{"code": "<Python code string>"}}"""
 
     def get_env_state_prompt(
         self,
@@ -247,8 +255,8 @@ Please output your decision in the following format:
 
     def get_direct_response_anyway_prompt(self) -> str:
         """Gets the direct response anyway prompt for Conductor."""
-        return """You have reached the maximum number of steps. Please answer the current user input.
-You are essentially asked to produce a `communicate_with_user` response but without the JSON format requirements. Simply output the response answering the current user input."""
+        return f"""You have reached the maximum number of steps. Please answer the current user input.
+You are essentially asked to produce a `{ActionNames.USER_FACING_COMMUNICATION.value}` response but without the JSON format requirements. Simply output the response answering the current user input."""
 
     def __convert_interactions_to_str(
         self, interactions: list[UserConductorInteraction]

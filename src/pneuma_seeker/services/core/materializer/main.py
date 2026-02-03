@@ -194,7 +194,7 @@ class Materializer:
     ):
         """Handles a single action in the materialization process."""
         self.__log(f"=> Handling action of type: {action_type}")
-        if action_type == "internal_reasoning":
+        if action_type == ActionNames.SITUATIONAL_ANALYSIS.value:
             message: str = plan["message"]
             self.actions.append(f"Reasoned internally: {message}")
         elif action_type == "operation":
@@ -803,6 +803,27 @@ class Materializer:
                 except Exception as exception:
                     self.__log(
                         f"==> Exception occured during Python code execution: {exception}"
+                    )
+                    self.actions.append(str(exception))
+            case ActionNames.ASSUMPTION_CHECK.value:
+                if not self.config.ENABLE_ASSUMPTION_CHECK:
+                    error_msg = f"{ActionNames.ASSUMPTION_CHECK.value} is not enabled in the configuration."
+                    self.__log(f"==> {error_msg}")
+                    self.actions.append(error_msg)
+                    return
+
+                id_dfs: dict[str, DataFrame] = {}
+                for table_doc in all_tables:
+                    id_dfs[table_doc.doc_id] = table_doc.content
+                try:
+                    python_code: str = parse_code(op_args.get("code", ""))
+                    exec_res = self.action_set.execute_code(id_dfs, python_code)
+                    success_msg = f"Assumption check result: {exec_res}"
+                    self.__log(f"==> {success_msg}")
+                    self.actions.append(success_msg)
+                except Exception as exception:
+                    self.__log(
+                        f"==> Exception occured during assumption checking: {exception}"
                     )
                     self.actions.append(str(exception))
             case ActionNames.SQL_EXECUTOR.value:

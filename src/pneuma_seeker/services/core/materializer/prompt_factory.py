@@ -41,7 +41,11 @@ REFERENCE SCRIPT (for value format guidance only — not to execute directly):
 {S}
 
 AVAILABLE OPERATIONS:
-{get_operation_description(self.config.ENABLE_WEB_SEARCH, self.config.ENABLE_WEB_CRAWL)}
+{get_operation_description(
+    self.config.ENABLE_WEB_SEARCH,
+    self.config.ENABLE_WEB_CRAWL,
+    self.config.ENABLE_ASSUMPTION_CHECK,
+)}
 
 CORE RULES:
 1. Only use listed operations — no custom methods.
@@ -63,8 +67,8 @@ COLUMN HANDLING:
 OUTPUT FORMAT:
 Produce exactly ONE JSON object:
 {{
-    "action_type": "internal_reasoning" | "operation",
-    "message": "...",        # if action_type == internal_reasoning
+    "action_type": "{ActionNames.SITUATIONAL_ANALYSIS.value}" | "operation",
+    "message": "...",        # if action_type == {ActionNames.SITUATIONAL_ANALYSIS.value}
     "name": "<operation>",   # if action_type == operation
     "args": {{...}},         # arguments for the operation
     "assign_to": "<target_table_id or intermediate_table_id>"
@@ -117,8 +121,8 @@ TOOL USAGE:
 OUTPUT FORMAT:
 Return exactly ONE JSON object per iteration:
 {{
-  "action_type": "internal_reasoning",
-  "message": "<your private reasoning>"
+  "action_type": "{ActionNames.SITUATIONAL_ANALYSIS.value}",
+  "message": "<your situational analysis>"
 }}
 
 OR
