@@ -31,7 +31,7 @@ class ConfigTests(unittest.TestCase):
             "ALLOWED_ORIGINS",
             "OPENWEBUI_BASE_URL",
             "OPENWEBUI_API_KEY",
-            "CONDUCTOR_ITERATION_LIMIT",
+            "MAX_CONDUCTOR_STEPS",
             "MATERIALIZER_ITERATION_LIMIT",
             "ENABLE_WEB_SEARCH",
             "ENABLE_WEB_CRAWL",
@@ -105,7 +105,7 @@ class ConfigTests(unittest.TestCase):
         os.environ["LLM_PATH"] = "gpt-4o"
         os.environ["EMBEDDING_MAX_TOKENS"] = "2048"
         os.environ["USE_AZURE_LLM"] = "false"
-        os.environ["CONDUCTOR_ITERATION_LIMIT"] = "10"
+        os.environ["MAX_CONDUCTOR_STEPS"] = "10"
         
         cfg = Config()
         
@@ -123,7 +123,7 @@ class ConfigTests(unittest.TestCase):
             f.write("LLM_PATH=claude-3\n")
             f.write("EMBEDDING_MAX_TOKENS=512\n")
             f.write("USE_AZURE_EMBED_MODEL=false\n")
-            f.write("CONDUCTOR_ITERATION_LIMIT=5\n")
+            f.write("MAX_CONDUCTOR_STEPS=5\n")
             env_file = f.name
         
         try:
@@ -223,7 +223,7 @@ class ConfigTests(unittest.TestCase):
     def test_integer_parsing_valid_values(self):
         """Test integer parsing with valid numeric strings."""
         os.environ["EMBEDDING_MAX_TOKENS"] = "3000"
-        os.environ["CONDUCTOR_ITERATION_LIMIT"] = "15"
+        os.environ["MAX_CONDUCTOR_STEPS"] = "15"
         os.environ["MATERIALIZER_ITERATION_LIMIT"] = "200"
         os.environ["WEB_CRAWL_MAX_CHARS"] = "10000"
         os.environ["SEMANTIC_JOIN_BATCH_SIZE"] = "50"
@@ -243,7 +243,7 @@ class ConfigTests(unittest.TestCase):
     def test_integer_parsing_zero_and_negative_values(self):
         """Test integer parsing with zero and negative values."""
         os.environ["EMBEDDING_MAX_TOKENS"] = "0"
-        os.environ["CONDUCTOR_ITERATION_LIMIT"] = "-5"
+        os.environ["MAX_CONDUCTOR_STEPS"] = "-5"
         
         cfg = Config()
         
@@ -427,7 +427,7 @@ class ConfigTests(unittest.TestCase):
         os.environ["ALLOWED_ORIGINS"] = "http://localhost:3000,https://prod.example.com"
         os.environ["OPENWEBUI_BASE_URL"] = "http://openwebui:8080/"
         os.environ["OPENWEBUI_API_KEY"] = "openwebui-key"
-        os.environ["CONDUCTOR_ITERATION_LIMIT"] = "10"
+        os.environ["MAX_CONDUCTOR_STEPS"] = "10"
         os.environ["MATERIALIZER_ITERATION_LIMIT"] = "150"
         os.environ["ENABLE_WEB_SEARCH"] = "true"
         os.environ["ENABLE_WEB_CRAWL"] = "false"
@@ -498,7 +498,7 @@ class ConfigTests(unittest.TestCase):
     def test_config_with_very_large_integer_values(self):
         """Test config with very large integer values."""
         os.environ["EMBEDDING_MAX_TOKENS"] = "999999"
-        os.environ["CONDUCTOR_ITERATION_LIMIT"] = "1000000"
+        os.environ["MAX_CONDUCTOR_STEPS"] = "1000000"
         
         cfg = Config()
         

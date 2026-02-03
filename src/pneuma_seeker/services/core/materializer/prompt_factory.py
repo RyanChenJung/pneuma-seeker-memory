@@ -85,6 +85,7 @@ Produce exactly ONE JSON object:
         user_uploaded_external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None,
         web_crawl_result: AbstractDocument | None,
+        join_paths: str | None,
     ) -> str:
         """Generates the context prompt for each iteration of the Materializer."""
         return f"""
@@ -94,6 +95,7 @@ CURRENT PROGRESS:
 - Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
 - Recent actions: {recent_actions}
 - Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables)}
+    - Potential join paths between retrieved tables: {join_paths if join_paths else "N/A"}
 - User-uploaded external tables: {convert_retrieval_results_to_str(user_uploaded_external_tables)}
 - User note: {user_side_note}
 {f"- Web search result (if any): {web_search_result}\n" if self.config.ENABLE_WEB_SEARCH and web_search_result else ""}

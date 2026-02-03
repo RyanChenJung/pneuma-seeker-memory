@@ -79,6 +79,7 @@ If you find that a computation requires matching data from different tables, fir
   - **Notes**:
     - Avoid retrying the same or slightly modified queries repeatedly.
     - However, for different topics or aspects of an information need, feel free to call multiple times.
+    - Potential join paths between retrieved tables will be provided for reference.
     - In relation to defining columns of tables in T:
       - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
       - If the approximation is uncertain, explicitly warn the user before continuing.
@@ -98,7 +99,7 @@ If you find that a computation requires matching data from different tables, fir
   - **Capabilities**:
     - Integrate multi-source data using Python or SQL computations for columns that are not semantically derived.
     - Generate (`semantically_derived`) columns via semantic reasoning (i.e., using an LLM), conditioned on the available data.
-    - Perform semantic joins without strict key matches.
+    - Perform semantic joins without strict key matches (e.g., when there are no promising join paths).
       - Do not specify a similarity threshold in the `note` argument. If specified by the user, define it in `S` instead.
       - If you intend a table in T to be a result of a semantic join, add a column named "similarity".
     - **Guidelines related to T**:
@@ -196,6 +197,7 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
         external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None = None,
         web_crawl_result: AbstractDocument | None = None,
+        join_paths: str | None = None,
     ) -> str:
         """Gets the environment state prompt for Conductor."""
         return f"""
@@ -212,6 +214,9 @@ RECENT USER INTERACTIONS:
 
 RETRIEVED TABLES:
 {convert_retrieval_results_to_str(curr_retrieved_tables)}
+
+POTENTIAL JOIN PATHS BETWEEN RETRIEVED TABLES:
+{join_paths if join_paths else "N/A"}
 
 OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (IF ANY; FOR REFERENCE):
 {enumerated_table_ids}
@@ -256,7 +261,7 @@ Please output your decision in the following format:
     def get_direct_response_anyway_prompt(self) -> str:
         """Gets the direct response anyway prompt for Conductor."""
         return f"""You have reached the maximum number of steps. Please answer the current user input.
-You are essentially asked to produce a `{ActionNames.USER_FACING_COMMUNICATION.value}` response but without the JSON format requirements. Simply output the response answering the current user input."""
+You are essentially asked to produce a `{ActionNames.USER_FACING_COMMUNICATION.value}d` response but without the JSON format requirements. Simply output the response answering the current user input."""
 
     def __convert_interactions_to_str(
         self, interactions: list[UserConductorInteraction]

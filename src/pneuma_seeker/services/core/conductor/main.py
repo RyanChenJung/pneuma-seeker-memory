@@ -80,6 +80,7 @@ class Conductor:
         self.enumerated_table_ids: list[str] = []
         self.web_search_result: AbstractDocument | None = None
         self.web_crawl_result: AbstractDocument | None = None
+        self.join_paths: str | None = None
 
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -172,6 +173,7 @@ class Conductor:
                         self.external_tables,
                         self.web_search_result,
                         self.web_crawl_result,
+                        self.join_paths,
                     ),
                 )
             )
@@ -191,6 +193,9 @@ class Conductor:
                 yield "LOG: Parsing plan..."
                 self.__log("==> Parsing plan...")
                 plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
+
+                executor_part_of_plan = False
+                user_facing_communication_part_of_plan = False
                 for action_plan in plan:
                     if action_plan.get("action") is None:
                         error_msg = "Action specified is not valid (None)."
@@ -200,6 +205,19 @@ class Conductor:
                         error_msg = f"Action specified is not valid: {action_plan.get('action')}"
                         self.__log(f"=> {error_msg}")
                         raise ValueError(error_msg)
+                    if action_plan.get("action") == ActionNames.PYTHON_EXECUTOR.value:
+                        executor_part_of_plan = True
+                    if action_plan.get("action") == ActionNames.USER_FACING_COMMUNICATION.value:
+                        user_facing_communication_part_of_plan = True
+                
+                # Ensure there is no user-facing communication in the same plan as code execution (simply remove the user-facing part)
+                if executor_part_of_plan and user_facing_communication_part_of_plan:
+                    self.__log("==> Removing user-facing communication from plan due to presence of code execution.")
+                    plan = [
+                        action_plan
+                        for action_plan in plan
+                        if action_plan.get("action") != ActionNames.USER_FACING_COMMUNICATION.value
+                    ]
                 self.__log("==> Plan parsed!")
             except Exception as exc:
                 self.__log(f"=> Unexpected error occurred: {exc}")
@@ -291,6 +309,11 @@ class Conductor:
                 self.retrieved_tables = self.action_set.retrieve_documents(
                     args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
                 )
+                try:
+                    self.join_paths = self.action_set.discover_join_paths(self.retrieved_tables)
+                except Exception as e:
+                    self.__log(f"=> Error during join path extraction: {e}")
+
                 success_msg = "Successfully retrieved tables from Table Retrieve. Notice that the `RETRIEVED TABLES` has been updated."
                 self.__log(success_msg)
                 return (

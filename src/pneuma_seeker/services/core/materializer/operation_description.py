@@ -54,7 +54,7 @@ def get_operation_description(
     - Joins two tables (internal, external, or intermediate) by computing semantic similarity between specified columns.
     - Similarity uses a weighted combination of embedding cosine similarity and normalized Damerau-Levenshtein edit similarity.
     - Produces a new joined table containing matched rows and a similarity_score column.
-    - Use case: when the user explicitly asks for it, or when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM").
+    - Use case: when the user explicitly asks for it, when two tables contain related entities that do not match exactly by key or text (e.g., "Intl Business Machines" vs. "IBM"), or when there are no potential join paths.
       Even if both tables share a key column (e.g., "product_id"), the user may prefer semantic matching — for instance, comparing product descriptions between catalogs from different years to detect essentially identical products that were renumbered but now sold at different prices.
     - Args: {{
         "left_table_id": "<ID of left table (must exist in retrieved or intermediate tables)>",

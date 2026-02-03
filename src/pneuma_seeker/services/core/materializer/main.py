@@ -75,6 +75,7 @@ class Materializer:
         prefetched_tables: list[AbstractDocument] = [],
         prefetched_web_search_result: AbstractDocument | None = None,
         prefetched_web_crawl_result: AbstractDocument | None = None,
+        precomputed_join_paths: str | None = None,
     ) -> dict[str, DataFrame]:
         """Materialize target tables T based on the provided script S and external tables."""
         self.__log(f"Materializing {len(T)} target tables...")
@@ -87,6 +88,8 @@ class Materializer:
             self.state.web_search_result = prefetched_web_search_result
         if prefetched_web_crawl_result is not None:
             self.state.web_crawl_result = prefetched_web_crawl_result
+        if precomputed_join_paths is not None:
+            self.state.join_paths = precomputed_join_paths
 
         prev_response = ""
         repetitive_response_count = 0
@@ -122,6 +125,7 @@ class Materializer:
                         external_tables,
                         self.state.web_search_result,
                         self.state.web_crawl_result,
+                        self.state.join_paths,
                     ),
                 )
             )
@@ -196,7 +200,7 @@ class Materializer:
         self.__log(f"=> Handling action of type: {action_type}")
         if action_type == ActionNames.SITUATIONAL_ANALYSIS.value:
             message: str = plan["message"]
-            self.actions.append(f"Reasoned internally: {message}")
+            self.actions.append(f"Situational analysis: {message}")
         elif action_type == "operation":
             op_name, op_args, assign_to = (
                 plan.get("name", ""),
@@ -264,6 +268,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.actions.append(error_msg)
                 else:
+                    self.state.join_paths = self.action_set.discover_join_paths(self.state.retrieved_tables)
                     success_msg = f'Successfully retrieved tables using this prompt: ```{prompt}```. Notice that the "retrieved internal tables" have been filled.'
                     self.__log(f"==> {success_msg}")
                     self.actions.append(success_msg)
@@ -293,7 +298,7 @@ class Materializer:
                     self.actions.append(error_msg)
                     return
                 self.state.web_search_result = web_search_results[0]
-                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value} using this prompt: ```{prompt}```. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled. Join paths have been updated accordingly.'
                 self.__log(f"==> {success_msg}")
                 self.actions.append(success_msg)
 
@@ -991,6 +996,7 @@ class Materializer:
         self.prov_graph.reset_for_materialization()
         self.__clear_csv_files()
         self.actions = []
+        self.join_paths = None
         self.__log("Materializer cleanup complete.")
 
     def __clear_csv_files(self):

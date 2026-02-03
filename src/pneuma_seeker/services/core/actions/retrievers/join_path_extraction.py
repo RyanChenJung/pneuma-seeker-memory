@@ -36,7 +36,10 @@ class JoinPathExtraction(Action):
         for tname, df in tables.items():
             profiles[tname] = {}
             for col in df.columns:
-                prof = self.__profile_column(df[col])
+                col_data = df[col]
+                if isinstance(col_data, pd.DataFrame):
+                    continue
+                prof = self.__profile_column(col_data)
                 if prof:
                     profiles[tname][col] = prof
 
@@ -82,7 +85,8 @@ class JoinPathExtraction(Action):
                 f"<-> {c['t2']} (columns: [{c['c2']}]) "
                 f"[score={c['score']:.3f}]"
             )
-
+        
+        self.logger.info("[JOIN PATH EXTRACTION] Discovered join paths:\n" + "\n".join(lines))
         return "\n".join(lines)
 
     def __value_overlap(self, col_a, col_b) -> float:

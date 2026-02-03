@@ -24,7 +24,12 @@ from pneuma_seeker.services.core.actions.operators.semantic_join import (
     SyntacticSimMetric,
 )
 from pneuma_seeker.services.core.actions.executors.sql_executor import SQLExecutor
-from pneuma_seeker.services.core.actions.operators.table_projection import TableProjection
+from pneuma_seeker.services.core.actions.operators.table_projection import (
+    TableProjection,
+)
+from pneuma_seeker.services.core.actions.retrievers.join_path_extraction import (
+    JoinPathExtraction,
+)
 from pneuma_seeker.services.core.actions.retrievers.table_enumeration import (
     TableEnumeration,
 )
@@ -72,6 +77,9 @@ class ActionSet:
         self.web_crawl = WebCrawl(
             self.config, self.logger, self.db_api, self.language_model_api
         )
+        self.join_path_extraction = JoinPathExtraction(
+            self.config, self.logger, self.db_api, self.language_model_api
+        )
 
         self.python_executor = PythonExecutor(
             self.config, self.logger, self.db_api, self.language_model_api
@@ -101,7 +109,11 @@ class ActionSet:
         return self.ir_system.retrieve_documents(
             retriever_type, prompt, k, sample_only, sample_size
         )
-    
+
+    def discover_join_paths(self, tables: list[AbstractDocument]) -> str:
+        tables_df: dict[str, DataFrame] = {doc.doc_id: doc.content for doc in tables}
+        return self.join_path_extraction.discover_join_paths(tables_df)
+
     def project_table(self, table: DataFrame, relevant_columns: list[str]) -> DataFrame:
         return self.table_projection.apply(
             {
