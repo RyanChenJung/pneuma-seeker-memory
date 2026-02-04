@@ -17,7 +17,6 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
-    convert_retrieval_results_to_str,
 )
 from pneuma_seeker.services.core.materializer.prompt_factory import (
     MaterializerPromptFactory,
@@ -65,6 +64,7 @@ class Materializer:
         self.prompt_factory = MaterializerPromptFactory(self.config)
         self.state = MaterializerState()
         self.actions: list[str] = []
+        self.llm_messages: list[LLMMessage] = []
 
     def materialize_T(
         self,
@@ -96,7 +96,7 @@ class Materializer:
         repetitive_response_count = 0
 
         curr_iteration = 0
-        llm_messages = [
+        self.llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_planning_prompt(
@@ -114,7 +114,7 @@ class Materializer:
             if curr_iteration == self.config.MATERIALIZER_ITERATION_LIMIT:
                 break
 
-            llm_messages.append(
+            self.llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_context_prompt(
@@ -132,7 +132,9 @@ class Materializer:
             )
 
             response = "".join(
-                self.language_model_api.chat(llm_messages, LLMOption(json_mode=True))
+                self.language_model_api.chat(
+                    self.llm_messages, LLMOption(json_mode=True)
+                )
             )
             self.__log(f"=> Materialization action selected: {response}")
 
@@ -144,7 +146,7 @@ class Materializer:
             if repetitive_response_count == 5:
                 break
 
-            llm_messages.append(
+            self.llm_messages.append(
                 LLMMessage(
                     role=Role.ASSISTANT.value,
                     content=response,
@@ -157,8 +159,7 @@ class Materializer:
             except ValueError as exc:
                 error_msg = f"Error parsing the response: {exc}. Please ensure the response is a valid JSON object."
                 self.__log(f"==> {error_msg}")
-                self.actions.append(error_msg)
-                llm_messages.append(
+                self.llm_messages.append(
                     LLMMessage(
                         role=Role.SYSTEM.value,
                         content=error_msg,
@@ -166,12 +167,12 @@ class Materializer:
                 )
                 continue
 
+            self.actions.append(str(plan))
             action_type: str = plan.get("action_type", "")
             if len(action_type) == 0:
                 error_msg = "The action_type is not defined. Please define it properly."
                 self.__log(f"==> {error_msg}")
-                self.actions.append(error_msg)
-                llm_messages.append(
+                self.llm_messages.append(
                     LLMMessage(
                         role=Role.SYSTEM.value,
                         content=error_msg,
@@ -201,7 +202,12 @@ class Materializer:
         self.__log(f"=> Handling action of type: {action_type}")
         if action_type == ActionNames.SITUATIONAL_ANALYSIS.value:
             message: str = plan["message"]
-            self.actions.append(f"Situational analysis: {message}")
+            self.llm_messages.append(
+                LLMMessage(
+                    role=Role.SYSTEM.value,
+                    content=f"You did a situational analysis: {message}",
+                )
+            )
         elif action_type == "operation":
             op_name, op_args, assign_to = (
                 plan.get("name", ""),
@@ -210,16 +216,26 @@ class Materializer:
             )
 
             if len(op_name) == 0:
-                error_msg = "The op_name is not defined. Please define it properly."
+                error_msg = f"{op_name} is not defined. Please define it properly."
                 self.__log(f"==> {error_msg}")
-                self.actions.append(error_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=error_msg,
+                    )
+                )
                 return
 
             self.__handle_operation(T, external_data, op_name, op_args, assign_to)
         else:
             error_msg = f"{action_type} is not a valid action."
             self.__log(f"==> {error_msg}")
-            self.actions.append(error_msg)
+            self.llm_messages.append(
+                LLMMessage(
+                    role=Role.SYSTEM.value,
+                    content=error_msg,
+                )
+            )
 
     def __handle_operation(
         self,
@@ -265,12 +281,22 @@ class Materializer:
                     ):
                         error_msg = "The 'prompts' argument must be a list of strings."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
                     if len(prompts) == 0:
                         error_msg = "The 'prompts' list cannot be empty."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
                     self.state.retrieved_tables = (
                         self.action_set.retrieve_multi_topic_documents(
@@ -282,12 +308,22 @@ class Materializer:
                     if not isinstance(prompt, str):
                         error_msg = "The 'prompt' argument must be a string."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
                     if len(prompt.strip()) == 0:
                         error_msg = "The 'prompt' argument cannot be empty."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
                     self.state.retrieved_tables = self.action_set.retrieve_documents(
                         prompt, RetrieverType.PNEUMA_RETRIEVER, 10
@@ -296,7 +332,12 @@ class Materializer:
                 if len(self.state.retrieved_tables) == 0:
                     error_msg = f"No tables were retrieved."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                 else:
                     if self.config.ENABLE_JOIN_PATH_EXTRACTION:
                         self.state.join_paths = self.action_set.discover_join_paths(
@@ -304,10 +345,15 @@ class Materializer:
                         )
                     success_msg = f'Successfully retrieved tables. Notice that the "retrieved internal tables" have been filled.'
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
+                    )
 
                     self.__log(
-                        f"Retrieved tables:\n {convert_retrieval_results_to_str(self.state.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
+                        f"Retrieved tables:\n {[i.doc_id for i in self.state.retrieved_tables]}"
                     )
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
@@ -323,7 +369,12 @@ class Materializer:
                 if not self.config.ENABLE_WEB_SEARCH:
                     error_msg = f"{ActionNames.WEB_SEARCH.value} is not enabled in the configuration."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 prompt = op_args.get("prompt", "")
                 web_search_results = self.action_set.retrieve_documents(
@@ -332,12 +383,22 @@ class Materializer:
                 if len(web_search_results) == 0:
                     error_msg = f"No relevant information was found from {ActionNames.WEB_SEARCH.value}."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 self.state.web_search_result = web_search_results[0]
                 success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value}. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.{" Join paths have been updated accordingly." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}'
                 self.__log(f"==> {success_msg}")
-                self.actions.append(success_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=success_msg,
+                    )
+                )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_SEARCH,
@@ -352,7 +413,12 @@ class Materializer:
                 if not self.config.ENABLE_WEB_CRAWL:
                     error_msg = f"{ActionNames.WEB_CRAWL.value} is not enabled in the configuration."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 prompt = op_args.get("url", "")
                 web_crawl_results = self.action_set.retrieve_documents(
@@ -361,12 +427,22 @@ class Materializer:
                 if len(web_crawl_results) == 0:
                     error_msg = f"No relevant information was found from {ActionNames.WEB_CRAWL.value}."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 self.state.web_crawl_result = web_crawl_results[0]
                 success_msg = f'Successfully retrieved information from {ActionNames.WEB_CRAWL.value}. Notice that the "{ActionNames.WEB_CRAWL.value} result" have been filled.'
                 self.__log(f"==> {success_msg}")
-                self.actions.append(success_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=success_msg,
+                    )
+                )
 
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.WEB_CRAWL,
@@ -388,7 +464,12 @@ class Materializer:
                 if len(extra_tables) > 0:
                     success_msg = f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called {ActionNames.TABLE_RETRIEVE.value} before, as these tables have been included to "retrieved internal tables".'
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
+                    )
 
                     read_code = self.action_set.generate_pandas_read_multi_doc_code(
                         extra_tables
@@ -415,12 +496,17 @@ class Materializer:
                         set(existing_tables).union(set(extra_tables))
                     )
                     self.__log(
-                        f"Retrieved tables:\n {convert_retrieval_results_to_str(self.state.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
+                        f"Retrieved tables:\n {[i.doc_id for i in self.state.retrieved_tables]}"
                     )
                 else:
                     error_msg = "There are no tables that match the pattern."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
             case ActionNames.TABLE_PROJECTION.value:
                 all_table_doc_ids = [i.doc_id for i in all_tables]
                 for target_table_id, retrieved_table_info in op_args.items():
@@ -429,14 +515,24 @@ class Materializer:
                         if len(retrieved_table_info) == 0:
                             msg = f"Skipping {target_table_id!r}: empty list provided as value."
                             self.__log(f"==> {msg}")
-                            self.actions.append(msg)
+                            self.llm_messages.append(
+                                LLMMessage(
+                                    role=Role.SYSTEM.value,
+                                    content=msg,
+                                )
+                            )
                             continue
                         retrieved_table_info = retrieved_table_info[0]
 
                     if not isinstance(retrieved_table_info, dict):
                         msg = f"Invalid argument for target {target_table_id!r}: expected a dict."
                         self.__log(f"==> {msg}")
-                        self.actions.append(msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=msg,
+                            )
+                        )
                         continue
 
                     table_id_to_project = str(
@@ -452,7 +548,12 @@ class Materializer:
                             "Invalid table ID to select. Ensure the table exists."
                         )
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
 
                     if target_table_id not in T:
@@ -460,21 +561,36 @@ class Materializer:
                             f"Error: The ID {target_table_id} does not exist in T."
                         )
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
 
                     matches = [i for i in all_tables if i.doc_id == table_id_to_project]
                     if not matches:
                         error_msg = f"Table {table_id_to_project!r} not found in the available tables."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
 
                     table_to_project = matches[0].content
                     if not isinstance(table_to_project, DataFrame):
                         error_msg = f"Content of table {table_id_to_project!r} is not a valid DataFrame."
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
                     # END INPUT VALIDATION
 
@@ -489,7 +605,12 @@ class Materializer:
                     except Exception as e:
                         error_msg = f"Failed selecting columns {relevant_columns!r} from table {table_id_to_project!r}: {e}"
                         self.__log(f"==> {error_msg}")
-                        self.actions.append(error_msg)
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.SYSTEM.value,
+                                content=error_msg,
+                            )
+                        )
                         return
 
                     # Always create a materializer node representing the select operation
@@ -538,7 +659,12 @@ class Materializer:
                     self.__save_new_or_updated_intermediate_table(target_table_id)
                     success_msg = "Successfully selected retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
+                    )
             case ActionNames.SEMANTIC_COLUMN_GENERATION.value:
                 table_id: str | None = op_args.get("table_id")
                 new_column_name: str | None = op_args.get("new_column_name")
@@ -550,17 +676,32 @@ class Materializer:
                 if table_id is None or table_id not in [i.doc_id for i in all_tables]:
                     error_msg = "table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if new_column_name is None:
                     error_msg = "new_column_name is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if table_relevant_columns is None:
                     error_msg = "relevant_columns is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 conditioned_table_doc = [i for i in all_tables if i.doc_id == table_id][
@@ -573,12 +714,22 @@ class Materializer:
                 ):
                     error_msg = f"relevant_columns must be a subset of the columns of table {table_id}."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if instruction is None:
                     error_msg = "instruction is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 augmented_table = self.action_set.generate_semantic_column(
@@ -589,7 +740,12 @@ class Materializer:
                 conditioned_table_doc.content = augmented_table
                 success_msg = f"Successfully added a new column named {new_column_name} to table with ID {table_id}."
                 self.__log(f"==> {success_msg}")
-                self.actions.append(success_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=success_msg,
+                    )
+                )
 
                 sem_col_code = self.action_set.generate_semantic_col_generator_code(
                     table_relevant_columns,
@@ -639,12 +795,22 @@ class Materializer:
                 if left_table_id is None or left_table_id not in all_table_ids:
                     error_msg = "left_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if right_table_id is None or right_table_id not in all_table_ids:
                     error_msg = "right_table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 left_table: DataFrame | None = None
@@ -665,57 +831,102 @@ class Materializer:
                         f"left_table with ID {left_table_id} is not a DataFrame."
                     )
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if not isinstance(right_table, DataFrame):
                     error_msg = (
                         f"right_table with ID {right_table_id} is not a DataFrame."
                     )
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 if not isinstance(left_table_doc, AbstractDocument):
                     error_msg = f"ID {left_table_id} does not correspond to a document."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if not isinstance(right_table_doc, AbstractDocument):
                     error_msg = (
                         f"ID {right_table_id} does not correspond to a document."
                     )
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 if relevant_left_cols is None:
                     error_msg = "relevant_left_cols is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if relevant_right_cols is None:
                     error_msg = "relevant_right_cols is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if not set(relevant_left_cols) <= set(list(left_table.columns)):
                     error_msg = (
                         "relevant_left_cols is not a subset of left_table's columns."
                     )
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if not set(relevant_right_cols) <= set(list(right_table.columns)):
                     error_msg = (
                         "relevant_right_cols is not a subset of right_table's columns."
                     )
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
                 if not joined_table_id:
                     error_msg = "joined_table_id is not provided."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 joined_table = self.action_set.join_semantic(
@@ -778,7 +989,12 @@ class Materializer:
                 self.__save_new_or_updated_intermediate_table(joined_table_id)
                 success_msg = "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 self.__log(f"==> {success_msg}")
-                self.actions.append(success_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=success_msg,
+                    )
+                )
             case ActionNames.PYTHON_EXECUTOR.value:
                 id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
@@ -846,17 +1062,33 @@ class Materializer:
                     self.__save_new_or_updated_intermediate_table(assign_to)
                     success_msg = f"Successfully executed the Python code, resulting in a table named {assign_to}"
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
-                except Exception as exception:
-                    self.__log(
-                        f"==> Exception occured during Python code execution: {exception}"
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
                     )
-                    self.actions.append(str(exception))
+                except Exception as exception:
+                    error_msg = (
+                        f"Exception occured during Python code execution: {exception}."
+                    )
+                    self.__log(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
             case ActionNames.ASSUMPTION_CHECK.value:
                 if not self.config.ENABLE_ASSUMPTION_CHECK:
                     error_msg = f"{ActionNames.ASSUMPTION_CHECK.value} is not enabled in the configuration."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
                     return
 
                 id_dfs: dict[str, DataFrame] = {}
@@ -867,12 +1099,21 @@ class Materializer:
                     exec_res = self.action_set.execute_code(id_dfs, python_code)
                     success_msg = f"Assumption check result: {exec_res}"
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
-                except Exception as exception:
-                    self.__log(
-                        f"==> Exception occured during assumption checking: {exception}"
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
                     )
-                    self.actions.append(str(exception))
+                except Exception as exception:
+                    error_msg = f"Error during assumption checking: {exception}"
+                    self.__log(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
             case ActionNames.SQL_EXECUTOR.value:
                 try:
                     sql_query: str = op_args["sql_query"]
@@ -944,16 +1185,31 @@ class Materializer:
 
                     success_msg = f"Successfully executed the SQL query, resulting in a table named {assign_to}"
                     self.__log(f"==> {success_msg}")
-                    self.actions.append(success_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=success_msg,
+                        )
+                    )
 
                 except Exception as e:
                     error_msg = f"Error when executing the SQL query: {e}. Please fix it (you may want to quote identifiers with, for instance, `-` symbol)."
                     self.__log(f"==> {error_msg}")
-                    self.actions.append(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
             case _:
                 error_msg = f"{op_name} is not a valid operation."
                 self.__log(f"==> {error_msg}")
-                self.actions.append(error_msg)
+                self.llm_messages.append(
+                    LLMMessage(
+                        role=Role.SYSTEM.value,
+                        content=error_msg,
+                    )
+                )
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
         """Check if all target tables (T) have been materialized correctly."""
@@ -979,7 +1235,12 @@ class Materializer:
         if not ids_complete:
             warning_msg = f"You have not materialized these tables: {all_T_ids - materialized_table_ids}"
             self.__log(f"=> {warning_msg}")
-            self.actions.append(warning_msg)
+            self.llm_messages.append(
+                LLMMessage(
+                    role=Role.SYSTEM.value,
+                    content=warning_msg,
+                )
+            )
 
         column_issues: list[str] = ["Fix the following column issues:"]
         if ids_complete:
@@ -1012,7 +1273,12 @@ class Materializer:
                     column_issues.append(issue_msg.strip())
 
         if ids_complete and not is_complete:
-            self.actions.append("\n".join(column_issues))
+            self.llm_messages.append(
+                LLMMessage(
+                    role=Role.SYSTEM.value,
+                    content="\n".join(column_issues),
+                )
+            )
 
         self.__log(f"==> is_complete: {is_complete}")
         self.__log(
@@ -1038,6 +1304,7 @@ class Materializer:
         self.prov_graph.reset_for_materialization()
         self.__clear_csv_files()
         self.actions = []
+        self.llm_messages = []
         self.join_paths = None
         self.__log("Materializer cleanup complete.")
 

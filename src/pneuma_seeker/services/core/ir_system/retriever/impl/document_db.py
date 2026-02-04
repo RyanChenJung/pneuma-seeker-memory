@@ -16,8 +16,8 @@ from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import A
 class DocumentDB(AbstractRetriever):
     """Represents a domain knowledge retriever."""
 
-    def __init__(self, config, db_api, language_model_api):
-        super().__init__(config, db_api, language_model_api)
+    def __init__(self, user_id: str, chat_id: str, config, db_api, language_model_api):
+        super().__init__(user_id, chat_id, config, db_api, language_model_api)
         self.local_retriever = None
         self.global_retriever = None
 

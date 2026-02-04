@@ -18,17 +18,22 @@ class RetrieverFactory:
     """Factory class to create Retriever instances based on the RetrieverType."""
 
     def __init__(
-        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
+        self,
+        user_id: str,
+        chat_id: str,
+        config: Config,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ):
         """Initialize the RetrieverFactory with available retriever instances."""
         self.retriever_instances = {
             RetrieverType.PNEUMA_RETRIEVER: PneumaRetriever(
-                config, db_api, language_model_api
+                user_id, chat_id, config, db_api, language_model_api
             ),
-            RetrieverType.DOCUMENT_DB: DocumentDB(config, db_api, language_model_api),
-            RetrieverType.WEB_SEARCH: WebSearch(config, db_api, language_model_api),
-            RetrieverType.ENUMERATOR: Enumerator(config, db_api, language_model_api),
-            RetrieverType.WEB_CRAWL: WebCrawler(config, db_api, language_model_api),
+            RetrieverType.DOCUMENT_DB: DocumentDB(user_id, chat_id, config, db_api, language_model_api),
+            RetrieverType.WEB_SEARCH: WebSearch(user_id, chat_id, config, db_api, language_model_api),
+            RetrieverType.ENUMERATOR: Enumerator(user_id, chat_id, config, db_api, language_model_api),
+            RetrieverType.WEB_CRAWL: WebCrawler(user_id, chat_id, config, db_api, language_model_api),
         }
 
     def get_retriever(self, retriever_type: RetrieverType) -> AbstractRetriever:

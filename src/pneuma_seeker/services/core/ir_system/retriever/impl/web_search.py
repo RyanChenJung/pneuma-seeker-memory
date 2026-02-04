@@ -6,9 +6,9 @@ from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import A
 class WebSearch(AbstractRetriever):
     """Represents a web search interface."""
 
-    def __init__(self, config, db_api, language_model_api):
+    def __init__(self, user_id, chat_id, config, db_api, language_model_api):
         # Note: For now, we assume OpenAI model
-        super().__init__(config, db_api, language_model_api)
+        super().__init__(user_id, chat_id, config, db_api, language_model_api)
         self.client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     @property

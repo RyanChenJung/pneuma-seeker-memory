@@ -17,8 +17,8 @@ from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import (
 class WebCrawler(AbstractRetriever):
     """Represents a web crawler interface."""
 
-    def __init__(self, config, db_api, language_model_api):
-        super().__init__(config, db_api, language_model_api)
+    def __init__(self, user_id, chat_id, config, db_api, language_model_api):
+        super().__init__(user_id, chat_id, config, db_api, language_model_api)
         self.max_chars = config.WEB_CRAWL_MAX_CHARS
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "WebCrawler"})

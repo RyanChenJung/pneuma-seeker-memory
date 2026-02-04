@@ -50,12 +50,16 @@ from pneuma_seeker.shared.config import Config
 class ActionSet:
     def __init__(
         self,
+        user_id: str,
+        chat_id: str,
         config: Config,
         logger: Logger,
         prov_graph: ProvenanceGraph,
         db_api: DBAPI,
         language_model_api: LanguageModelAPI,
     ) -> None:
+        self.user_id = user_id
+        self.chat_id = chat_id
         self.config = config
         self.logger = logger
         self.prov_graph = prov_graph
@@ -63,6 +67,7 @@ class ActionSet:
         self.language_model_api = language_model_api
 
         self.ir_system = IRSystem(
+            self.user_id, self.chat_id,
             self.config, self.logger, self.db_api, self.language_model_api
         )
         self.table_retrieve = TableRetrieve(

@@ -25,7 +25,6 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
     Table,
-    convert_retrieval_results_to_str,
 )
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
@@ -55,6 +54,8 @@ class Conductor:
         self.prompt_factory = ConductorPromptFactory(self.config)
 
         self.action_set = ActionSet(
+            self.user_id,
+            self.chat_id,
             self.config,
             self.logger,
             self.prov_graph,
@@ -337,7 +338,7 @@ class Conductor:
                         error_msg = "=> `prompt` must be a string"
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
-                    
+
                     if len(args["prompt"].strip()) == 0:
                         error_msg = "=> `prompt` must be a non-empty string"
                         self.__log(f"=> {error_msg}")
@@ -348,7 +349,7 @@ class Conductor:
                     )
 
                 self.__log(
-                    f"Retrieved tables:\n {convert_retrieval_results_to_str(self.retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}"
+                    f"Retrieved tables:\n {[i.doc_id for i in self.retrieved_tables]}"
                 )
 
                 try:

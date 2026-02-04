@@ -7,11 +7,13 @@ from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, Retrie
 
 class AbstractRetriever(ABC):
     def __init__(
-        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
+        self, user_id: str, chat_id: str, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
     ):
         """
         Initialize the Retriever class
         """
+        self.user_id = user_id
+        self.chat_id = chat_id
         self.db_api = db_api
         self.language_model_api = language_model_api
         self.is_loaded = False

@@ -25,14 +25,14 @@ class MaterializerPromptFactory:
         column_descriptions: dict[str, dict[str, str]],
         S: str,
     ) -> str:
-        """Generates the initial planning prompt for the Materializer."""
+        """Generates the initial planning prompt for Materializer."""
         return f"""
-You are the Materializer. Your task is to fill all rows for the target tables using:
+You are Materializer. Your task is to fill all rows for the target tables using:
 1. Retrieved internal tables
 2. User-uploaded external tables (if any)
 3. Allowed operations described below
 
-Treat external tables just like internal tables, except it is fixed and will never be replaced by calling {ActionNames.TABLE_RETRIEVE.value} again.
+Treat external tables just like internal tables, except it is fixed and will never be replaced by calling {ActionNames.TABLE_RETRIEVE.value}.
 
 TARGET TABLES:
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
@@ -57,6 +57,7 @@ CORE RULES:
 - You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call {ActionNames.TABLE_RETRIEVE.value} again if needed. These pre-fetched tables are not guaranteed to be complete or sufficient.
 {f"- You may already see a web search result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web search yourself — use it if useful. This pre-fetched web search result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {f"- You may already see a web crawl result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web crawl yourself — use it if useful. This pre-fetched web crawl result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_CRAWL else ""}
+{f"8. Use {ActionNames.ASSUMPTION_CHECK.value} to validate assumptions (e.g., about the existence of values) in the tables prior to determining how best to integrate them.\n" if self.config.ENABLE_ASSUMPTION_CHECK else ""}
 
 COLUMN HANDLING:
 - (semantically_derived) and user notes are hints, not guarantees.
@@ -111,6 +112,7 @@ CORE RULES:
 - You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call {ActionNames.TABLE_RETRIEVE.value} again if needed. These pre-fetched tables are not guaranteed to be complete or sufficient.
 {f"- You may already see a web search result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web search yourself — use it if useful. This pre-fetched web search result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {f"- You may already see a web crawl result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web crawl yourself — use it if useful. This pre-fetched web crawl result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_CRAWL else ""}
+{f"8. Use {ActionNames.ASSUMPTION_CHECK.value} to validate assumptions (e.g., about the existence of values) in the tables prior to determining how best to integrate them.\n" if self.config.ENABLE_ASSUMPTION_CHECK else ""}
 
 COLUMN HANDLING:
 - Treat (semantically_derived) and user notes as hints only.

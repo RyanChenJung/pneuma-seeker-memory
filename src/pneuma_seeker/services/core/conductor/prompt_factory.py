@@ -147,6 +147,7 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
   - **Notes**:
     - Avoid retrying the same or slightly modified queries repeatedly.
     - However, for different topics or aspects of an information need, feel free to call multiple times.
+    - If available, include specific keywords or entities in the query to improve retrieval precision.
     - Previously retrieved tables will be replaced with new retrievals.
     {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
     - In relation to defining columns of tables in T:
@@ -158,6 +159,7 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
   - **Args**: {{"prompts": "[<retrieval query 1>, <retrieval query 2>, ...]"}}
   - **Notes**:
     - You may provide multiple retrieval queries in a single call to retrieve tables on different topics (at most {self.config.TABLE_RETRIEVE_MAX_TOPICS} topics).
+    - If available, include specific keywords or entities in each query to improve retrieval precision.
     - Previously retrieved tables will be replaced with new retrievals.
     {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
     - In relation to defining columns of tables in T:

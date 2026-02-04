@@ -19,18 +19,24 @@ class IRSystem:
 
     def __init__(
         self,
+        user_id: str,
+        chat_id: str,
         config: Config,
         logger: Logger,
         db_api: DBAPI,
         language_model_api: LanguageModelAPI,
     ):
+        self.user_id = user_id
+        self.chat_id = chat_id
         self.config = config
         self.logger = logger
         self.db_api = db_api
         self.language_model_api = language_model_api
 
         self.prompt_factory = PromptFactory()
-        self.retriever_factory = RetrieverFactory(config, db_api, language_model_api)
+        self.retriever_factory = RetrieverFactory(
+            self.user_id, self.chat_id, config, db_api, language_model_api
+        )
 
     def index_documents(
         self, retriever_type: RetrieverType, documents: list[AbstractDocument]

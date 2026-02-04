@@ -1,11 +1,13 @@
 import gc
+import math
 import os
+import re
 import time
 from collections import defaultdict
 from enum import Enum
 from math import ceil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import bm25s
 import chromadb_deterministic as chromadb
@@ -15,29 +17,47 @@ import Stemmer
 from bm25s.tokenization import convert_tokenized_to_string_list
 from chromadb_deterministic.api import ClientAPI
 from chromadb_deterministic.api.models.Collection import Collection
-from pneuma_seeker.services.core.api.db import DBAPI
-from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import AbstractRetriever
-from pneuma_seeker.services.language_model.abstract_model import AbstractModel
-from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, TableContext, Text
-from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
-from pneuma_seeker.shared.schemas.language_model.role import Role
-from pneuma_seeker.shared.schemas.language_model.option import EmbeddingModelOption, LLMOption
-from pneuma_seeker.shared.str_processor import clean_column_table_name
 from scipy.spatial.distance import cosine
 from tiktoken import encoding_for_model
 from torch import cuda
 from tqdm import tqdm
+
+from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
+from pneuma_seeker.services.core.ir_system.retriever.abstract_retriever import (
+    AbstractRetriever,
+)
+from pneuma_seeker.services.language_model.abstract_model import AbstractModel
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.parser import parse_json
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+    TableContext,
+    Text,
+)
+from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.schemas.language_model.option import (
+    EmbeddingModelOption,
+    LLMOption,
+)
+from pneuma_seeker.shared.schemas.language_model.role import Role
+from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 
 class PneumaRetriever(AbstractRetriever):
     """Represents a tabular data retriever."""
 
     def __init__(
-        self, config: Config, db_api: DBAPI, language_model_api: LanguageModelAPI
+        self,
+        user_id: str,
+        chat_id: str,
+        config: Config,
+        db_api: DBAPI,
+        language_model_api: LanguageModelAPI,
     ):
-        super().__init__(config, db_api, language_model_api)
+        super().__init__(user_id, chat_id, config, db_api, language_model_api)
         self.hybrid_retriever = HybridRetriever(
             self.language_model_api.llm,
             RerankingMode.NONE,  # Alternative: RerankingMode.LLM
@@ -46,6 +66,20 @@ class PneumaRetriever(AbstractRetriever):
         self.index_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "indices", "pneuma"
         )
+        metadata_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "data_src",
+            self.config.DATA_SOURCES[0],
+            "metadata.csv",
+        )
+        self.metadata = pd.read_csv(metadata_path)
 
     @property
     def retriever_type(self) -> RetrieverType:
@@ -72,119 +106,382 @@ class PneumaRetriever(AbstractRetriever):
         """
         retrieval_results: list[AbstractDocument] = []
         increased_k = k * 5
-        for dataset in self.config.DATA_SOURCES:
-            client = chromadb.PersistentClient(
-                os.path.join(self.index_path, f"vector-index-{dataset}")
-            )
-            collection = client.get_collection("benchmark")
-            retriever = bm25s.BM25.load(
-                os.path.join(self.index_path, f"fulltext-index-{dataset}"),
-                load_corpus=True,
-            )
+        self.db_api.link_dataset_tables(
+            self.user_id, self.chat_id, self.config.DATA_SOURCES[0]
+        )
 
-            dictionary_id_bm25 = dict()
-            if retriever.corpus is not None:
-                if len(retriever.corpus) < increased_k:
-                    print(
-                        f"Reducing increased_k from {increased_k} to {len(retriever.corpus)}"
+        client = chromadb.PersistentClient(
+            os.path.join(self.index_path, f"vector-index-{self.config.DATA_SOURCES[0]}")
+        )
+        collection = client.get_collection("benchmark")
+        retriever = bm25s.BM25.load(
+            os.path.join(
+                self.index_path, f"fulltext-index-{self.config.DATA_SOURCES[0]}"
+            ),
+            load_corpus=True,
+        )
+
+        dictionary_id_bm25 = dict()
+        if retriever.corpus is not None:
+            if len(retriever.corpus) < increased_k:
+                print(
+                    f"Reducing increased_k from {increased_k} to {len(retriever.corpus)}"
+                )
+                increased_k = len(retriever.corpus)
+            dictionary_id_bm25 = {
+                datum["metadata"]["table"]: datum_idx
+                for datum_idx, datum in enumerate(retriever.corpus)
+            }
+
+        question_embedding = self.language_model_api.embed_model.encode([query])[
+            0
+        ].tolist()
+        query_tokens = bm25s.tokenize(query, stemmer=self.stemmer, show_progress=False)
+
+        results, scores = retriever.retrieve(
+            query_tokens, k=increased_k, show_progress=False
+        )
+        bm25_res = (results, scores)
+        vec_res = collection.query(
+            query_embeddings=[question_embedding], n_results=increased_k
+        )
+        all_nodes = self.hybrid_retriever.retrieve(
+            retriever,
+            collection,
+            bm25_res,
+            vec_res,
+            increased_k,
+            query,
+            0.5,
+            query_tokens,
+            question_embedding,
+            dictionary_id_bm25,
+        )
+
+        seen_tables: list[str] = []
+        final_rank: list[tuple[str, float]] = []
+        table_keywords: dict[str, set[str]] = {}
+        if self.config.TABLE_RETRIEVE_ENABLE_ENTITIES_RELEVANCE_BOOSTER:
+            messages = [
+                LLMMessage(
+                    role=Role.SYSTEM.value,
+                    content=self.__get_entity_extraction_sys_prompt(),
+                ),
+                LLMMessage(role=Role.USER.value, content=query),
+            ]
+            entities = parse_json(
+                "".join(
+                    self.language_model_api.chat(messages, LLMOption(json_mode=True))
+                )
+            )
+            if "entities" in entities and isinstance(entities["entities"], list):
+                keywords = entities["entities"]
+                if len(keywords) > 0:
+                    final_rank, table_keywords = self.__keyword_relevance_by_table(
+                        keywords
                     )
-                    increased_k = len(retriever.corpus)
-                dictionary_id_bm25 = {
-                    datum["metadata"]["table"]: datum_idx
-                    for datum_idx, datum in enumerate(retriever.corpus)
-                }
-            question_embedding = self.language_model_api.embed_model.encode([query])[0].tolist()
-            query_tokens = bm25s.tokenize(
-                query, stemmer=self.stemmer, show_progress=False
+
+        for table, _, _ in all_nodes[:k]:
+            table_raw = table.split("_SEP_")[0]
+            table_name = clean_column_table_name(Path(table_raw).stem)
+
+            if table_name not in seen_tables:
+                seen_tables.append(table_name)
+            else:
+                continue
+
+            query_table = f"""
+            SELECT * FROM {self.config.DATA_SOURCES[0]}."{table_name}"
+            """
+            if sample_only:
+                if sample_size is None or sample_size <= 0:
+                    sample_size = 5
+                query_table += f" LIMIT {sample_size}"
+            actual_table = self.db_api.execute_query(
+                self.user_id, self.chat_id, query_table
             )
 
-            results, scores = retriever.retrieve(
-                query_tokens, k=increased_k, show_progress=False
-            )
-            bm25_res = (results, scores)
-            vec_res = collection.query(
-                query_embeddings=[question_embedding], n_results=increased_k
+            s = self.metadata.loc[
+                self.metadata["table_name"] == Path(table).stem, "description"
+            ]
+            table_description = str(s.iloc[0]) if len(s) > 0 else ""
+            table_metadata: dict[str, str] = {"description": table_description}
+
+            actual_table.rename(columns=clean_column_table_name, inplace=True)
+            retrieval_results.append(
+                Table(
+                    doc_id=table_name,
+                    retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                    content=actual_table,
+                    metadata=table_metadata,
+                    path=table_raw,
+                )
             )
 
-            all_nodes = self.hybrid_retriever.retrieve(
-                retriever,
-                collection,
-                bm25_res,
-                vec_res,
-                increased_k,
-                query,
-                0.5,
-                query_tokens,
-                question_embedding,
-                dictionary_id_bm25,
-            )
-            seen_tables: list[str] = []
-            metadata: pd.DataFrame | None = None
-            for table, _, _ in all_nodes[:k]:
-                table = table.split("_SEP_")[0]
-
-                if table not in seen_tables:
-                    seen_tables.append(table)
-                else:
+        if (
+            self.config.TABLE_RETRIEVE_ENABLE_ENTITIES_RELEVANCE_BOOSTER
+            and len(final_rank) > 0
+        ):  # Future-TODO: Improve scoring mechanism
+            for i in final_rank:
+                table_id = i[0]
+                if table_id in seen_tables:
+                    # Include the keyword existence info
+                    for doc in retrieval_results:
+                        if doc.doc_id == table_id:
+                            doc.metadata["keywords_existence"] = ", ".join(
+                                sorted(table_keywords.get(table_id, []))
+                            )
                     continue
+                if len(retrieval_results) >= k:
+                    break
+                seen_tables.append(table_id)
 
-                table_name = clean_column_table_name(
-                    Path(table).stem
-                )  # Assume table is already ingested
-                query_table = f"""
-                SELECT * FROM {table_name}
-                """
+                s = self.metadata.loc[
+                    self.metadata["table_name"] == table_id, "description"
+                ]
+                table_description = str(s.iloc[0]) if len(s) > 0 else ""
+
                 if sample_only:
+                    booster_query = f"SELECT * FROM {table_id}"
                     if sample_size is None or sample_size <= 0:
                         sample_size = 5
-                    query_table += f" LIMIT {sample_size}"
-                with duckdb.connect(
-                    database=os.path.join(self.config.DB_BACKEND_PATH, f"{dataset}.db"),
-                    read_only=True,
-                ) as con:
-                    actual_table = con.execute(query_table).fetchdf()
-
-                if metadata is None:
-                    metadata_path = os.path.join(
-                        os.path.dirname(os.path.abspath(__file__)),
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "data_src",
-                        dataset,
-                        "metadata.csv",
+                    booster_query += f" LIMIT {sample_size}"
+                    with duckdb.connect(
+                        database=os.path.join(
+                            self.config.DB_BACKEND_PATH,
+                            f"{self.config.DATA_SOURCES[0]}.db",
+                        ),
+                        read_only=True,
+                    ) as con:
+                        booster_table = con.execute(booster_query).fetchdf()
+                else:
+                    booster_table = self.db_api.execute_query(
+                        self.user_id,
+                        self.chat_id,
+                        f"SELECT * FROM {self.config.DATA_SOURCES[0]}.\"{table_id}\"",
                     )
-                try:
-                    metadata = pd.read_csv(metadata_path)
-                    table_description = (
-                        metadata.loc[
-                            metadata["table_name"] == Path(table).stem, "description"
-                        ]
-                        .head(1)
-                        .item()
-                    )
-                except:
-                    table_description = ""
 
-                table_metadata: dict[str, str] = dict()
-                if isinstance(table_description, str):
-                    table_metadata["description"] = table_description
-
-                actual_table.rename(columns=clean_column_table_name, inplace=True)
                 retrieval_results.append(
                     Table(
-                        doc_id=table_name,
+                        doc_id=table_id,
                         retriever_type=RetrieverType.PNEUMA_RETRIEVER,
-                        content=actual_table,
-                        metadata=table_metadata,
-                        path=table,
+                        content=booster_table,
+                        metadata={
+                            "description": table_description,
+                            "keywords_existence": ", ".join(
+                                sorted(table_keywords.get(table_id, []))
+                            ),
+                        },
+                        path=table_id,
                     )
                 )
+
         return retrieval_results
+
+    def __get_entity_extraction_sys_prompt(self) -> str:
+        return f"""You are an information extraction system.
+
+Your task is to analyze a natural-language query and extract **explicitly mentioned, concrete entities** that are suitable for direct lookup in a structured dataset.
+
+**Extraction rules:**
+
+* Only extract entities that are **specific, named, and canonical**, such as identifiers, symbols, or codes that would typically appear verbatim in a database.
+* Do **not** extract general concepts or categories.
+* If the query does **not** contain any extractable entities under these rules, return an empty list ({{"entities": []}}).
+
+**Output requirements:**
+
+* Output **only** a JSON object.
+* The JSON object must contain a single key `"entities"` whose value is a list of strings.
+* Each string must exactly match how the entity appears in the query.
+* Preserve original casing and punctuation.
+* Do not include duplicates.
+* Do not include any explanation, comments, formatting, or additional text outside the JSON object.
+
+**Output format:**
+{{"entities": [...]}}"""
+
+    def __keyword_relevance_by_table(
+        self,
+        keywords: list[str],
+    ) -> tuple[list[tuple[str, float]], dict[str, set[str]]]:
+        """
+        Returns:
+        1) dict[table_name, relevance_score in [0, 1]]
+        2) dict[table_name, set[keyword]]
+        """
+
+        # ------------------------------------------------------------
+        # Configuration
+        # ------------------------------------------------------------
+        WEIGHTS = {
+            "table_hits": 3.0,
+            "column_hits": 2.0,
+            "data_hits": 1.0,
+        }
+
+        table_columns = self.db_api.execute_query(
+            self.user_id,
+            self.chat_id,
+            f"""
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE data_type IN ('VARCHAR', 'TEXT')
+            AND table_catalog = '{self.config.DATA_SOURCES[0]}'
+            """,
+        )
+
+        # Precompile keyword regexes
+        keyword_regexes = {
+            kw: self.__keyword_to_single_char_regex(kw)
+            for kw in keywords
+            if self.__keyword_to_single_char_regex(kw)
+        }
+
+        # ------------------------------------------------------------
+        # Data structures
+        # ------------------------------------------------------------
+        # table -> keyword -> hits
+        per_table_keyword_hits: dict[str, dict[str, dict[str, int]]] = {}
+
+        # table -> keywords (original keywords, not regex)
+        table_keyword_hits: dict[str, set[str]] = {}
+
+        def _ensure(table: str, regex: str) -> None:
+            per_table_keyword_hits.setdefault(table, {})
+            per_table_keyword_hits[table].setdefault(
+                regex,
+                {"data_hits": 0, "column_hits": 0, "table_hits": 0},
+            )
+
+        # ------------------------------------------------------------
+        # 1. Column-name + table-name hits
+        # ------------------------------------------------------------
+        for _, row in table_columns.iterrows():
+            table = row["table_name"]
+            column = row["column_name"]
+
+            for keyword, regex in keyword_regexes.items():
+                _ensure(table, regex)
+
+                if re.search(regex, column):
+                    per_table_keyword_hits[table][regex]["column_hits"] += 1
+                    table_keyword_hits.setdefault(table, set()).add(keyword)
+
+                if re.search(regex, table):
+                    per_table_keyword_hits[table][regex]["table_hits"] += 1
+                    table_keyword_hits.setdefault(table, set()).add(keyword)
+
+        # ------------------------------------------------------------
+        # 2. Data hits (DuckDB-side)
+        # ------------------------------------------------------------
+        for _, row in table_columns.iterrows():
+            table = row["table_name"]
+            column = row["column_name"]
+            fq_table = f"{self.config.DATA_SOURCES[0]}.{table}"
+
+            for keyword, regex in keyword_regexes.items():
+                _ensure(table, regex)
+
+                query = f"""
+                    SELECT
+                        COALESCE(
+                            SUM(
+                                ARRAY_LENGTH(
+                                    REGEXP_EXTRACT_ALL("{column}", '{regex}')
+                                )
+                            ),
+                            0
+                        ) AS cnt
+                    FROM {fq_table}
+                    WHERE REGEXP_MATCHES("{column}", '{regex}')
+                """
+
+                cnt = cast(
+                    int,
+                    self.db_api.execute_query(self.user_id, self.chat_id, query).iat[0, 0],
+                )
+
+                if cnt > 0:
+                    per_table_keyword_hits[table][regex]["data_hits"] += cnt
+                    table_keyword_hits.setdefault(table, set()).add(keyword)
+
+        # ------------------------------------------------------------
+        # 3. Per-keyword scoring (weighted + log dampening)
+        # ------------------------------------------------------------
+        # keyword -> table -> score
+        keyword_table_scores: dict[str, dict[str, float]] = {}
+
+        for table, kw_map in per_table_keyword_hits.items():
+            for regex, hits in kw_map.items():
+                raw_score = (
+                    WEIGHTS["table_hits"] * hits["table_hits"]
+                    + WEIGHTS["column_hits"] * hits["column_hits"]
+                    + WEIGHTS["data_hits"] * hits["data_hits"]
+                )
+
+                if raw_score > 0:
+                    tf = math.log(1.0 + raw_score)
+                    keyword_table_scores.setdefault(regex, {})[table] = tf
+
+        # ------------------------------------------------------------
+        # 4. Per-keyword normalization across tables
+        # ------------------------------------------------------------
+        normalized_scores: dict[str, dict[str, float]] = {}
+
+        for regex, table_scores in keyword_table_scores.items():
+            max_tf = max(table_scores.values(), default=0.0)
+            if max_tf == 0:
+                continue
+
+            normalized_scores[regex] = {
+                table: tf / max_tf for table, tf in table_scores.items()
+            }
+
+        # ------------------------------------------------------------
+        # 5. Aggregate per table: mean × coverage
+        # ------------------------------------------------------------
+        final_scores: dict[str, float] = {}
+        num_keywords = len(keyword_regexes)
+
+        all_tables = set(per_table_keyword_hits.keys())
+
+        for table in all_tables:
+            values = []
+            covered = 0
+
+            for regex in keyword_regexes.values():
+                v = normalized_scores.get(regex, {}).get(table, 0.0)
+                values.append(v)
+                if v > 0:
+                    covered += 1
+
+            if num_keywords == 0:
+                final_scores[clean_column_table_name(table)] = 0.0
+                continue
+
+            mean_score = sum(values) / num_keywords
+            coverage = covered / num_keywords
+
+            final_scores[clean_column_table_name(table)] = mean_score * coverage
+
+        final_rank = sorted(final_scores.items(), key=lambda x: (-x[1], x[0]))
+        return final_rank, table_keyword_hits
+
+    def __keyword_to_single_char_regex(self, keyword: str) -> str:
+        """
+        Convert a keyword into a case-insensitive regex that
+        allows exactly one arbitrary character between segments.
+        """
+        parts = re.split(r"[^A-Za-z0-9]+", keyword)
+        parts = [re.escape(p) for p in parts if p]
+
+        if not parts:
+            return ""
+
+        core = ".{1}".join(parts)
+
+        return rf"(?i)(^|[^A-Za-z0-9_-]){core}($|[^A-Za-z0-9_-])"
 
     def index(self, documents: list[AbstractDocument]):
         """
@@ -210,9 +507,7 @@ class PneumaRetriever(AbstractRetriever):
             client = chromadb.PersistentClient(
                 os.path.join(self.index_path, f"vector-index-{dataset}")
             )
-            self.__indexing_vector(
-                client, schema_summaries, sample_rows, table_context
-            )
+            self.__indexing_vector(client, schema_summaries, sample_rows, table_context)
             end = time.time()
             print(f"[VECTOR INDEX] Indexing time: {end-start} seconds")
 

@@ -29,7 +29,7 @@ class IRSystemTests(unittest.TestCase):
         self.db_api = MagicMock()
         self.lm_api = MagicMock()
         self.ir_system = IRSystem(
-            self.config, self.logger, self.db_api, self.lm_api
+            "uX", "cX", self.config, self.logger, self.db_api, self.lm_api
         )
 
     def test_index_documents_calls_retriever_index(self):

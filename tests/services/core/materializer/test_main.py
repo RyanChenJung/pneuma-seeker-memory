@@ -26,6 +26,8 @@ from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table, Te
 
 class MaterializerTests(unittest.TestCase):
     def setUp(self):
+        self.user_id="uX"
+        self.chat_id="cX"
         self.logger = logging.getLogger("test_materializer")
         self.logger.setLevel(logging.ERROR)
         self.config = Config(".env.test")
@@ -48,6 +50,8 @@ class MaterializerTests(unittest.TestCase):
         self.lm_api = LanguageModelAPI(self.config, self.logger)
 
         self.action_set = ActionSet(
+            self.user_id,
+            self.chat_id,
             self.config,
             self.logger,
             self.prov_graph,
@@ -56,8 +60,8 @@ class MaterializerTests(unittest.TestCase):
         )
 
         self.materializer = Materializer(
-            user_id="uX",
-            chat_id="cX",
+            user_id=self.user_id,
+            chat_id=self.chat_id,
             config=self.config,
             logger=self.logger,
             prov_graph=self.prov_graph,

@@ -102,22 +102,35 @@ class Table(AbstractDocument):
         super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
     def __str__(self) -> str:
-        content_representation = ""
         table: DataFrame = self.content
-        content_representation += (
-            f"Table {self.doc_id}:\ncol: {" | ".join(table.columns)}"
-        )
+        cols = " | ".join(table.columns)
+
+        if "description" in self.metadata and "keywords_existence" in self.metadata:
+            header = (
+                f"Table {self.doc_id} ({self.metadata['description']}; include these keywords: {self.metadata['keywords_existence']}):\ncol: {cols}"
+            )
+        elif "description" in self.metadata:
+            header = (
+                f"Table {self.doc_id} ({self.metadata['description']}):\ncol: {cols}"
+            )
+        elif "keywords_existence" in self.metadata:
+            header = (
+                f"Table {self.doc_id} "
+                f"(include these keywords: {self.metadata['keywords_existence']}):\n"
+                f"col: {cols}"
+            )
+        else:
+            header = f"Table {self.doc_id}:\ncol: {cols}"
+
+        lines = [header]
+
         if len(table) > 0:
-            # Sample 5 rows to represent the table
-            sample_rows = table.sample(min(5, len(table)), random_state=42)
-            sample_row_idx = 1
-            for _, data in sample_rows.iterrows():
-                str_data = [str(i) for i in data]
-                content_representation += (
-                    f"\nsample row {sample_row_idx}: {" | ".join(str_data)}"
-                )
-                sample_row_idx += 1
-        return content_representation
+            sample_rows = table.sample(min(5, len(table)), random_state=42).sort_index()
+            for idx, (_, row) in enumerate(sample_rows.iterrows(), start=1):
+                row_str = " | ".join(str(row[col]) for col in table.columns)
+                lines.append(f"sample row {idx}: {row_str}")
+
+        return "\n".join(lines)
 
 
 class TableContext(AbstractDocument):
@@ -158,7 +171,9 @@ class Text(AbstractDocument):
         super().__init__(doc_id, retriever_type, content, metadata, path, last_node_id)
 
 
-def convert_retrieval_results_to_str(retrieval_results: list[AbstractDocument], multi_topic_mode: bool = False):
+def convert_retrieval_results_to_str(
+    retrieval_results: list[AbstractDocument], multi_topic_mode: bool = False
+):
     representation = ""
     if multi_topic_mode:
         topic_documents: dict[str, list[AbstractDocument]] = {}

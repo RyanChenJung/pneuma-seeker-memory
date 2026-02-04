@@ -374,7 +374,7 @@ class PneumaDB:
         Execute SQL in the context of the workspace DB connection.
         Note: workspace connection is cached so ATTACH persists between calls.
         """
-        self.logger.info(f"[PneumaDB] Executing workspace query:\n{sql}")
+        # self.logger.info(f"[PneumaDB] Executing workspace query:\n{sql}")
         workspace_db_con = self.get_workspace_db_connection(user_id, chat_id)
         return workspace_db_con.execute(sql, sql_params).fetchdf()
 

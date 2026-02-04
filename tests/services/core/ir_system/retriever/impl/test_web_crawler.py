@@ -46,7 +46,7 @@ class WebSearchTests(unittest.TestCase):
         # session.get will be called twice: once for robots.txt, once for the page
         mock_get.side_effect = [robots_resp, page_resp]
 
-        crawler = WebCrawler(self.config, MagicMock(), MagicMock())
+        crawler = WebCrawler("uX", "cX", self.config, MagicMock(), MagicMock())
         results = crawler.retrieve("http://www.example.com", 1, False)
 
         # Should return a list with one Text document
@@ -68,7 +68,7 @@ class WebSearchTests(unittest.TestCase):
 
         mock_get.return_value = robots_resp
 
-        crawler = WebCrawler(self.config, MagicMock(), MagicMock())
+        crawler = WebCrawler("uX", "cX", self.config, MagicMock(), MagicMock())
         out = crawler.retrieve("http://www.example.com/anypath", 1, False)
 
         # When disallowed, retrieve returns a string error message
