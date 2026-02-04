@@ -293,11 +293,12 @@ def download_all_tables(user_id: str, chat_id: str):
     zip_buffer.seek(0)
 
     # Stream the zip file to the client
-    zip_filename = f"{user_id}_{chat_id}_tables.zip"
-    return StreamingResponse(
-        zip_buffer,
+    return Response(
+        content=zip_buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={zip_filename}"},
+        headers={
+            "Content-Disposition": f"attachment; filename={user_id}_{chat_id}_tables.zip"
+        },
     )
 
 
