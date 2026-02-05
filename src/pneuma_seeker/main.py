@@ -204,6 +204,8 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
     messages = data.get("messages", [])
     model = data.get("model", "assistant")
 
+    retrieved_tables = {doc.doc_id: serialize_dataframe(doc.content, config.TABLE_MAX_ROWS_DISPLAY) for doc in conductor.retrieved_tables}
+
     return templates.TemplateResponse(
         "state_view.html",
         {
@@ -214,6 +216,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
             "chat_id": chat_id,
             "model": model,
             "messages": messages,
+            "retrieved_tables": retrieved_tables,
         },
     )
 

@@ -47,6 +47,65 @@
       justify-content: flex-start;
     }
 
+    .carousel-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .carousel-tables {
+      flex: 1;
+      overflow: hidden;
+      border-radius: 6px;
+    }
+
+    .carousel-inner-tables {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+
+    .carousel-item-table {
+      width: 100%;
+      min-width: 100%;
+      flex-shrink: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .carousel-item-table .table-container {
+      width: 100%;
+    }
+
+    .carousel-nav-btn {
+      background: none;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      color: #6c757d;
+    }
+
+    .carousel-nav-btn:hover:not(:disabled) {
+      background-color: #f8f9fa;
+      color: #495057;
+      border-color: #adb5bd;
+    }
+
+    .carousel-nav-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .carousel-counter {
+      font-size: 0.75rem;
+      color: #6c757d;
+      white-space: nowrap;
+      min-width: 45px;
+      text-align: center;
+    }
+
     .table-title {
       font-weight: 500;
       font-size: 0.9rem;
@@ -172,13 +231,44 @@
       </div>
     </div>
 
+    <!-- Collapsible Retrieved Tables Card -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
+        data-bs-target="#retrievedTablesCardBody" aria-expanded="false" aria-controls="retrievedTablesCardBody">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-files me-2"></i>
+          Retrieved Tables
+        </div>
+        <i class="bi bi-chevron-down small"></i>
+      </div>
+
+      <div id="retrievedTablesCardBody" class="collapse">
+        <div class="card-body">
+          <div class="carousel-container">
+            <button id="carousel-prev-btn" class="carousel-nav-btn" aria-label="Previous table">
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <div class="carousel-tables">
+              <div id="retrieved-tables" class="carousel-inner-tables"></div>
+            </div>
+            <button id="carousel-next-btn" class="carousel-nav-btn" aria-label="Next table">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+            <div class="carousel-counter">
+              <span id="carousel-counter">0/0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Collapsible Pneuma's State Card -->
     <div class="card mb-4 shadow-sm">
       <div class="card-header d-flex align-items-center justify-content-between" data-bs-toggle="collapse"
         data-bs-target="#pneumaCardBody" aria-expanded="true" aria-controls="pneumaCardBody">
         <div class="d-flex align-items-center">
           <i class="bi bi-database-fill me-2"></i>
-          Pneuma's State
+          State (T, S)
         </div>
         <i class="bi bi-chevron-down small"></i>
       </div>
@@ -261,6 +351,7 @@
     const state = {{ state | tojson | safe }};
     const userId = "{{ user_id }}";
     const chatId = "{{ chat_id }}";
+    const retrievedTables = {{ retrieved_tables | tojson | safe }};
 
     // Update statuses
     document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
@@ -432,6 +523,108 @@
 
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
+
+    // Render Retrieved Tables
+    const retrievedTablesDiv = document.getElementById("retrieved-tables");
+    const retrievedTableNames = Object.keys(retrievedTables || {});
+    let currentTableIndex = 0;
+
+    for (const [tableName, rows] of Object.entries(retrievedTables || {})) {
+      const tableItemDiv = document.createElement("div");
+      tableItemDiv.className = "carousel-item-table";
+
+      const tableContainer = document.createElement("div");
+      tableContainer.className = "table-container";
+
+      const tableTitle = document.createElement("div");
+      tableTitle.className = "table-title";
+      tableTitle.textContent = tableName;
+      tableContainer.appendChild(tableTitle);
+
+      const scrollWrapper = document.createElement("div");
+      scrollWrapper.className = "table-responsive";
+
+      const tableEl = document.createElement("table");
+      tableEl.className = "table table-striped table-hover table-bordered align-middle table-sm";
+
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      const columns =
+        rows && rows.length > 0
+          ? Object.keys(rows[0])
+          : [];
+
+      if (columns.length === 0) {
+        const th = document.createElement("th");
+        th.textContent = "(empty table)";
+        th.classList.add("text-muted");
+        headerRow.appendChild(th);
+      } else {
+        columns.forEach(col => {
+          const th = document.createElement("th");
+          th.textContent = col;
+          headerRow.appendChild(th);
+        });
+      }
+      thead.appendChild(headerRow);
+      tableEl.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      (rows || []).forEach(row => {
+        const tr = document.createElement("tr");
+        Object.values(row).forEach(val => {
+          const td = document.createElement("td");
+          td.textContent = val;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      tableEl.appendChild(tbody);
+
+      scrollWrapper.appendChild(tableEl);
+      tableContainer.appendChild(scrollWrapper);
+      tableItemDiv.appendChild(tableContainer);
+      retrievedTablesDiv.appendChild(tableItemDiv);
+    }
+
+    // Setup carousel navigation
+    const carouselInner = document.getElementById("retrieved-tables");
+    const prevBtn = document.getElementById("carousel-prev-btn");
+    const nextBtn = document.getElementById("carousel-next-btn");
+    const counterSpan = document.getElementById("carousel-counter");
+
+    function updateCarousel() {
+      const offset = -currentTableIndex * 100;
+      carouselInner.style.transform = `translateX(${offset}%)`;
+      
+      prevBtn.disabled = currentTableIndex === 0;
+      nextBtn.disabled = currentTableIndex === retrievedTableNames.length - 1;
+      
+      counterSpan.textContent = `${currentTableIndex + 1}/${retrievedTableNames.length}`;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (currentTableIndex > 0) {
+        currentTableIndex--;
+        updateCarousel();
+      }
+    });
+
+    nextBtn.addEventListener("click", () => {
+      if (currentTableIndex < retrievedTableNames.length - 1) {
+        currentTableIndex++;
+        updateCarousel();
+      }
+    });
+
+    // Initialize carousel if there are tables
+    if (retrievedTableNames.length > 0) {
+      updateCarousel();
+    } else {
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      counterSpan.textContent = "0/0";
+    }
 
     // Render Python Script
     const scriptPre = document.getElementById("script-container");

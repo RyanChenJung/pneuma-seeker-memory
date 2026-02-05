@@ -117,11 +117,7 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.graph.add_node(materializer_node)
         self.graph.connect(used_node, materializer_node)
 
-        link = "http://example.com/script.py"
-        explanation = self.graph.get_graph_explanation(link)
-
-        # The script download link should be present
-        self.assertIn(link, explanation)
+        explanation = self.graph.get_graph_explanation()
 
         # The used data python code should appear in a code block
         self.assertIn(f"```python\n{used_node.python_code}\n```", explanation)
