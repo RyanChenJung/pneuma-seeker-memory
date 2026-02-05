@@ -92,6 +92,11 @@ class Conductor:
             "target_tables",
         )
 
+        self.user_facing_response = ""
+        self.is_user_facing_response = False
+        self.actions: list[str] = []
+        self.llm_messages: list[LLMMessage] = []
+
     def chat(
         self,
         user_input: str,
@@ -100,6 +105,7 @@ class Conductor:
     ):
         """Processes user input and yields responses."""
         self.__log(f"Processing user input: {user_input}")
+        self.reset_conductor()
         self.external_tables = self.table_reader.process_external_tables(
             external_table_paths
         )
@@ -123,10 +129,8 @@ class Conductor:
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
 
-        user_facing_response = ""
-        is_user_facing_response = False
-        actions_taken: list[str] = []
-        llm_messages = [
+
+        self.llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_sys_prompt(),
@@ -135,21 +139,21 @@ class Conductor:
         current_step = 0
 
         while (
-            not is_user_facing_response
+            not self.is_user_facing_response
             and current_step < self.config.MAX_CONDUCTOR_STEPS
         ):
             current_step += 1
             self.__log(
                 f"Asking the model to produce a sequence of actions (Current step: {current_step}/{self.config.MAX_CONDUCTOR_STEPS})..."
             )
-            llm_messages.append(
+            self.llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
                         current_step,
                         self.info_need_state,
                         interaction_history,
-                        actions_taken,
+                        self.actions,
                         self.retrieved_tables,
                         user_input,
                         self.enumerated_table_ids,
@@ -163,12 +167,12 @@ class Conductor:
 
             full_response = "".join(
                 self.language_model_api.chat(
-                    llm_messages,
+                    self.llm_messages,
                     LLMOption(json_mode=True, stream=True, temperature=0, top_p=0.1),
                 )
             )
             self.__log(f"=> Model responded with a plan: {full_response}")
-            llm_messages.append(
+            self.llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
             )
 
@@ -231,10 +235,11 @@ class Conductor:
                         != ActionNames.USER_FACING_COMMUNICATION.value
                     ]
                 self.__log("==> Plan parsed!")
+                self.actions.append(str(plan))
             except Exception as exc:
                 self.__log(f"=> Unexpected error occurred: {exc}")
                 yield "LOG: Fixing error in produced plan..."
-                llm_messages.append(
+                self.llm_messages.append(
                     LLMMessage(
                         role=Role.USER.value,
                         content=f"An unexpected error occurred while processing your response: {exc}. Please fix the issue and try again.",
@@ -243,85 +248,83 @@ class Conductor:
                 continue
 
             for action_plan in plan:
-                self.__log(f"=> Processing this action: {action_plan}")
-                actions_taken.append(str(action_plan))
-                action_name: None | str = action_plan.get("action")
-                action_message: None | str = action_plan.get("message")
-                args: None | dict = action_plan.get("args")
+                self.__log(f"=> Executing this action: {action_plan}")
+                action_name: str = action_plan.get("action", "")
+                action_args: dict = action_plan.get("args", {})
+                yield f"LOG: Executing action: {action_name}..."
+                action_outcome, _ = self.__execute_action(
+                    action_name, action_args
+                )
+                self.llm_messages.append(
+                    LLMMessage(role=Role.USER.value, content=action_outcome)
+                )
 
-                if action_name is None:
-                    error_msg = "Each action entry must have an `action` field specifying the action to take."
-                    self.__log(f"=> {error_msg}")
-                    llm_messages.append(
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content=error_msg,
-                        )
-                    )
-                    break
-
-                if (
-                    action_name == ActionNames.USER_FACING_COMMUNICATION.value
-                    and isinstance(action_message, str)
-                ):
-                    user_facing_response = action_message
-                    is_user_facing_response = True
-                elif (
-                    action_name == ActionNames.SITUATIONAL_ANALYSIS.value
-                    and isinstance(action_message, str)
-                ):
-                    yield "LOG: Reasoning internally..."
-                    llm_messages.append(
-                        LLMMessage(
-                            role=Role.USER.value,
-                            content=f"You did some internal reasoning: {action_message}",
-                        )
-                    )
-                elif args is not None:
-                    tool = action_name
-                    yield f"LOG: Calling tool: {tool}..."
-                    tool_outcome, tool_execution_status = self.__execute_action(
-                        tool, args
-                    )
-                    llm_messages.append(
-                        LLMMessage(role=Role.USER.value, content=tool_outcome)
-                    )
-
-        if not is_user_facing_response:
+        if not self.is_user_facing_response:
             self.__log("Force produce user-facing response")
-            llm_messages.append(
+            self.llm_messages.append(
                 LLMMessage(
                     role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_direct_response_anyway_prompt(),
                 )
             )
             user_facing_response = "".join(
-                self.language_model_api.chat(llm_messages, LLMOption(stream=True))
+                self.language_model_api.chat(self.llm_messages, LLMOption(stream=True))
             )
 
-        yield user_facing_response
+        yield self.user_facing_response
 
     def __execute_action(
-        self, tool: str, args: str | dict[str, Any]
+        self, action_name: str, action_args: dict[str, Any]
     ) -> tuple[str, ActionExecutionStatus]:
         """Executes an action and returns the outcome message and status."""
-        match tool:
-            case ActionNames.TABLE_RETRIEVE.value:
-                self.__log(f"Table Retrieve request with params: {args}")
+        match action_name:
+            case ActionNames.SITUATIONAL_ANALYSIS.value:
+                self.__log(f"Situational Analysis request with params: {action_args}")
+                message = action_args.get("message")
+                if not isinstance(message, str):
+                    error_msg = "=> `args` must be an object with a `message` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if len(message.strip()) == 0:
+                    error_msg = "=> `message` must be a non-empty string"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                success_msg = f"You did a situational analysis: {message}"
+                self.__log(f"=> {success_msg}")
+                return success_msg, ActionExecutionStatus.SUCCESS
+            case ActionNames.USER_FACING_COMMUNICATION.value:
+                self.__log(f"User-Facing Communication request with params: {action_args}")
+                message = action_args.get("message")
+                if not isinstance(message, str):
+                    error_msg = "=> `args` must be an object with a `message` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+                if len(message.strip()) == 0:
+                    error_msg = "=> `message` must be a non-empty string"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                if not isinstance(args, dict):
+                self.user_facing_response = message
+                self.is_user_facing_response = True
+                success_msg = f"You communicated to the user: {message}"
+                self.__log(f"=> {success_msg}")
+                return success_msg, ActionExecutionStatus.SUCCESS
+            case ActionNames.TABLE_RETRIEVE.value:
+                self.__log(f"Table Retrieve request with params: {action_args}")
+
+                if not isinstance(action_args, dict):
                     error_msg = "=> `args` must be an object with a `prompt` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
                 if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
-                    if "prompts" not in args:
+                    if "prompts" not in action_args:
                         error_msg = "=> `args` must have a `prompts` property"
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
 
-                    if not isinstance(args["prompts"], list) or not all(
-                        isinstance(p, str) for p in args["prompts"]
+                    if not isinstance(action_args["prompts"], list) or not all(
+                        isinstance(p, str) for p in action_args["prompts"]
                     ):
                         error_msg = "=> `prompts` must be a list of strings"
                         self.__log(f"=> {error_msg}")
@@ -329,27 +332,27 @@ class Conductor:
 
                     self.retrieved_tables = (
                         self.action_set.retrieve_multi_topic_documents(
-                            args["prompts"], RetrieverType.PNEUMA_RETRIEVER, 10
+                            action_args["prompts"], RetrieverType.PNEUMA_RETRIEVER, 10
                         )
                     )
                 else:
-                    if "prompt" not in args:
+                    if "prompt" not in action_args:
                         error_msg = "=> `args` must have a `prompt` property"
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
 
-                    if not isinstance(args["prompt"], str):
+                    if not isinstance(action_args["prompt"], str):
                         error_msg = "=> `prompt` must be a string"
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
 
-                    if len(args["prompt"].strip()) == 0:
+                    if len(action_args["prompt"].strip()) == 0:
                         error_msg = "=> `prompt` must be a non-empty string"
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
 
                     self.retrieved_tables = self.action_set.retrieve_documents(
-                        args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
+                        action_args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
                     )
 
                 self.__log(
@@ -371,18 +374,18 @@ class Conductor:
                     ActionExecutionStatus.SUCCESS,
                 )
             case ActionNames.WEB_SEARCH.value:
-                self.__log(f"Web Search request with params: {args}")
-                if not isinstance(args, dict):
+                self.__log(f"Web Search request with params: {action_args}")
+                if not isinstance(action_args, dict):
                     error_msg = "=> `args` must be an object with a `prompt` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-                if "prompt" not in args:
+                if "prompt" not in action_args:
                     error_msg = "=> `args` must have a `prompt` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
                 retrieved_docs = self.action_set.retrieve_documents(
-                    args["prompt"], RetrieverType.WEB_SEARCH
+                    action_args["prompt"], RetrieverType.WEB_SEARCH
                 )
                 self.web_search_result = (
                     retrieved_docs[0] if len(retrieved_docs) > 0 else None
@@ -397,18 +400,18 @@ class Conductor:
                     ActionExecutionStatus.SUCCESS,
                 )
             case ActionNames.WEB_CRAWL.value:
-                self.__log(f"Web Crawl request with params: {args}")
-                if not isinstance(args, dict):
+                self.__log(f"Web Crawl request with params: {action_args}")
+                if not isinstance(action_args, dict):
                     error_msg = "=> `args` must be an object with a `url` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-                if "url" not in args:
+                if "url" not in action_args:
                     error_msg = "=> `args` must have a `url` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
                 retrieved_docs = self.action_set.retrieve_documents(
-                    args["url"], RetrieverType.WEB_CRAWL
+                    action_args["url"], RetrieverType.WEB_CRAWL
                 )
                 self.web_crawl_result = (
                     retrieved_docs[0] if len(retrieved_docs) > 0 else None
@@ -427,40 +430,40 @@ class Conductor:
                     ActionExecutionStatus.SUCCESS,
                 )
             case ActionNames.TABLE_ENUMERATION.value:
-                self.__log(f"Table Enumerator request with params: {args}")
+                self.__log(f"Table Enumerator request with params: {action_args}")
 
-                if not isinstance(args, dict):
+                if not isinstance(action_args, dict):
                     error_msg = "`args` must be an object with a `pattern` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-                if "pattern" not in args:
+                if "pattern" not in action_args:
                     error_msg = "`args` must have a `pattern` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
                 enumerated_tables = self.action_set.retrieve_documents(
-                    args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
+                    action_args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
                 )
                 self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
-                success_msg = f"Enumerated table IDs based on this pattern: {args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+                success_msg = f"Enumerated table IDs based on this pattern: {action_args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
                 self.__log(success_msg)
                 return (
                     success_msg,
                     ActionExecutionStatus.SUCCESS,
                 )
             case ActionNames.STATE_MANIPULATION.value:
-                self.__log(f"State Manipulation request with params: {args}")
+                self.__log(f"State Manipulation request with params: {action_args}")
 
-                if not isinstance(args, dict):
+                if not isinstance(action_args, dict):
                     error_msg = "`args` must be an object"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                T: dict[str, list[str]] | None = args.get("T")
-                column_descriptions: dict[str, dict[str, str]] | None = args.get(
+                T: dict[str, list[str]] | None = action_args.get("T")
+                column_descriptions: dict[str, dict[str, str]] | None = action_args.get(
                     "column_descriptions"
                 )
-                S: str | None = args.get("S")
+                S: str | None = action_args.get("S")
 
                 is_T_modified = False
                 if T is not None and len(T) > 0:
@@ -533,8 +536,8 @@ class Conductor:
                     return error_msg, ActionExecutionStatus.ERROR
 
                 note = ""
-                if isinstance(args, dict) and "note" in args:
-                    note = args["note"]
+                if isinstance(action_args, dict) and "note" in action_args:
+                    note = action_args["note"]
 
                 self.__log(f"Materializer called (note: {note})")
 
@@ -591,12 +594,12 @@ class Conductor:
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
             case ActionNames.ASSUMPTION_CHECK.value:
-                self.__log(f"Assumption Check request with params: {args}")
-                if not isinstance(args, dict):
+                self.__log(f"Assumption Check request with params: {action_args}")
+                if not isinstance(action_args, dict):
                     error_msg = "=> `args` must be an object with a `code` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-                if "code" not in args:
+                if "code" not in action_args:
                     error_msg = "=> `args` must have a `code` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
@@ -612,7 +615,7 @@ class Conductor:
 
                 try:
                     execution_result = self.action_set.execute_code(
-                        all_tables, args["code"]
+                        all_tables, action_args["code"]
                     )
                     self.__log(f"Assumption Check execution result: {execution_result}")
                     return (
@@ -625,7 +628,7 @@ class Conductor:
                     return error_msg, ActionExecutionStatus.ERROR
             case _:
                 return (
-                    f"Tool calling failed; {tool} is unknown",
+                    f"Tool calling failed; {action_name} is unknown",
                     ActionExecutionStatus.ERROR,
                 )
 
@@ -656,7 +659,13 @@ class Conductor:
         for T_id, T_df in materialized_T_dfs.items():
             materialized_T[T_id] = T[T_id]
             materialized_T[T_id].content = T_df
-        return materialized_T
+        return materialized_T        
+
+    def reset_conductor(self):
+        self.user_facing_response = ""
+        self.is_user_facing_response = False
+        self.actions = []
+        self.llm_messages = []
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)

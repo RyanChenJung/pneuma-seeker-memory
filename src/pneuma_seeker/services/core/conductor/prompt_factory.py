@@ -132,9 +132,9 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
 
 {{
   "plan": [
-    {{"action": "{ActionNames.SITUATIONAL_ANALYSIS.value}", "message": "..."}},
+    {{"action": "{ActionNames.SITUATIONAL_ANALYSIS.value}", "args": {{"message": "..."}}}},
     {{"action": "<one of tool names>", "args": {{...}}}},
-    {{"action": "{ActionNames.USER_FACING_COMMUNICATION.value}", "message": "..."}}
+    {{"action": "{ActionNames.USER_FACING_COMMUNICATION.value}", "args": {{"message": "..."}}}}
   ]
 }}
 """.strip()

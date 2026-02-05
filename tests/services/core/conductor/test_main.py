@@ -68,7 +68,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"done"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"done"}}}}
         ]}}"""
         ]
         self.conductor.action_set.retrieve_documents = MagicMock(
@@ -102,7 +102,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.WEB_SEARCH.value}","args":{{"prompt":"web search query"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"web done"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"web done"}}}}
         ]}}"""
         ]
         self.conductor.action_set.retrieve_documents = MagicMock(
@@ -132,7 +132,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.WEB_CRAWL.value}","args":{{"url":"http://example.com"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"web crawl done"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"web crawl done"}}}}
         ]}}"""
         ]
 
@@ -165,7 +165,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.TABLE_ENUMERATION.value}","args":{{"pattern":"pattern"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"enum done"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"enum done"}}}}
         ]}}"""
         ]
 
@@ -193,7 +193,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"state_manipulation","args":{{"S":"result = something"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"S set"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"S set"}}}}
         ]}}"""
         ]
         gen = self.conductor.chat(
@@ -215,7 +215,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"state_manipulation","args":{{"T":{{"t1":["a","b"]}},"column_descriptions":{{"t1":{{"a":"col a"}}}}}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"T set"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"T set"}}}}
         ]}}"""
         ]
 
@@ -240,7 +240,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.STATE_MANIPULATION.value}","args":{{"T":{{"t1":["a","b"]}},"column_descriptions":{{"t1":{{"a":"col a"}}}},"S":"result = pd.DataFrame({{'sum': [tables['t1']['a'].sum()]}})"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"state done"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"state done"}}}}
         ]}}"""
         ]
         gen = self.conductor.chat(
@@ -261,44 +261,46 @@ class ConductorTests(unittest.TestCase):
         self.assertFalse(state.is_T_materialized)
         self.assertFalse(state.is_S_executed)
 
-    # def test_materializer_and_executor(self):
-    #     self.conductor.language_model_api.llm._responses = [  # type: ignore
-    #         f"""{{"plan": [
-    #         {{"action":"{ActionNames.STATE_MANIPULATION.value}","args":{{"T":{{"t1":["a","b"]}},"column_descriptions":{{"t1":{{"a":"col a"}}}},"S":"result = pd.DataFrame({{'sum': [tables['t1']['a'].sum()]}})"}}}},
-    #         {{"action":"{ActionNames.MATERIALIZER.value}","args":{{"note":""}}}},
-    #         {{"action":"{ActionNames.PYTHON_EXECUTOR.value}","args":{{}}}},
-    #         {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"materialization and execution done"}}
-    #     ]}}"""
-    #     ]
-    #     self.conductor.materializer.materialize_T = MagicMock(
-    #         return_value={"t1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
-    #     )
-    #     self.conductor.action_set.execute_code = MagicMock(
-    #         return_value=pd.DataFrame({"sum": [3]})
-    #     )
+    def test_materializer_and_executor(self):
+        self.conductor.language_model_api.llm._responses = [  # type: ignore
+            f"""{{"plan": [
+                {{"action":"{ActionNames.STATE_MANIPULATION.value}","args":{{"T":{{"t1":["a","b"]}},"column_descriptions":{{"t1":{{"a":"col a"}}}},"S":"result = pd.DataFrame({{'sum': [tables['t1']['a'].sum()]}})"}}}},
+                {{"action":"{ActionNames.MATERIALIZER.value}","args":{{"note":""}}}},
+                {{"action":"{ActionNames.PYTHON_EXECUTOR.value}","args":{{}}}}
+            ]}}""",
+            f"""{{"plan": [
+                {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"materialization and execution done"}}}}
+            ]}}"""
+        ]
+        self.conductor.materializer.materialize_T = MagicMock(
+            return_value={"t1": pd.DataFrame({"a": [1, 2], "b": [3, 4]})}
+        )
+        self.conductor.action_set.execute_code = MagicMock(
+            return_value=pd.DataFrame({"sum": [3]})
+        )
 
-    #     gen = self.conductor.chat(
-    #         user_input="materialize T",
-    #         interaction_history=[],
-    #         external_table_paths=[],
-    #     )
-    #     responses = list(gen)
+        gen = self.conductor.chat(
+            user_input="materialize T",
+            interaction_history=[],
+            external_table_paths=[],
+        )
+        list(gen)
 
-    #     self.assertTrue(
-    #         self.conductor.info_need_state.is_T_materialized,
-    #         "T should be marked as materialized",
-    #     )
-    #     self.assertTrue(
-    #         self.conductor.info_need_state.is_S_executed,
-    #         "S should be marked as executed",
-    #     )
-    #     self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
-    #     self.assertEqual(
-    #         list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2]
-    #     )
-    #     self.assertEqual(
-    #         list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
-    #     )
+        self.assertTrue(
+            self.conductor.info_need_state.is_T_materialized,
+            "T should be marked as materialized",
+        )
+        self.assertTrue(
+            self.conductor.info_need_state.is_S_executed,
+            "S should be marked as executed",
+        )
+        self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2]
+        )
+        self.assertEqual(
+            list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
+        )
 
     def test_assumption_check_produces_expected_string(self):
         df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "x", "y"]})
@@ -314,7 +316,7 @@ class ConductorTests(unittest.TestCase):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
             {{"action":"{ActionNames.ASSUMPTION_CHECK.value}","args":{{"code":"result = tables['table1']['A'].mean()"}}}},
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"info provided"}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"info provided"}}}}
         ]}}"""
         ]
         gen = self.conductor.chat(
@@ -348,7 +350,7 @@ class ConductorTests(unittest.TestCase):
 
         self.conductor.language_model_api.llm._responses = [  # type: ignore
             f"""{{"plan": [
-            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","message":"External data read successfuly."}}
+            {{"action":"{ActionNames.USER_FACING_COMMUNICATION.value}","args": {{"message":"External data read successfuly."}}}}
         ]}}"""
         ]
         gen = self.conductor.chat(

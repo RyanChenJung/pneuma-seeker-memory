@@ -119,7 +119,7 @@ class Materializer:
 
             self.llm_messages.append(
                 LLMMessage(
-                    role=Role.USER.value,
+                    role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_context_prompt(
                         self.state.retrieved_tables,
                         list(self.state.intermediate_tables),
@@ -180,7 +180,7 @@ class Materializer:
                 self.__log(f"==> {error_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=error_msg,
                     )
                 )
@@ -219,7 +219,7 @@ class Materializer:
                 message: str = action_args.get("message", "")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=f"You did a situational analysis: {message}",
                     )
                 )
@@ -233,7 +233,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -243,7 +243,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -260,7 +260,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -270,7 +270,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -284,7 +284,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -297,7 +297,7 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=success_msg,
                         )
                     )
@@ -321,7 +321,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -335,7 +335,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -345,7 +345,7 @@ class Materializer:
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=success_msg,
                     )
                 )
@@ -365,7 +365,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -379,7 +379,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -389,7 +389,7 @@ class Materializer:
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=success_msg,
                     )
                 )
@@ -416,7 +416,7 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=success_msg,
                         )
                     )
@@ -453,7 +453,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -467,7 +467,7 @@ class Materializer:
                             self.__log(f"==> {msg}")
                             self.llm_messages.append(
                                 LLMMessage(
-                                    role=Role.SYSTEM.value,
+                                    role=Role.USER.value,
                                     content=msg,
                                 )
                             )
@@ -479,7 +479,7 @@ class Materializer:
                         self.__log(f"==> {msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=msg,
                             )
                         )
@@ -500,7 +500,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -513,7 +513,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -525,7 +525,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -537,7 +537,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -557,7 +557,7 @@ class Materializer:
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
-                                role=Role.SYSTEM.value,
+                                role=Role.USER.value,
                                 content=error_msg,
                             )
                         )
@@ -613,7 +613,7 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=success_msg,
                         )
                     )
@@ -630,7 +630,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -640,7 +640,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -650,7 +650,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -668,7 +668,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -678,7 +678,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -694,7 +694,7 @@ class Materializer:
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=success_msg,
                     )
                 )
@@ -751,7 +751,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -761,7 +761,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -787,7 +787,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -799,7 +799,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -810,7 +810,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -822,7 +822,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -833,7 +833,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -843,7 +843,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -855,7 +855,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -867,7 +867,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -877,7 +877,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -945,7 +945,7 @@ class Materializer:
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=success_msg,
                     )
                 )
@@ -961,7 +961,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -1029,7 +1029,7 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=success_msg,
                         )
                     )
@@ -1040,7 +1040,7 @@ class Materializer:
                     self.__log(error_msg)
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -1050,7 +1050,7 @@ class Materializer:
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -1066,7 +1066,7 @@ class Materializer:
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=success_msg,
                         )
                     )
@@ -1075,7 +1075,7 @@ class Materializer:
                     self.__log(error_msg)
                     self.llm_messages.append(
                         LLMMessage(
-                            role=Role.SYSTEM.value,
+                            role=Role.USER.value,
                             content=error_msg,
                         )
                     )
@@ -1084,7 +1084,7 @@ class Materializer:
                 self.__log(f"==> {error_msg}")
                 self.llm_messages.append(
                     LLMMessage(
-                        role=Role.SYSTEM.value,
+                        role=Role.USER.value,
                         content=error_msg,
                     )
                 )
@@ -1140,7 +1140,7 @@ class Materializer:
             self.__log(f"=> {warning_msg}")
             self.llm_messages.append(
                 LLMMessage(
-                    role=Role.SYSTEM.value,
+                    role=Role.USER.value,
                     content=warning_msg,
                 )
             )
@@ -1178,7 +1178,7 @@ class Materializer:
         if ids_complete and not is_complete:
             self.llm_messages.append(
                 LLMMessage(
-                    role=Role.SYSTEM.value,
+                    role=Role.USER.value,
                     content="\n".join(column_issues),
                 )
             )
