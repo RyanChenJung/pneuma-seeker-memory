@@ -186,7 +186,8 @@ class Materializer:
                 )
                 step_count -= 1
                 continue
-
+            
+            self.__log(f"==> Executing the planned actions: {plan}...")
             for action_plan in plan:
                 action_name: str = action_plan.get("action", "")
                 action_args: dict[str, Any] = action_plan.get("args", {})
