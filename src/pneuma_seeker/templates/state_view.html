@@ -163,7 +163,10 @@
             <i class="bi bi-file-earmark-pdf"></i> Export Chat as PDF
           </button>
           <button id="download-tables-btn" class="btn btn-outline-primary btn-sm download-btn">
-            <i class="bi bi-download"></i> Download Target Tables
+            <i class="bi bi-download"></i> Download Target Tables (T)
+          </button>
+          <button id="download-t-provenance-btn" class="btn btn-outline-success btn-sm download-btn">
+            <i class="bi bi-download"></i> Download T's Provenance Script
           </button>
         </div>
       </div>
@@ -188,7 +191,7 @@
               <h5 class="mb-0 d-flex align-items-center">
                 <i class="bi bi-table"></i>
                 <span class="ms-2">T (Target Tables)
-                  <sup data-bs-toggle="tooltip" title="Tables are shown with sample rows.">*</sup>
+                  <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="A set of relevant tables (shown with sample rows) for your information need." style="font-size: 0.9rem; cursor: help;"></i>
                 </span>
                 <span class="badge ms-2 badge-materialized">Materialized: <span
                     id="materialized-status">No</span></span>
@@ -201,7 +204,9 @@
           <!-- Python Script Section -->
           <h5 class="mb-3 d-flex align-items-center">
             <i class="bi bi-file-earmark-code-fill"></i>
-            <span class="ms-2">S (Python Script)</span>
+            <span class="ms-2">S (Python Script)
+              <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="A Python script that runs on the target tables (T) to satisfy your information need." style="font-size: 0.9rem; cursor: help;"></i>
+            </span>
             <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
           </h5>
 
@@ -292,6 +297,39 @@
     if (!state.is_T_materialized || !state.T || Object.keys(state.T).length === 0) {
       downloadBtn.disabled = true;
       downloadBtn.title = "No tables available to download yet";
+    }
+
+    // Download T's Provenance Script
+    const downloadProvenanceBtn = document.getElementById("download-t-provenance-btn");
+    downloadProvenanceBtn.addEventListener("click", async () => {
+      const baseUrl =
+        window.location.ancestorOrigins[0].startsWith("http://localhost")
+          ? "http://localhost:8000"
+          : "";
+
+      const url = `${baseUrl}/materializer_code/${userId}/${chatId}`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `materializer_${userId}_${chatId}.py`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error("Download error:", err);
+        alert("Failed to download provenance script. Check console for details.");
+      }
+    });
+
+    if (!state.is_T_materialized) {
+      downloadProvenanceBtn.disabled = true;
+      downloadProvenanceBtn.title = "T must be materialized first";
     }
 
     // Export Chat as PDF

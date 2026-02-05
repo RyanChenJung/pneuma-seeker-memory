@@ -192,15 +192,10 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
         config.TABLE_MAX_ROWS_DISPLAY
     )
 
-    base_url = str(request.base_url).rstrip("/")
-    script_download_link = f"{base_url}/materializer_code/{user_id}/{chat_id}"
-
     prov_explanation = "<strong>T</strong> is not materialized yet."
     if conductor.info_need_state.is_T_materialized:
         prov_explanation_markdown = (
-            conductor.materializer.prov_graph.get_graph_explanation(
-                script_download_link=script_download_link
-            )
+            conductor.materializer.prov_graph.get_graph_explanation()
         )
         prov_explanation = markdown.markdown(
             prov_explanation_markdown, extensions=["fenced_code"]

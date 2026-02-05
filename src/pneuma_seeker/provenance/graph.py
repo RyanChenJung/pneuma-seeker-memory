@@ -196,7 +196,7 @@ class ProvenanceGraph:
         code_sections = [node.python_code for node in ordered_nodes if node.python_code]
         return "\n\n".join(code_sections)
 
-    def get_graph_explanation(self, script_download_link: str) -> str:
+    def get_graph_explanation(self) -> str:
         """Returns a textual explanation of the provenance graph."""
         ordered_nodes = self.topological_sort()
         used_data_nodes: list[ProvenanceNode] = []
@@ -218,7 +218,7 @@ class ProvenanceGraph:
 
         textual_explanations: list[str] = []
         textual_explanations.append(
-            f"""This document describes how **T** was generated, including all source data and processing steps. You can download the script [here]({script_download_link}).
+            f"""This document describes how **T** was generated, including all source data and processing steps.
 
 ---
 
