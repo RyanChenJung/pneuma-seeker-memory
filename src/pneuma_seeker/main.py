@@ -52,6 +52,8 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
 )
 
+TITLE_GENERATION_PREFIX = "### Task:\nGenerate a concise, 3-5 word title with an emoji summarizing the chat history.\n### Guidelines:\n- The title should clearly represent the main theme or subject of the conversation.\n- Use emojis that enhance understanding of the topic, but avoid quotation marks or special formatting."
+
 
 # Helper functions
 def now_ms() -> int:
@@ -204,7 +206,10 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
     messages = data.get("messages", [])
     model = data.get("model", "assistant")
 
-    retrieved_tables = {doc.doc_id: serialize_dataframe(doc.content, config.TABLE_MAX_ROWS_DISPLAY) for doc in conductor.retrieved_tables}
+    retrieved_tables = {
+        doc.doc_id: serialize_dataframe(doc.content, config.TABLE_MAX_ROWS_DISPLAY)
+        for doc in conductor.retrieved_tables
+    }
 
     return templates.TemplateResponse(
         "state_view.html",
@@ -228,6 +233,12 @@ async def chat(request: Request):
     chat_id: str = body.get("chat_id", "default_chat")
     messages = body.get("messages", [])
     files = body.get("files", [])
+
+    is_title_generation_task = len(messages) > 0 and messages[0].get(
+        "content"
+    ).startswith(TITLE_GENERATION_PREFIX)
+    if is_title_generation_task:
+        return {}
 
     llm_messages: list[LLMMessage] = []
     for msg in messages:
