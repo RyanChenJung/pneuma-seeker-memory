@@ -9,15 +9,17 @@ from pandas import DataFrame
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 import pneuma_seeker.chat_session as chat_session_mod
-from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
-from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
+from pneuma_seeker.provenance.graph import ProvenanceNode
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 
 
 class DummyConductor:
-    def __init__(self, user_id, chat_id, config, logger, prov_graph_obj, db_api, lm_api):
+    def __init__(
+        self, user_id, chat_id, config, logger, prov_graph_obj, db_api, lm_api
+    ):
         self.user_id = user_id
         self.chat_id = chat_id
         self.config = config

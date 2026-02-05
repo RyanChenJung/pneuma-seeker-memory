@@ -7,9 +7,9 @@ import pandas as pd
 from pandas import DataFrame
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.services.db.main import PneumaDB
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,

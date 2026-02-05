@@ -1,9 +1,13 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
 
-from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction, InformationNeedState
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, convert_retrieval_results_to_str
+from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    convert_retrieval_results_to_str,
+)
 
 
 class ConductorPromptFactory:
@@ -138,10 +142,10 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
   ]
 }}
 """.strip()
-    
+
     def get_table_retrieve_description(self):
         if not self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
-          return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
+            return f"""- **{ActionNames.TABLE_RETRIEVE.value}**:
   Retrieve internal tables.
   - **Args**: {{"prompt": "<retrieval query>"}}
   - **Notes**:
@@ -190,7 +194,7 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
 """
 
     def get_assumption_check_description(self):
-      return f"""\n- **{ActionNames.ASSUMPTION_CHECK.value}**
+        return f"""\n- **{ActionNames.ASSUMPTION_CHECK.value}**
   - Executes Python code to explore, inspect, or test assumptions about the retrieved or external tables.
   - If T has been materialized, those tables are also available.
   - This tool is used ONLY to gather evidence, perform sanity checks, or confirm suspicions. There are no side effects.

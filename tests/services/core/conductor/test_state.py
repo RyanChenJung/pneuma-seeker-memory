@@ -8,8 +8,9 @@ sys.path.insert(
 )
 
 import pandas as pd
+
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 
 
@@ -34,7 +35,9 @@ class InformationNeedStateTests(unittest.TestCase):
         self.state.S = "SELECT *"
         self.state.is_S_executed = True
 
-        snapshot = self.state.get_current_state_instance(self.config.TABLE_MAX_ROWS_DISPLAY)
+        snapshot = self.state.get_current_state_instance(
+            self.config.TABLE_MAX_ROWS_DISPLAY
+        )
         self.assertIn("tbl1", snapshot["T"])
         self.assertEqual(snapshot["is_T_materialized"], True)
         self.assertEqual(snapshot["column_descriptions"]["tbl1"]["a"], "col a")

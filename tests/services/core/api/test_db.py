@@ -1,14 +1,13 @@
 import logging
 import os
-from pathlib import Path
 import shutil
 import sys
 import tempfile
 import unittest
 import uuid
+from pathlib import Path
 
 import pandas as pd
-
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
@@ -16,9 +15,9 @@ sys.path.insert(
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.services.core.api.db import DBAPI
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.conductor import InformationNeedState
-from pneuma_seeker.shared.schemas.core.ir_system import Table, RetrieverType
+from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 from pneuma_seeker.shared.schemas.db.table_type import TableType
 
 
@@ -80,7 +79,9 @@ class TestDBAPIPersistence(unittest.TestCase):
             os.path.join(self.dbapi.target_tables_path, user_id, chat_id), exist_ok=True
         )
         df.to_csv(
-            os.path.join(self.dbapi.target_tables_path, user_id, chat_id, f"{table_name}.csv"),
+            os.path.join(
+                self.dbapi.target_tables_path, user_id, chat_id, f"{table_name}.csv"
+            ),
             index=False,
         )
         self.dbapi.register_table(

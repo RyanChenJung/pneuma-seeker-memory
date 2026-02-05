@@ -9,15 +9,13 @@ from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
+from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json
 from pneuma_seeker.shared.schemas.core.action import ActionExecutionStatus, ActionNames
-from pneuma_seeker.shared.schemas.core.conductor import (
-    InformationNeedState,
-    UserConductorInteraction,
-)
+from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
     RetrieverType,
@@ -128,7 +126,6 @@ class Conductor:
                 )
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
-
 
         self.llm_messages = [
             LLMMessage(
@@ -252,9 +249,7 @@ class Conductor:
                 action_name: str = action_plan.get("action", "")
                 action_args: dict = action_plan.get("args", {})
                 yield f"LOG: Executing action: {action_name}..."
-                action_outcome, _ = self.__execute_action(
-                    action_name, action_args
-                )
+                action_outcome, _ = self.__execute_action(action_name, action_args)
                 self.llm_messages.append(
                     LLMMessage(role=Role.USER.value, content=action_outcome)
                 )
@@ -293,7 +288,9 @@ class Conductor:
                 self.__log(f"=> {success_msg}")
                 return success_msg, ActionExecutionStatus.SUCCESS
             case ActionNames.USER_FACING_COMMUNICATION.value:
-                self.__log(f"User-Facing Communication request with params: {action_args}")
+                self.__log(
+                    f"User-Facing Communication request with params: {action_args}"
+                )
                 message = action_args.get("message")
                 if not isinstance(message, str):
                     error_msg = "=> `args` must be an object with a `message` property"
@@ -659,7 +656,7 @@ class Conductor:
         for T_id, T_df in materialized_T_dfs.items():
             materialized_T[T_id] = T[T_id]
             materialized_T[T_id].content = T_df
-        return materialized_T        
+        return materialized_T
 
     def reset_conductor(self):
         self.user_facing_response = ""
