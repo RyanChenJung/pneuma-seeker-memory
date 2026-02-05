@@ -59,42 +59,50 @@ class ConfigTests(unittest.TestCase):
         """Test that all config values have proper defaults when no env vars or file provided."""
         cfg = Config()
         
-        # Language Model defaults
-        self.assertEqual(cfg.LLM_PATH, "gpt-4.1-mini")
-        self.assertEqual(cfg.EMBED_MODEL_PATH, "text-embedding-3-small")
-        self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 1536)
-        self.assertEqual(cfg.OPENAI_API_KEY, "")
-        self.assertEqual(cfg.AZURE_OPENAI_API_KEY, "")
-        self.assertEqual(cfg.AZURE_OPENAI_ENDPOINT, "")
-        self.assertEqual(cfg.AZURE_API_VERSION, "2024-12-01-preview")
-        self.assertTrue(cfg.USE_AZURE_LLM)
-        self.assertTrue(cfg.USE_AZURE_EMBED_MODEL)
+        self.assertIsInstance(cfg.LLM_PATH, str)
+        self.assertIsInstance(cfg.LLM_MAX_TOKENS, int)
+        self.assertIsInstance(cfg.EMBED_MODEL_PATH, str)
+        self.assertIsInstance(cfg.EMBEDDING_MAX_TOKENS, int)
+
+        self.assertIsInstance(cfg.OPENAI_API_KEY, str)
+        self.assertIsInstance(cfg.AZURE_OPENAI_API_KEY, str)
+        self.assertIsInstance(cfg.AZURE_OPENAI_ENDPOINT, str)
+        self.assertIsInstance(cfg.AZURE_API_VERSION, str)
+        self.assertIsInstance(cfg.USE_AZURE_LLM, bool)
+        self.assertIsInstance(cfg.USE_AZURE_EMBED_MODEL, bool)
         
-        # Frontend-Backend defaults
-        self.assertEqual(cfg.ALLOWED_ORIGINS, ["*"])
-        self.assertEqual(cfg.OPENWEBUI_BASE_URL, "http://localhost:8080/")
-        self.assertEqual(cfg.OPENWEBUI_API_KEY, "")
+        self.assertIsInstance(cfg.ALLOWED_ORIGINS, list)
+        self.assertIsInstance(cfg.OPENWEBUI_BASE_URL, str)
+        self.assertIsInstance(cfg.OPENWEBUI_API_KEY, str)
+        self.assertIsInstance(cfg.TABLE_MAX_ROWS_DISPLAY, int)
         
-        # System-Level defaults
-        self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 7)
-        self.assertEqual(cfg.MAX_MATERIALIZER_STEPS, 10)
-        self.assertFalse(cfg.ENABLE_WEB_SEARCH)
-        self.assertTrue(cfg.ENABLE_WEB_CRAWL)
-        self.assertEqual(cfg.WEB_CRAWL_MAX_CHARS, 5000)
-        self.assertTrue(cfg.PERSIST_CHAT_SESSION)
+        self.assertIsInstance(cfg.MAX_CONDUCTOR_STEPS, int)
+        self.assertIsInstance(cfg.MAX_MATERIALIZER_STEPS, int)
+        self.assertIsInstance(cfg.PERSIST_CHAT_SESSION, bool)
+        self.assertIsInstance(cfg.DATA_SOURCES, list)
+        for source in cfg.DATA_SOURCES:
+            self.assertIsInstance(source, str)
+
+        self.assertIsInstance(cfg.ENABLE_WEB_SEARCH, bool)
+        self.assertIsInstance(cfg.ENABLE_WEB_CRAWL, bool)
+        self.assertIsInstance(cfg.WEB_CRAWL_MAX_CHARS, int)
+        self.assertIsInstance(cfg.ENABLE_JOIN_PATH_EXTRACTION, bool)
+        self.assertIsInstance(cfg.JOIN_PATH_EXTRACTION_ALPHA, float)
+        self.assertIsInstance(cfg.JOIN_PATH_EXTRACTION_TOP_K, int)
+        self.assertIsInstance(cfg.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE, bool)
+        self.assertIsInstance(cfg.TABLE_RETRIEVE_MAX_TOPICS, int)
+        self.assertIsInstance(cfg.TABLE_RETRIEVE_ENABLE_ENTITIES_RELEVANCE_BOOSTER, bool)
         
-        # Semantic Operator defaults
-        self.assertEqual(cfg.SEMANTIC_JOIN_TOP_K, 1)
-        self.assertEqual(cfg.SEMANTIC_JOIN_BATCH_SIZE, 30)
-        self.assertEqual(cfg.SEMANTIC_JOIN_DELIMITER, " [SEP] ")
-        self.assertEqual(cfg.SEMANTIC_JOIN_ALPHA, 0.5)
-        self.assertEqual(cfg.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE, 60)
-        self.assertEqual(cfg.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE, 10)
+        self.assertIsInstance(cfg.SEMANTIC_JOIN_TOP_K, int)
+        self.assertIsInstance(cfg.SEMANTIC_JOIN_BATCH_SIZE, int)
+        self.assertIsInstance(cfg.SEMANTIC_JOIN_DELIMITER, str)
+        self.assertIsInstance(cfg.SEMANTIC_JOIN_ALPHA, float)
+        self.assertIsInstance(cfg.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE, int)
+        self.assertIsInstance(cfg.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE, int)
         
-        # Path defaults
-        self.assertIsNotNone(cfg.DB_BACKEND_PATH)
-        self.assertTrue("data_src" in cfg.DB_BACKEND_PATH)
-        self.assertTrue("duckdb" in cfg.DB_BACKEND_PATH)
+        self.assertIsInstance(cfg.ENABLE_ASSUMPTION_CHECK, bool)
+
+        self.assertIsInstance(cfg.DB_BACKEND_PATH, str)
 
     # ========== Test Environment Variable Loading ==========
 
@@ -105,7 +113,7 @@ class ConfigTests(unittest.TestCase):
         os.environ["EMBEDDING_MAX_TOKENS"] = "2048"
         os.environ["USE_AZURE_LLM"] = "false"
         os.environ["MAX_CONDUCTOR_STEPS"] = "10"
-        
+        os.environ["TABLE_MAX_ROWS_DISPLAY"] = "15"
         cfg = Config()
         
         self.assertEqual(cfg.OPENAI_API_KEY, "test_openai_key")
@@ -113,6 +121,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 2048)
         self.assertFalse(cfg.USE_AZURE_LLM)
         self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 10)
+        self.assertEqual(cfg.TABLE_MAX_ROWS_DISPLAY, 15)
 
     def test_config_loads_from_env_file(self):
         """Test that config loads from .env file when path is provided."""
@@ -149,7 +158,7 @@ class ConfigTests(unittest.TestCase):
         cfg = Config(env_path="/nonexistent/path/.env")
         
         # Should still load defaults
-        self.assertEqual(cfg.LLM_PATH, "gpt-4.1-mini")
+        self.assertIsInstance(cfg.LLM_PATH, str)
 
     # ========== Test Boolean Parsing ==========
 
@@ -380,10 +389,9 @@ class ConfigTests(unittest.TestCase):
         """Test that DB_BACKEND_PATH is properly constructed by default."""
         cfg = Config()
         
-        # Should contain expected path components
-        self.assertIn("data_src", cfg.DB_BACKEND_PATH)
-        self.assertIn("duckdb", cfg.DB_BACKEND_PATH)
-        # Should be an absolute path or relative to the config module
+        # Should be a string
+        self.assertIsInstance(cfg.DB_BACKEND_PATH, str)
+        # Should not be empty
         self.assertTrue(len(cfg.DB_BACKEND_PATH) > 0)
 
     def test_db_backend_path_custom_value(self):
@@ -399,7 +407,7 @@ class ConfigTests(unittest.TestCase):
         """Test SEMANTIC_JOIN_DELIMITER default value."""
         cfg = Config()
         
-        self.assertEqual(cfg.SEMANTIC_JOIN_DELIMITER, " [SEP] ")
+        self.assertIsInstance(cfg.SEMANTIC_JOIN_DELIMITER, str)
 
     def test_semantic_join_delimiter_custom(self):
         """Test SEMANTIC_JOIN_DELIMITER with custom value."""

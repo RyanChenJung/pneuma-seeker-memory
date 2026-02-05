@@ -11,9 +11,12 @@ class Config:
             load_dotenv(env_path)
 
         # Language Model Settings
-        self.LLM_PATH = getenv("LLM_PATH", "gpt-4.1-mini")
+        self.LLM_PATH = getenv("LLM_PATH", "o4-mini")
+        self.LLM_MAX_TOKENS = int(getenv("LLM_MAX_TOKENS", "128000"))
         self.EMBED_MODEL_PATH = getenv("EMBED_MODEL_PATH", "text-embedding-3-small")
         self.EMBEDDING_MAX_TOKENS = int(getenv("EMBEDDING_MAX_TOKENS", "1536"))
+
+        # OpenAI / Azure OpenAI Settings
         self.OPENAI_API_KEY = getenv("OPENAI_API_KEY", "")
         self.AZURE_OPENAI_API_KEY = getenv("AZURE_OPENAI_API_KEY", "")
         self.AZURE_OPENAI_ENDPOINT = getenv("AZURE_OPENAI_ENDPOINT", "")
@@ -27,26 +30,30 @@ class Config:
         self.ALLOWED_ORIGINS = getenv("ALLOWED_ORIGINS", "*").split(",")
         self.OPENWEBUI_BASE_URL = getenv("OPENWEBUI_BASE_URL", "http://localhost:8080/")
         self.OPENWEBUI_API_KEY = getenv("OPENWEBUI_API_KEY", "")
+        self.TABLE_MAX_ROWS_DISPLAY = int(getenv("TABLE_MAX_ROWS_DISPLAY", "10"))
 
-        # System-Level Configurations
-        self.DATA_SOURCES = ["biomedical"]
+        # Core Configuration Settings
         self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "7"))
         self.MAX_MATERIALIZER_STEPS = int(getenv("MAX_MATERIALIZER_STEPS", "10"))
-
-        self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
-        self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
-        self.ENABLE_ASSUMPTION_CHECK = (
-            getenv("ENABLE_ASSUMPTION_CHECK", "true").lower() == "true"
-        )
-        self.ENABLE_JOIN_PATH_EXTRACTION = (
-            getenv("ENABLE_JOIN_PATH_EXTRACTION", "true").lower() == "true"
-        )
-        self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))
         self.PERSIST_CHAT_SESSION = (
             getenv("PERSIST_CHAT_SESSION", "true").lower() == "true"
         )
+        self.DATA_SOURCES = ["biomedical"]
 
-        # Pneuma-Seeker (Table Retrieve) Settings
+        # Action Settings
+        ## Retrieval Action Settings
+        self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
+        self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
+        self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))     
+        self.ENABLE_JOIN_PATH_EXTRACTION = (
+            getenv("ENABLE_JOIN_PATH_EXTRACTION", "true").lower() == "true"
+        )
+        self.JOIN_PATH_EXTRACTION_ALPHA = float(
+            getenv("JOIN_PATH_EXTRACTION_NAME_SIMILARITY_WEIGHT", "0.6")
+        )
+        self.JOIN_PATH_EXTRACTION_TOP_K = int(
+            getenv("JOIN_PATH_EXTRACTION_TOP_K", "5")
+        )
         self.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = (
             getenv("ENABLE_MULTI_TOPIC_TABLE_RETRIEVE", "true").lower() == "true"
         )
@@ -55,14 +62,13 @@ class Config:
             getenv("TABLE_RETRIEVE_ENABLE_ENTITIES_RELEVANCE_BOOSTER", "true").lower() == "true"
         )
 
-        # Semantic Operator Settings
+        ## Semantic Action Settings
         self.SEMANTIC_JOIN_TOP_K = 1
         self.SEMANTIC_JOIN_BATCH_SIZE = max(
             1, int(getenv("SEMANTIC_JOIN_BATCH_SIZE", "30"))
         )
         self.SEMANTIC_JOIN_DELIMITER = getenv("SEMANTIC_JOIN_DELIMITER", " [SEP] ")
         self.SEMANTIC_JOIN_ALPHA = float(getenv("SEMANTIC_JOIN_ALPHA", "0.5"))
-
         self.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE = max(
             1, int(getenv("SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE", "60"))
         )
@@ -70,17 +76,12 @@ class Config:
             1, int(getenv("SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE", "10"))
         )
 
-        # Join Path Extraction Settings
-        self.JOIN_PATH_EXTRACTION_ALPHA = float(
-            getenv("JOIN_PATH_EXTRACTION_NAME_SIMILARITY_WEIGHT", "0.6")
+        ## Other Action Settings
+        self.ENABLE_ASSUMPTION_CHECK = (
+            getenv("ENABLE_ASSUMPTION_CHECK", "true").lower() == "true"
         )
-        self.JOIN_PATH_EXTRACTION_TOP_K = int(
-            getenv("JOIN_PATH_EXTRACTION_TOP_K", "5")
-        )
-
-        # State View Page Settings
-        self.TABLE_MAX_ROWS_DISPLAY = int(getenv("TABLE_MAX_ROWS_DISPLAY", "10"))
-
+        
+        # Database Settings
         self.DB_BACKEND_PATH = getenv(
             "DB_BACKEND_PATH",
             path.join(path.dirname(__file__), "..", "..", "..", "data_src", "duckdb"),
