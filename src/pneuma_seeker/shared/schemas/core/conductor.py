@@ -1,6 +1,7 @@
 from enum import Enum
 
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
+from pneuma_seeker.shared.table_serializer import serialize_dataframe
 
 
 class InformationNeedState:
@@ -34,20 +35,10 @@ Column descriptions of T:
 Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
 {self.S}"""
 
-    def get_current_state_instance(self):
-        MAX_ROWS = 10
-
-        def serialize_dataframe(df):
-            # Convert DataFrame to a JSON-safe list of dicts
-            return (
-                df.head(MAX_ROWS)
-                .map(lambda x: x.isoformat() if hasattr(x, "isoformat") else x)
-                .to_dict(orient="records")
-            )
-
+    def get_current_state_instance(self, nrows: int):
         return {
             "T": {
-                table_id: serialize_dataframe(table_doc.content)
+                table_id: serialize_dataframe(table_doc.content, nrows)
                 for table_id, table_doc in self.T.items()
             },
             "is_T_materialized": self.is_T_materialized,
@@ -55,7 +46,6 @@ Script (S) to be run over T (Is executed yet? {self.is_S_executed}):
             "S": self.S,
             "is_S_executed": self.is_S_executed,
         }
-
 
 
 class UserConductorInteraction:

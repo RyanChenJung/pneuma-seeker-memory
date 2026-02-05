@@ -78,6 +78,9 @@ class Config:
             getenv("JOIN_PATH_EXTRACTION_TOP_K", "5")
         )
 
+        # State View Page Settings
+        self.TABLE_MAX_ROWS_DISPLAY = int(getenv("TABLE_MAX_ROWS_DISPLAY", "10"))
+
         self.DB_BACKEND_PATH = getenv(
             "DB_BACKEND_PATH",
             path.join(path.dirname(__file__), "..", "..", "..", "data_src", "duckdb"),

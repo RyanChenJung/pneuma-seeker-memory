@@ -25,6 +25,7 @@ from pneuma_seeker.session_manager import SessionManager
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import setup_logger
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
+from pneuma_seeker.shared.table_serializer import serialize_dataframe
 
 
 app = FastAPI(title="Pneuma-Seeker")
@@ -51,6 +52,7 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
 )
 
+
 # Helper functions
 def now_ms() -> int:
     """Returns the current time in milliseconds."""
@@ -69,6 +71,7 @@ def stream_payload(sender: str, text: str) -> str:
         )
         + "\n"
     )
+
 
 @app.get("/")
 def root():
@@ -108,6 +111,29 @@ async def get_provenance_nodes(request: Request, user_id: str, chat_id: str):
             "nodes": nodes_json,
         }
     )
+
+
+@app.get("/execute_code/{user_id}/{chat_id}")
+async def execute_code(user_id: str, chat_id: str):
+    """
+    Endpoint to trigger execution of Python code (S) on target tables (T) for a given user and chat.
+    """
+    conductor = session_manager.get_chat_session(user_id, chat_id).conductor
+    try:
+        execution_result = conductor.action_set.execute_code(
+            {
+                doc_id: doc.content
+                for doc_id, doc in conductor.info_need_state.T.items()
+            },
+            conductor.info_need_state.S,
+        )
+        return serialize_dataframe(execution_result, config.TABLE_MAX_ROWS_DISPLAY)
+    except Exception as e:
+        logger.error(f"Error during code execution: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during code execution.",
+        )
 
 
 @app.post("/download_chat_pdf")
@@ -162,7 +188,9 @@ async def download_chat_pdf(data: dict):
 @app.post("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_combined_html(request: Request, user_id: str, chat_id: str, data: dict):
     conductor = session_manager.get_chat_session(user_id, chat_id).conductor
-    state = conductor.info_need_state.get_current_state_instance()
+    state = conductor.info_need_state.get_current_state_instance(
+        config.TABLE_MAX_ROWS_DISPLAY
+    )
 
     base_url = str(request.base_url).rstrip("/")
     script_download_link = f"{base_url}/materializer_code/{user_id}/{chat_id}"
@@ -308,9 +336,7 @@ def download_materializer_code(user_id: str, chat_id: str):
     Downloads Materializer code (.py) generated for a given user and chat.
     """
     chat_session = session_manager.get_chat_session(user_id, chat_id)
-    materializer_code = (
-        chat_session.conductor.materializer.prov_graph.get_graph_code()
-    )
+    materializer_code = chat_session.conductor.materializer.prov_graph.get_graph_code()
 
     file_stream = io.BytesIO()
     file_stream.write(materializer_code.encode("utf-8"))
