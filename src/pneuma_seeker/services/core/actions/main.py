@@ -4,6 +4,7 @@ from typing import Any
 import duckdb
 from pandas import DataFrame
 
+from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.provenance.provenance_helper import (
     append_comment_to_existing_code,
     generate_pandas_read_csv_code,
@@ -11,7 +12,6 @@ from pneuma_seeker.provenance.provenance_helper import (
     generate_read_external_tables_code,
     generate_semantic_col_generator_code,
     generate_semantic_join_generator_code,
-    generate_sql_executor_code,
     generate_table_select_code,
     generate_view_textual_document_code,
 )
@@ -23,7 +23,6 @@ from pneuma_seeker.services.core.actions.operators.semantic_join import (
     SemanticJoin,
     SyntacticSimMetric,
 )
-from pneuma_seeker.services.core.actions.executors.sql_executor import SQLExecutor
 from pneuma_seeker.services.core.actions.operators.table_projection import (
     TableProjection,
 )
@@ -38,13 +37,10 @@ from pneuma_seeker.services.core.actions.retrievers.web_crawl import WebCrawl
 from pneuma_seeker.services.core.actions.retrievers.web_search import WebSearch
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.shared.schemas.core.ir_system import (
-    AbstractDocument,
-    RetrieverType,
-)
 from pneuma_seeker.services.core.ir_system.main import IRSystem
-from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType
 
 
 class ActionSet:
@@ -67,8 +63,12 @@ class ActionSet:
         self.language_model_api = language_model_api
 
         self.ir_system = IRSystem(
-            self.user_id, self.chat_id,
-            self.config, self.logger, self.db_api, self.language_model_api
+            self.user_id,
+            self.chat_id,
+            self.config,
+            self.logger,
+            self.db_api,
+            self.language_model_api,
         )
         self.table_retrieve = TableRetrieve(
             self.config, self.logger, self.db_api, self.language_model_api
@@ -89,9 +89,6 @@ class ActionSet:
         self.python_executor = PythonExecutor(
             self.config, self.logger, self.db_api, self.language_model_api
         )
-        self.sql_executor = SQLExecutor(
-            self.config, self.logger, self.db_api, self.language_model_api
-        )
 
         self.semantic_join = SemanticJoin(
             self.config, self.logger, self.db_api, self.language_model_api
@@ -102,6 +99,40 @@ class ActionSet:
         self.table_projection = TableProjection(
             self.config, self.logger, self.db_api, self.language_model_api
         )
+
+        self.valid_conductor_actions = [
+            ActionNames.USER_FACING_COMMUNICATION.value,
+            ActionNames.SITUATIONAL_ANALYSIS.value,
+            ActionNames.TABLE_RETRIEVE.value,
+            ActionNames.TABLE_ENUMERATION.value,
+            ActionNames.STATE_MANIPULATION.value,
+            ActionNames.MATERIALIZER.value,
+            ActionNames.PYTHON_EXECUTOR.value,
+        ]
+        self.valid_materializer_actions = [
+            ActionNames.SITUATIONAL_ANALYSIS.value,
+            ActionNames.TABLE_RETRIEVE.value,
+            ActionNames.TABLE_ENUMERATION.value,
+            ActionNames.PYTHON_EXECUTOR.value,
+            ActionNames.TABLE_PROJECTION.value,
+            ActionNames.SEMANTIC_JOIN.value,
+            ActionNames.SEMANTIC_COLUMN_GENERATION.value,
+        ]
+        if self.config.ENABLE_WEB_SEARCH:
+            self.valid_conductor_actions.append(ActionNames.WEB_SEARCH.value)
+            self.valid_materializer_actions.append(ActionNames.WEB_SEARCH.value)
+        if self.config.ENABLE_WEB_CRAWL:
+            self.valid_conductor_actions.append(ActionNames.WEB_CRAWL.value)
+            self.valid_materializer_actions.append(ActionNames.WEB_CRAWL.value)
+        if self.config.ENABLE_ASSUMPTION_CHECK:
+            self.valid_conductor_actions.append(ActionNames.ASSUMPTION_CHECK.value)
+            self.valid_materializer_actions.append(ActionNames.ASSUMPTION_CHECK.value)
+
+    def is_valid_conductor_action(self, action_name: str) -> bool:
+        return action_name in self.valid_conductor_actions
+
+    def is_valid_materializer_action(self, action_name: str) -> bool:
+        return action_name in self.valid_materializer_actions
 
     def retrieve_documents(
         self,
@@ -187,17 +218,11 @@ class ActionSet:
                     final_output.append(str(result))
             return final_output
 
-    def execute_sql_df(self, sql_query: str, tables: dict[str, DataFrame]):
-        return self.sql_executor.execute({"sql_query": sql_query, "tables": tables})
-
     def execute_code(self, tables: dict[str, DataFrame], code: str):
         return self.python_executor.execute({"tables": tables, "code": code})
 
     def extract_table_ids_from_code(self, code: str) -> list[str]:
         return self.python_executor.extract_table_ids(code)
-
-    def extract_table_ids_from_sql(self, sql_query: str) -> list[str]:
-        return self.sql_executor.extract_table_ids(sql_query)
 
     def join_semantic(
         self,
@@ -287,15 +312,3 @@ class ActionSet:
 
     def append_comment_to_existing_code(self, code: str, comment: str):
         return append_comment_to_existing_code(code, comment)
-
-    def generate_sql_executor_code(
-        self,
-        sql_query: str,
-        id_dfs: dict[str, DataFrame],
-        path: str,
-    ):
-        return generate_sql_executor_code(
-            sql_query,
-            id_dfs,
-            path,
-        )

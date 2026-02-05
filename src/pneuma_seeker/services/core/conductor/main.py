@@ -1,14 +1,10 @@
 import os
 from logging import Logger
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.services.core.actions.action_names import (
-    ActionExecutionStatus,
-    ActionNames,
-)
 from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
@@ -17,6 +13,7 @@ from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_json
+from pneuma_seeker.shared.schemas.core.action import ActionExecutionStatus, ActionNames
 from pneuma_seeker.shared.schemas.core.conductor import (
     InformationNeedState,
     UserConductorInteraction,
@@ -94,22 +91,6 @@ class Conductor:
             "data_src",
             "target_tables",
         )
-
-        self.valid_actions: list[str] = [
-            ActionNames.USER_FACING_COMMUNICATION.value,
-            ActionNames.SITUATIONAL_ANALYSIS.value,
-            ActionNames.TABLE_RETRIEVE.value,
-            ActionNames.TABLE_ENUMERATION.value,
-            ActionNames.STATE_MANIPULATION.value,
-            ActionNames.MATERIALIZER.value,
-            ActionNames.PYTHON_EXECUTOR.value,
-        ]
-        if self.config.ENABLE_WEB_SEARCH:
-            self.valid_actions.append(ActionNames.WEB_SEARCH.value)
-        if self.config.ENABLE_WEB_CRAWL:
-            self.valid_actions.append(ActionNames.WEB_CRAWL.value)
-        if self.config.ENABLE_ASSUMPTION_CHECK:
-            self.valid_actions.append(ActionNames.ASSUMPTION_CHECK.value)
 
     def chat(
         self,
@@ -196,14 +177,37 @@ class Conductor:
                 self.__log("==> Parsing plan...")
                 plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
 
+                if not isinstance(plan, list):
+                    error_msg = "Plan specified is not valid (not a list)."
+                    self.__log(f"=> {error_msg}")
+                    raise ValueError(error_msg)
+                if len(plan) == 0:
+                    error_msg = "Plan specified is empty."
+                    self.__log(f"=> {error_msg}")
+                    raise ValueError(error_msg)
+                if not all(isinstance(action_plan, dict) for action_plan in plan):
+                    error_msg = (
+                        "Plan specified is not valid (not all entries are objects)."
+                    )
+                    self.__log(f"=> {error_msg}")
+                    raise ValueError(error_msg)
+
+                plan = cast(list[dict[str, Any]], plan)
                 executor_part_of_plan = False
                 user_facing_communication_part_of_plan = False
                 for action_plan in plan:
+                    assert isinstance(action_plan, dict)
                     if action_plan.get("action") is None:
                         error_msg = "Action specified is not valid (None)."
                         self.__log(f"=> {error_msg}")
                         raise ValueError(error_msg)
-                    if action_plan.get("action") not in self.valid_actions:
+                    if not isinstance(action_plan.get("action"), str):
+                        error_msg = f"Action specified is not valid (not a string): {action_plan.get('action')}"
+                        self.__log(f"=> {error_msg}")
+                        raise ValueError(error_msg)
+                    if not self.action_set.is_valid_conductor_action(
+                        action_plan.get("action", "")
+                    ):
                         error_msg = f"Action specified is not valid: {action_plan.get('action')}"
                         self.__log(f"=> {error_msg}")
                         raise ValueError(error_msg)
@@ -241,11 +245,11 @@ class Conductor:
             for action_plan in plan:
                 self.__log(f"=> Processing this action: {action_plan}")
                 actions_taken.append(str(action_plan))
-                action_type: None | str = action_plan.get("action")
+                action_name: None | str = action_plan.get("action")
                 action_message: None | str = action_plan.get("message")
                 args: None | dict = action_plan.get("args")
 
-                if action_type is None:
+                if action_name is None:
                     error_msg = "Each action entry must have an `action` field specifying the action to take."
                     self.__log(f"=> {error_msg}")
                     llm_messages.append(
@@ -257,13 +261,13 @@ class Conductor:
                     break
 
                 if (
-                    action_type == ActionNames.USER_FACING_COMMUNICATION.value
+                    action_name == ActionNames.USER_FACING_COMMUNICATION.value
                     and isinstance(action_message, str)
                 ):
                     user_facing_response = action_message
                     is_user_facing_response = True
                 elif (
-                    action_type == ActionNames.SITUATIONAL_ANALYSIS.value
+                    action_name == ActionNames.SITUATIONAL_ANALYSIS.value
                     and isinstance(action_message, str)
                 ):
                     yield "LOG: Reasoning internally..."
@@ -274,9 +278,9 @@ class Conductor:
                         )
                     )
                 elif args is not None:
-                    tool = action_type
+                    tool = action_name
                     yield f"LOG: Calling tool: {tool}..."
-                    tool_outcome, tool_execution_status = self.__execute_tool(
+                    tool_outcome, tool_execution_status = self.__execute_action(
                         tool, args
                     )
                     llm_messages.append(
@@ -297,10 +301,10 @@ class Conductor:
 
         yield user_facing_response
 
-    def __execute_tool(
-        self, tool: str, args: str | dict
+    def __execute_action(
+        self, tool: str, args: str | dict[str, Any]
     ) -> tuple[str, ActionExecutionStatus]:
-        """Executes a specified tool with given arguments."""
+        """Executes an action and returns the outcome message and status."""
         match tool:
             case ActionNames.TABLE_RETRIEVE.value:
                 self.__log(f"Table Retrieve request with params: {args}")
@@ -557,7 +561,7 @@ class Conductor:
                         self.__log(
                             f"=> Self-triggered materialization from calling {ActionNames.PYTHON_EXECUTOR.value}..."
                         )
-                        self.__execute_tool(ActionNames.MATERIALIZER.value, {})
+                        self.__execute_action(ActionNames.MATERIALIZER.value, {})
                     else:
                         error_msg = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
                         self.__log(f"=> {error_msg}")

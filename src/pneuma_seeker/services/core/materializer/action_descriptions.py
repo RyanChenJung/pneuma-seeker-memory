@@ -1,8 +1,8 @@
-from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.shared.config import Config
 
 
-def get_operation_description(
+def get_materializer_actions(
     config: Config,
 ) -> str:
     return (
@@ -23,7 +23,7 @@ def get_operation_description(
     - All tables — whether internal, external, or intermediate — are available via `tables["<ID>"]` (Pandas DataFrame).
     - Never use `pd.read_csv`; tables are already provided in memory.
     - Pandas, NumPy, and SciPy are available for data manipulation (remember to add relevant import statements in the code if you need them).
-    - You can perform many things, including transforming the values of certain columns. For example, if the SQLs expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
+    - You can perform many things, including transforming the values of certain columns. For example, if the SQLs (S) expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result, which must be a **SINGLE** pandas DataFrame, to a variable named 'result'
     - Args: {{"code": "<Python code string>"}}
 {get_assumption_check_description() if config.ENABLE_ASSUMPTION_CHECK else ""}
@@ -37,13 +37,7 @@ def get_operation_description(
                     }}
                 }}
             }}
-    - Example use case: If table A has columns that match some columns of target table B, you can select it directly instead of creating SQL queries or Python code.
-
-- **{ActionNames.SQL_EXECUTOR.value}**
-    - Executes SQL queries on available tables (internal, external, or intermediate).
-    - Supports standard SQL syntax
-    - Args: {{"sql_query": "<SQL query string>"}}
-    - Example: {{"sql_query": "SELECT * FROM table_1 WHERE date >= '2025-01-01'"}}
+    - Example use case: If table A has columns that match some columns of target table B, you can select it directly instead of creating Python code.
 
 - **{ActionNames.SEMANTIC_JOIN.value}**
     - Joins two tables (internal, external, or intermediate) by computing semantic similarity between specified columns.

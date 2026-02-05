@@ -6,8 +6,8 @@ from typing import Any
 
 from pandas import DataFrame
 
-from pneuma_seeker.services.core.actions.action_names import ActionNames
 from pneuma_seeker.services.core.actions.main import ActionSet
+from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.services.core.actions.operators.semantic_join import (
     SyntacticSimMetric,
 )
@@ -80,11 +80,16 @@ class Materializer:
     ) -> dict[str, DataFrame]:
         """Materialize target tables T based on the provided script S and external tables."""
         self.__log(f"Materializing {len(T)} target tables...")
-        self.__cleanup_system()
+        self.__reset_materializer()
+
+        self.state.T = T
+        self.state.column_descriptions = column_descriptions
+        self.state.S = S
 
         if len(prefetched_tables) > 0:
             self.state.retrieved_tables = prefetched_tables
-
+        if len(external_tables) > 0:
+            self.state.external_tables = external_tables
         if prefetched_web_search_result is not None:
             self.state.web_search_result = prefetched_web_search_result
         if prefetched_web_crawl_result is not None:
@@ -92,27 +97,25 @@ class Materializer:
         if precomputed_join_paths is not None:
             self.state.join_paths = precomputed_join_paths
 
-        prev_response = ""
-        repetitive_response_count = 0
-
-        curr_iteration = 0
         self.llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_planning_prompt(
-                    T=T,
-                    column_descriptions=column_descriptions,
-                    S=S,
+                    self.state.T,
+                    self.state.column_descriptions,
+                    self.state.S,
                 ),
             )
         ]
-        while not self.__check_completion(T):
-            self.__log("=> Planning next materialization action...")
-            curr_iteration += 1
-
-            # Prevent forever loop in the worst-case scenario
-            if curr_iteration == self.config.MATERIALIZER_ITERATION_LIMIT:
-                break
+        step_count = 0
+        while (
+            not self.__check_completion(self.state.T)
+            and step_count < self.config.MAX_MATERIALIZER_STEPS
+        ):
+            self.__log(
+                f"=> [Step {step_count}/{self.config.MAX_MATERIALIZER_STEPS}] Planning materialization actions..."
+            )
+            step_count += 1
 
             self.llm_messages.append(
                 LLMMessage(
@@ -120,10 +123,10 @@ class Materializer:
                     content=self.prompt_factory.get_context_prompt(
                         self.state.retrieved_tables,
                         list(self.state.intermediate_tables),
-                        self.actions,
-                        curr_iteration,
+                        self.actions[:5],  # only include last 5 actions for brevity
+                        step_count,
                         client_note,
-                        external_tables,
+                        self.state.external_tables,
                         self.state.web_search_result,
                         self.state.web_crawl_result,
                         self.state.join_paths,
@@ -131,33 +134,49 @@ class Materializer:
                 )
             )
 
-            response = "".join(
+            llm_response = "".join(
                 self.language_model_api.chat(
                     self.llm_messages, LLMOption(json_mode=True)
                 )
             )
-            self.__log(f"=> Materialization action selected: {response}")
-
-            if response == prev_response:
-                repetitive_response_count += 1
-            else:
-                prev_response = response
-                repetitive_response_count = 0
-            if repetitive_response_count == 5:
-                break
-
             self.llm_messages.append(
                 LLMMessage(
                     role=Role.ASSISTANT.value,
-                    content=response,
+                    content=llm_response,
                 )
             )
 
             try:
                 self.__log("==> Parsing the response...")
-                plan: dict[str, Any] = parse_json(response)
+                plan: list[dict[str, Any]] = parse_json(llm_response).get("plan", [])
+
+                if not isinstance(plan, list):
+                    raise ValueError("The 'plan' field must be a list.")
+                if len(plan) == 0:
+                    raise ValueError("The 'plan' list cannot be empty.")
+                if not all(isinstance(item, dict) for item in plan):
+                    raise ValueError(
+                        "All items in the 'plan' list must be JSON objects."
+                    )
+
+                for action_plan in plan:
+                    if not isinstance(action_plan, dict):
+                        raise ValueError(
+                            "Each action in the plan must be a JSON object."
+                        )
+                    if "action" not in action_plan:
+                        raise ValueError(
+                            "Each action in the plan must have an 'action' field."
+                        )
+                    if not self.action_set.is_valid_materializer_action(
+                        action_plan["action"]
+                    ):
+                        raise ValueError(
+                            f"Invalid action '{action_plan['action']}' specified."
+                        )
+                self.actions.append(str(plan))
             except ValueError as exc:
-                error_msg = f"Error parsing the response: {exc}. Please ensure the response is a valid JSON object."
+                error_msg = f"Error parsing the the plan: {exc}."
                 self.__log(f"==> {error_msg}")
                 self.llm_messages.append(
                     LLMMessage(
@@ -165,117 +184,47 @@ class Materializer:
                         content=error_msg,
                     )
                 )
+                step_count -= 1
                 continue
 
-            self.actions.append(str(plan))
-            action_type: str = plan.get("action_type", "")
-            if len(action_type) == 0:
-                error_msg = "The action_type is not defined. Please define it properly."
-                self.__log(f"==> {error_msg}")
-                self.llm_messages.append(
-                    LLMMessage(
-                        role=Role.SYSTEM.value,
-                        content=error_msg,
-                    )
-                )
-                continue
+            for action_plan in plan:
+                action_name: str = action_plan.get("action", "")
+                action_args: dict[str, Any] = action_plan.get("args", {})
+                self.__execute_action(action_name, action_args)
 
-            self.__process_action(action_type, plan, external_tables, T)
-
-        self.__log("Materialization completed successfully.")
+        self.__log("Materialization completed successfully!")
         final_result: dict[str, DataFrame] = {}
         for intermediate_table_doc in self.state.intermediate_tables:
-            if intermediate_table_doc.doc_id in T.keys():
+            if intermediate_table_doc.doc_id in self.state.T.keys():
                 final_result[intermediate_table_doc.doc_id] = (
                     intermediate_table_doc.content
                 )
         return final_result
 
-    def __process_action(
+    def __execute_action(
         self,
-        action_type: str,
-        plan: dict[str, Any],
-        external_data: list[AbstractDocument],
-        T: dict[str, DataFrame],
+        action_name: str,
+        action_args: dict[str, Any],
     ):
-        """Handles a single action in the materialization process."""
-        self.__log(f"=> Handling action of type: {action_type}")
-        if action_type == ActionNames.SITUATIONAL_ANALYSIS.value:
-            message: str = plan["message"]
-            self.llm_messages.append(
-                LLMMessage(
-                    role=Role.SYSTEM.value,
-                    content=f"You did a situational analysis: {message}",
-                )
-            )
-        elif action_type == "operation":
-            op_name, op_args, assign_to = (
-                plan.get("name", ""),
-                plan.get("args", {}),
-                plan.get("assign_to", ""),
-            )
+        all_tables = (
+            self.state.retrieved_tables
+            + self.state.external_tables
+            + list(self.state.intermediate_tables)
+        )
 
-            if len(op_name) == 0:
-                error_msg = f"{op_name} is not defined. Please define it properly."
-                self.__log(f"==> {error_msg}")
+        self.__log(f"==> Executing action {action_name}...")
+        match action_name:
+            case ActionNames.SITUATIONAL_ANALYSIS.value:
+                message: str = action_args.get("message", "")
                 self.llm_messages.append(
                     LLMMessage(
                         role=Role.SYSTEM.value,
-                        content=error_msg,
+                        content=f"You did a situational analysis: {message}",
                     )
                 )
-                return
-
-            self.__handle_operation(T, external_data, op_name, op_args, assign_to)
-        else:
-            error_msg = f"{action_type} is not a valid action."
-            self.__log(f"==> {error_msg}")
-            self.llm_messages.append(
-                LLMMessage(
-                    role=Role.SYSTEM.value,
-                    content=error_msg,
-                )
-            )
-
-    def __handle_operation(
-        self,
-        T: dict[str, DataFrame],
-        external_data: list[AbstractDocument],
-        op_name: str,
-        op_args: dict[str, Any],
-        assign_to: str,
-    ):
-        all_tables = self.__gather_all_tables(external_data)
-        self.__log(f"==> Executing operation {op_name}...")
-
-        def _create_or_get_read_node(
-            doc: AbstractDocument,
-            source: RetrieverType,
-            python_code: str,
-            description: str,
-        ) -> str | None:
-            try:
-                last_id = getattr(doc, "last_node_id", None)
-                if last_id is not None:
-                    existing = self.prov_graph.get_node_by_id(last_id)
-                    if existing is not None:
-                        return last_id
-
-                read_node = ProvenanceNode(
-                    source_retriever=source,
-                    python_code=python_code,
-                    description=description,
-                )
-                self.prov_graph.add_node(read_node, True)
-                return read_node.id
-            except Exception:
-                # On any error, do not crash materializer; return None so caller can handle
-                return None
-
-        match op_name:
             case ActionNames.TABLE_RETRIEVE.value:
                 if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
-                    prompts = op_args.get("prompts", [])
+                    prompts = action_args.get("prompts", [])
                     if not isinstance(prompts, list) or not all(
                         isinstance(p, str) for p in prompts
                     ):
@@ -304,7 +253,7 @@ class Materializer:
                         )
                     )
                 else:
-                    prompt = op_args.get("prompt")
+                    prompt = action_args.get("prompt")
                     if not isinstance(prompt, str):
                         error_msg = "The 'prompt' argument must be a string."
                         self.__log(f"==> {error_msg}")
@@ -357,7 +306,7 @@ class Materializer:
                     )
                 for doc in self.state.retrieved_tables:
                     if doc.path is not None:
-                        node_id = _create_or_get_read_node(
+                        node_id = self.__create_or_get_read_node(
                             doc,
                             RetrieverType.PNEUMA_RETRIEVER,
                             self.action_set.generate_pandas_read_csv_code(doc),
@@ -376,7 +325,7 @@ class Materializer:
                         )
                     )
                     return
-                prompt = op_args.get("prompt", "")
+                prompt = action_args.get("prompt", "")
                 web_search_results = self.action_set.retrieve_documents(
                     prompt, RetrieverType.WEB_SEARCH
                 )
@@ -420,7 +369,7 @@ class Materializer:
                         )
                     )
                     return
-                prompt = op_args.get("url", "")
+                prompt = action_args.get("url", "")
                 web_crawl_results = self.action_set.retrieve_documents(
                     prompt, RetrieverType.WEB_CRAWL
                 )
@@ -454,7 +403,7 @@ class Materializer:
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_crawl_result.last_node_id = new_node.id
             case ActionNames.TABLE_ENUMERATION.value:
-                pattern = op_args.get("pattern", "")
+                pattern = action_args.get("pattern", "")
                 extra_tables: list[AbstractDocument] = (
                     self.action_set.retrieve_documents(
                         pattern, RetrieverType.ENUMERATOR, 10, True, 5
@@ -509,7 +458,7 @@ class Materializer:
                     )
             case ActionNames.TABLE_PROJECTION.value:
                 all_table_doc_ids = [i.doc_id for i in all_tables]
-                for target_table_id, retrieved_table_info in op_args.items():
+                for target_table_id, retrieved_table_info in action_args.items():
                     # BEGIN INPUT VALIDATION
                     if isinstance(retrieved_table_info, list):
                         if len(retrieved_table_info) == 0:
@@ -556,7 +505,7 @@ class Materializer:
                         )
                         return
 
-                    if target_table_id not in T:
+                    if target_table_id not in self.state.T:
                         error_msg = (
                             f"Error: The ID {target_table_id} does not exist in T."
                         )
@@ -621,7 +570,7 @@ class Materializer:
                     )
 
                     # Try to create/get a read node for the source doc to connect from
-                    parent_node_id = _create_or_get_read_node(
+                    parent_node_id = self.__create_or_get_read_node(
                         matches[0],
                         matches[0].retriever_type,
                         self.action_set.generate_pandas_read_csv_code(matches[0]),
@@ -629,7 +578,9 @@ class Materializer:
                     )
 
                     child_node_desc = f"Directly selects a table (ID: `{table_id_to_project}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
-                    if set(relevant_columns) != set(T[target_table_id].columns):
+                    if set(relevant_columns) != set(
+                        self.state.T[target_table_id].columns
+                    ):
                         child_node_desc += " (partially)."
                     else:
                         child_node_desc += "."
@@ -666,12 +617,12 @@ class Materializer:
                         )
                     )
             case ActionNames.SEMANTIC_COLUMN_GENERATION.value:
-                table_id: str | None = op_args.get("table_id")
-                new_column_name: str | None = op_args.get("new_column_name")
-                table_relevant_columns: list[str] | None = op_args.get(
+                table_id: str | None = action_args.get("table_id")
+                new_column_name: str | None = action_args.get("new_column_name")
+                table_relevant_columns: list[str] | None = action_args.get(
                     "relevant_columns"
                 )
-                instruction: str | None = op_args.get("instruction")
+                instruction: str | None = action_args.get("instruction")
 
                 if table_id is None or table_id not in [i.doc_id for i in all_tables]:
                     error_msg = "table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
@@ -758,7 +709,7 @@ class Materializer:
                     ),
                 )
                 # Ensure we have a parent node for the conditioned table (read node)
-                parent_node_id = _create_or_get_read_node(
+                parent_node_id = self.__create_or_get_read_node(
                     conditioned_table_doc,
                     conditioned_table_doc.retriever_type,
                     self.action_set.generate_pandas_read_csv_code(
@@ -783,13 +734,15 @@ class Materializer:
                     conditioned_table_doc.doc_id
                 )
             case ActionNames.SEMANTIC_JOIN.value:
-                left_table_id: str | None = op_args.get("left_table_id")
-                right_table_id: str | None = op_args.get("right_table_id")
-                relevant_left_cols: list[str] | None = op_args.get("relevant_left_cols")
-                relevant_right_cols: list[str] | None = op_args.get(
+                left_table_id: str | None = action_args.get("left_table_id")
+                right_table_id: str | None = action_args.get("right_table_id")
+                relevant_left_cols: list[str] | None = action_args.get(
+                    "relevant_left_cols"
+                )
+                relevant_right_cols: list[str] | None = action_args.get(
                     "relevant_right_cols"
                 )
-                joined_table_id: str | None = op_args.get("joined_table_id")
+                joined_table_id: str | None = action_args.get("joined_table_id")
 
                 all_table_ids = [i.doc_id for i in all_tables]
                 if left_table_id is None or left_table_id not in all_table_ids:
@@ -949,13 +902,13 @@ class Materializer:
                         f"{joined_table_id}.csv",
                     ),
                 )
-                parent_node_1_id = _create_or_get_read_node(
+                parent_node_1_id = self.__create_or_get_read_node(
                     left_table_doc,
                     left_table_doc.retriever_type,
                     self.action_set.generate_pandas_read_csv_code(left_table_doc),
                     "",
                 )
-                parent_node_2_id = _create_or_get_read_node(
+                parent_node_2_id = self.__create_or_get_read_node(
                     right_table_doc,
                     right_table_doc.retriever_type,
                     self.action_set.generate_pandas_read_csv_code(right_table_doc),
@@ -1001,9 +954,20 @@ class Materializer:
                 for table_doc in all_tables:
                     id_dfs[table_doc.doc_id] = table_doc.content
                     id_docs[table_doc.doc_id] = table_doc
+                assign_to: str | None = action_args.get("assign_to")
+                if assign_to is None or assign_to.strip() == "":
+                    error_msg = "'assign_to' argument is missing or empty."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.SYSTEM.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
 
                 try:
-                    python_code: str = parse_code(op_args.get("code", ""))
+                    python_code: str = parse_code(action_args.get("code", ""))
                     exec_res = self.action_set.execute_code(id_dfs, python_code)
                     used_table_ids = self.action_set.extract_table_ids_from_code(
                         python_code
@@ -1095,7 +1059,7 @@ class Materializer:
                 for table_doc in all_tables:
                     id_dfs[table_doc.doc_id] = table_doc.content
                 try:
-                    python_code: str = parse_code(op_args.get("code", ""))
+                    python_code: str = parse_code(action_args.get("code", ""))
                     exec_res = self.action_set.execute_code(id_dfs, python_code)
                     success_msg = f"Assumption check result: {exec_res}"
                     self.__log(f"==> {success_msg}")
@@ -1114,95 +1078,8 @@ class Materializer:
                             content=error_msg,
                         )
                     )
-            case ActionNames.SQL_EXECUTOR.value:
-                try:
-                    sql_query: str = op_args["sql_query"]
-                    self.logger.info(f"Executing this SQL query: {sql_query}")
-
-                    id_dfs: dict[str, DataFrame] = {}
-                    id_docs: dict[str, AbstractDocument] = {}
-                    for doc in all_tables:
-                        id_dfs[doc.doc_id] = doc.content
-                        id_docs[doc.doc_id] = doc
-                    sql_executor_output = self.action_set.execute_sql_df(
-                        sql_query, id_dfs
-                    )
-
-                    exec_res: DataFrame = sql_executor_output
-                    used_table_ids = self.action_set.extract_table_ids_from_sql(
-                        sql_query
-                    )
-
-                    sql_executor_output["used_table_ids"]
-
-                    source_retrievers: list[RetrieverType] = []
-                    parent_nodes: list[ProvenanceNode] = []
-                    for used_table_id in used_table_ids:
-                        doc = id_docs[used_table_id]
-                        source_retrievers.append(doc.retriever_type)
-                        last_id = getattr(doc, "last_node_id", None)
-                        if last_id is not None:
-                            parent_node = self.prov_graph.get_node_by_id(last_id)
-                            if parent_node is not None:
-                                parent_nodes.append(parent_node)
-
-                    new_node = ProvenanceNode(
-                        source_retriever=RetrieverType.MATERIALIZER,
-                        python_code=self.action_set.generate_sql_executor_code(
-                            sql_query,
-                            id_dfs,
-                            os.path.join(
-                                self._get_intermediate_table_dir_path(),
-                                f"{assign_to}.csv",
-                            ),
-                        ),
-                        description="Executes a SQL query.",
-                    )
-                    self.prov_graph.add_node(new_node, True)
-                    for parent_node in parent_nodes:
-                        if parent_node is None:
-                            continue
-                        try:
-                            self.prov_graph.connect(parent_node, new_node)
-                        except Exception:
-                            fallback = self.prov_graph.get_node_by_id(parent_node.id)
-                            if fallback is not None:
-                                try:
-                                    self.prov_graph.connect(fallback, new_node)
-                                except Exception:
-                                    continue
-
-                    self.state.add_intermediate_table(
-                        Table(
-                            doc_id=assign_to,
-                            retriever_type=RetrieverType.MATERIALIZER,
-                            content=exec_res,
-                            metadata={},
-                            last_node_id=new_node.id,
-                        )
-                    )
-                    self.__save_new_or_updated_intermediate_table(assign_to)
-
-                    success_msg = f"Successfully executed the SQL query, resulting in a table named {assign_to}"
-                    self.__log(f"==> {success_msg}")
-                    self.llm_messages.append(
-                        LLMMessage(
-                            role=Role.SYSTEM.value,
-                            content=success_msg,
-                        )
-                    )
-
-                except Exception as e:
-                    error_msg = f"Error when executing the SQL query: {e}. Please fix it (you may want to quote identifiers with, for instance, `-` symbol)."
-                    self.__log(f"==> {error_msg}")
-                    self.llm_messages.append(
-                        LLMMessage(
-                            role=Role.SYSTEM.value,
-                            content=error_msg,
-                        )
-                    )
             case _:
-                error_msg = f"{op_name} is not a valid operation."
+                error_msg = f"{action_name} is not a valid action."
                 self.__log(f"==> {error_msg}")
                 self.llm_messages.append(
                     LLMMessage(
@@ -1210,6 +1087,31 @@ class Materializer:
                         content=error_msg,
                     )
                 )
+
+    def __create_or_get_read_node(
+        self,
+        doc: AbstractDocument,
+        source: RetrieverType,
+        python_code: str,
+        description: str,
+    ) -> str | None:
+        try:
+            last_id = getattr(doc, "last_node_id", None)
+            if last_id is not None:
+                existing = self.prov_graph.get_node_by_id(last_id)
+                if existing is not None:
+                    return last_id
+
+            read_node = ProvenanceNode(
+                source_retriever=source,
+                python_code=python_code,
+                description=description,
+            )
+            self.prov_graph.add_node(read_node, True)
+            return read_node.id
+        except Exception:
+            # On any error, do not crash materializer; return None so caller can handle
+            return None
 
     def __check_completion(self, T: dict[str, DataFrame]) -> bool:
         """Check if all target tables (T) have been materialized correctly."""
@@ -1280,33 +1182,21 @@ class Materializer:
                 )
             )
 
-        self.__log(f"==> is_complete: {is_complete}")
         self.__log(
             f"Completion check: {is_complete} ({len(materialized_table_ids)}/{len(all_T_ids)} tables materialized)"
         )
         return is_complete
 
-    def __gather_all_tables(self, external_data: list[AbstractDocument]):
-        """Gather all tables from retrieved documents, external data, and intermediate tables."""
-        external_data_tables_only: list[AbstractDocument] = [
-            i for i in external_data if isinstance(i, Table)
-        ]
-        return (
-            self.state.retrieved_tables
-            + external_data_tables_only
-            + list(self.state.intermediate_tables)
-        )
-
-    def __cleanup_system(self):
+    def __reset_materializer(self):
         """Reset the state and clear intermediate files."""
-        self.__log("Cleaning up Materializer...")
+        self.__log("Resetting materializer...")
         self.state.reset()
         self.prov_graph.reset_for_materialization()
         self.__clear_csv_files()
         self.actions = []
         self.llm_messages = []
         self.join_paths = None
-        self.__log("Materializer cleanup complete.")
+        self.__log("Materializer reset complete.")
 
     def __clear_csv_files(self):
         """Delete all .csv files in the module directory."""

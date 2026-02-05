@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from pneuma_seeker.services.core.actions.action_names import ActionNames
-from pneuma_seeker.services.core.actions.interfaces.action import Action
+from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.services.core.actions.interfaces.abstract_action import Action
 from pneuma_seeker.services.core.actions.interfaces.executable import Executable
 
 

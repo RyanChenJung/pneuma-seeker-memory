@@ -5,7 +5,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../src"))
 )
@@ -15,37 +14,37 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
-from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.materializer.main import Materializer
-from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table, Text
 
 
 class MaterializerTests(unittest.TestCase):
     def setUp(self):
-        self.user_id="uX"
-        self.chat_id="cX"
+        self.user_id = "uX"
+        self.chat_id = "cX"
+
         self.logger = logging.getLogger("test_materializer")
         self.logger.setLevel(logging.ERROR)
-        self.config = Config(".env.test")
         self.prov_graph = ProvenanceGraph(self.logger)
 
+        self.config = Config(".env.test")
         self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = False
-
-        self.tmpdir = tempfile.mkdtemp()
-        dataset_db_path = Path(os.path.join(self.tmpdir, "datasets"))
-        workspace_db_path = Path(os.path.join(self.tmpdir, "workspaces"))
-
         self.config.ENABLE_WEB_SEARCH = True
         self.config.ENABLE_WEB_CRAWL = True
         self.config.LLM_PATH = "mock"
         self.config.EMBED_MODEL_PATH = "mock"
 
+        self.tmpdir = tempfile.mkdtemp()
         self.db_api = DBAPI(
-            self.config, self.logger, str(dataset_db_path), str(workspace_db_path)
+            self.config,
+            self.logger,
+            str(Path(os.path.join(self.tmpdir, "datasets"))),
+            str(Path(os.path.join(self.tmpdir, "workspaces"))),
         )
         self.lm_api = LanguageModelAPI(self.config, self.logger)
 
@@ -75,9 +74,9 @@ class MaterializerTests(unittest.TestCase):
 
     def test_table_retrieve_and_table_projection_materializes_T(self):
         # LLM will ask to call table_retrieve then table_projection to materialize t1
-        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
-        plan2 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
-        self.lm_api.llm._responses = [plan1, plan2]  # type: ignore
+        plan1 = f'{{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
+        self.lm_api.llm._responses = [f"""{{"plan": [{plan1}, {plan2}]}}"""]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -111,12 +110,10 @@ class MaterializerTests(unittest.TestCase):
 
     def test_web_search_sets_web_search_result(self):
         # LLM will call table_retrieve, web_search, then table_projection to finish
-        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
-        plan2 = (
-            f'{{"action_type":"operation","name":"{ActionNames.WEB_SEARCH.value}","args":{{"prompt":"query"}}}}'
-        )
-        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
-        self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
+        plan1 = f'{{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action":"{ActionNames.WEB_SEARCH.value}","args":{{"prompt":"query"}}}}'
+        plan3 = f'{{"action":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
+        self.lm_api.llm._responses = [f"{{\"plan\": [{plan1}, {plan2}, {plan3}]}}"]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -176,10 +173,10 @@ class MaterializerTests(unittest.TestCase):
 
     def test_web_crawl_sets_web_crawl_result(self):
         # LLM will call table_retrieve, web_crawl, then table_projection to finish
-        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
-        plan2 = f'{{"action_type":"operation","name":"{ActionNames.WEB_CRAWL.value}","args":{{"url":"http://example.com"}}}}'
-        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
-        self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
+        plan1 = f'{{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action":"{ActionNames.WEB_CRAWL.value}","args":{{"url":"http://example.com"}}}}'
+        plan3 = f'{{"action":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b"]}}}}}}'
+        self.lm_api.llm._responses = [f"{{\"plan\": [{plan1}, {plan2}, {plan3}]}}"]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         table_doc = Table(
@@ -239,10 +236,10 @@ class MaterializerTests(unittest.TestCase):
 
     def test_semantic_column_generator_adds_column(self):
         # LLM will call table_retrieve, semantic_column_generator, then table_projection
-        plan1 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
-        plan2 = f'{{"action_type":"operation","name":"{ActionNames.SEMANTIC_COLUMN_GENERATION.value}","args":{{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}}}'
-        plan3 = f'{{"action_type":"operation","name":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b","newcol"]}}}}}}'
-        self.lm_api.llm._responses = [plan1, plan2, plan3]  # type: ignore
+        plan1 = f'{{"action":"{ActionNames.TABLE_RETRIEVE.value}","args":{{"prompt":"find tables"}}}}'
+        plan2 = f'{{"action":"{ActionNames.SEMANTIC_COLUMN_GENERATION.value}","args":{{"table_id":"table_1","new_column_name":"newcol","relevant_columns":["b"],"instruction":"make new"}}}}'
+        plan3 = f'{{"action":"{ActionNames.TABLE_PROJECTION.value}","args":{{"t1":{{"id":"table_1","columns":["a","b","newcol"]}}}}}}'
+        self.lm_api.llm._responses = [f"{{\"plan\": [{plan1}, {plan2}, {plan3}]}}"]  # type: ignore
 
         table_df = pd.DataFrame({"a": [1, 2], "b": [10, 20]})
         table_doc = Table(
@@ -257,7 +254,9 @@ class MaterializerTests(unittest.TestCase):
         # Mock generation of semantic column
         augmented_table = table_df.copy()
         augmented_table["newcol"] = [100, 200]
-        self.action_set.generate_semantic_column = MagicMock(return_value=augmented_table)
+        self.action_set.generate_semantic_column = MagicMock(
+            return_value=augmented_table
+        )
 
         T = {"t1": pd.DataFrame(columns=["a", "b", "newcol"])}
 

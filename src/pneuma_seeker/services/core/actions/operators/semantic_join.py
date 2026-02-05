@@ -7,8 +7,8 @@ from pyxdameraulevenshtein import damerau_levenshtein_distance
 from sklearn.feature_extraction.text import CountVectorizer
 from tqdm import tqdm
 
-from pneuma_seeker.services.core.actions.action_names import ActionNames
-from pneuma_seeker.services.core.actions.interfaces.action import Action
+from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.services.core.actions.interfaces.abstract_action import Action
 from pneuma_seeker.services.core.actions.interfaces.applicable import Applicable
 from pneuma_seeker.shared.parser import augmented_literal_eval
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage

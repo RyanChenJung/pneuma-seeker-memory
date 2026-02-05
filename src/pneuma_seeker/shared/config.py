@@ -29,11 +29,9 @@ class Config:
         self.OPENWEBUI_API_KEY = getenv("OPENWEBUI_API_KEY", "")
 
         # System-Level Configurations
-        self.DATA_SOURCES = ["buysite"]
+        self.DATA_SOURCES = ["biomedical"]
         self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "7"))
-        self.MATERIALIZER_ITERATION_LIMIT = int(
-            getenv("MATERIALIZER_ITERATION_LIMIT", "100")
-        )
+        self.MAX_MATERIALIZER_STEPS = int(getenv("MAX_MATERIALIZER_STEPS", "10"))
 
         self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
         self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"

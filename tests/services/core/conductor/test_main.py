@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
-from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.main import Conductor

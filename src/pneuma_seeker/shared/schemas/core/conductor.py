@@ -6,11 +6,11 @@ from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 class InformationNeedState:
     """
     Represents a user's information need as a pair (T,S), where T is a set of
-    tables and S is a script to be executed over them. For example,
+    tables and S is a Python script to be executed over them. For example,
     if the user needs to know about the work addresses of faculty members, the target schemas
     may be ["name", "work address"], where name represents the names of the members, and work address represents
-    the corresponding work address of each of them. After materialized by Materializer Engine, the SQLs can be
-    executed sequentially over the materialized tables, and the outcome is useful to answer user's needs.
+    the corresponding work address of each of them. After materialized Materializer, the Python code can be
+    executed over the materialized tables, and the outcome is useful to answer the user's information need.
     """
 
     def __init__(self) -> None:

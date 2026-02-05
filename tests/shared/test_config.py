@@ -32,7 +32,7 @@ class ConfigTests(unittest.TestCase):
             "OPENWEBUI_BASE_URL",
             "OPENWEBUI_API_KEY",
             "MAX_CONDUCTOR_STEPS",
-            "MATERIALIZER_ITERATION_LIMIT",
+            "MAX_MATERIALIZER_STEPS",
             "ENABLE_WEB_SEARCH",
             "ENABLE_WEB_CRAWL",
             "WEB_CRAWL_MAX_CHARS",
@@ -77,7 +77,7 @@ class ConfigTests(unittest.TestCase):
         
         # System-Level defaults
         self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 7)
-        self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 100)
+        self.assertEqual(cfg.MAX_MATERIALIZER_STEPS, 10)
         self.assertFalse(cfg.ENABLE_WEB_SEARCH)
         self.assertTrue(cfg.ENABLE_WEB_CRAWL)
         self.assertEqual(cfg.WEB_CRAWL_MAX_CHARS, 5000)
@@ -223,7 +223,7 @@ class ConfigTests(unittest.TestCase):
         """Test integer parsing with valid numeric strings."""
         os.environ["EMBEDDING_MAX_TOKENS"] = "3000"
         os.environ["MAX_CONDUCTOR_STEPS"] = "15"
-        os.environ["MATERIALIZER_ITERATION_LIMIT"] = "200"
+        os.environ["MAX_MATERIALIZER_STEPS"] = "200"
         os.environ["WEB_CRAWL_MAX_CHARS"] = "10000"
         os.environ["SEMANTIC_JOIN_BATCH_SIZE"] = "50"
         os.environ["SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE"] = "100"
@@ -233,7 +233,7 @@ class ConfigTests(unittest.TestCase):
         
         self.assertEqual(cfg.EMBEDDING_MAX_TOKENS, 3000)
         self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 15)
-        self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 200)
+        self.assertEqual(cfg.MAX_MATERIALIZER_STEPS, 200)
         self.assertEqual(cfg.WEB_CRAWL_MAX_CHARS, 10000)
         self.assertEqual(cfg.SEMANTIC_JOIN_BATCH_SIZE, 50)
         self.assertEqual(cfg.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE, 100)
@@ -427,7 +427,7 @@ class ConfigTests(unittest.TestCase):
         os.environ["OPENWEBUI_BASE_URL"] = "http://openwebui:8080/"
         os.environ["OPENWEBUI_API_KEY"] = "openwebui-key"
         os.environ["MAX_CONDUCTOR_STEPS"] = "10"
-        os.environ["MATERIALIZER_ITERATION_LIMIT"] = "150"
+        os.environ["MAX_MATERIALIZER_STEPS"] = "150"
         os.environ["ENABLE_WEB_SEARCH"] = "true"
         os.environ["ENABLE_WEB_CRAWL"] = "false"
         os.environ["WEB_CRAWL_MAX_CHARS"] = "8000"
@@ -455,7 +455,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.OPENWEBUI_BASE_URL, "http://openwebui:8080/")
         self.assertEqual(cfg.OPENWEBUI_API_KEY, "openwebui-key")
         self.assertEqual(cfg.MAX_CONDUCTOR_STEPS, 10)
-        self.assertEqual(cfg.MATERIALIZER_ITERATION_LIMIT, 150)
+        self.assertEqual(cfg.MAX_MATERIALIZER_STEPS, 150)
         self.assertTrue(cfg.ENABLE_WEB_SEARCH)
         self.assertFalse(cfg.ENABLE_WEB_CRAWL)
         self.assertEqual(cfg.WEB_CRAWL_MAX_CHARS, 8000)
@@ -518,7 +518,7 @@ class ConfigTests(unittest.TestCase):
         # Integer types
         self.assertIsInstance(cfg.EMBEDDING_MAX_TOKENS, int)
         self.assertIsInstance(cfg.MAX_CONDUCTOR_STEPS, int)
-        self.assertIsInstance(cfg.MATERIALIZER_ITERATION_LIMIT, int)
+        self.assertIsInstance(cfg.MAX_MATERIALIZER_STEPS, int)
         self.assertIsInstance(cfg.WEB_CRAWL_MAX_CHARS, int)
         self.assertIsInstance(cfg.SEMANTIC_JOIN_TOP_K, int)
         self.assertIsInstance(cfg.SEMANTIC_JOIN_BATCH_SIZE, int)

@@ -1,6 +1,6 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
 
-from pneuma_seeker.services.core.actions.action_names import ActionNames
+from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction, InformationNeedState
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, convert_retrieval_results_to_str
@@ -88,7 +88,7 @@ If you find that a computation requires matching data from different tables, fir
   Populate tables in T with rows based on data integration and processing.
   - **Args**: {{"note": "<additional note or empty string>"}}
   - **Capabilities**:
-    - Integrate multi-source data using Python or SQL computations for columns that are not semantically derived.
+    - Integrate multi-source data using Python code for columns that are not semantically derived.
     - Generate (`semantically_derived`) columns via semantic reasoning (i.e., using an LLM), conditioned on the available data.
     - Perform semantic joins without strict key matches{" (e.g., when there are no promising join paths)" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}.
       - Do not specify a similarity threshold in the `note` argument. If specified by the user, define it in `S` instead.
@@ -164,7 +164,7 @@ Return **one JSON object** describing your planned actions for this step, e.g.:
     {"- Potential join paths between retrieved tables will be provided for reference." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
     - In relation to defining columns of tables in T:
       - If data is missing but can be semantically approximated, mark such columns as (`semantically_derived`) and proceed.
-      - If the approximation is uncertain, explicitly warn the user before continuing."""
+      - If the approximation is unc ertain, explicitly warn the user before continuing."""
 
     def get_web_search_description(self):
         """Gets the web search tool description for Conductor."""

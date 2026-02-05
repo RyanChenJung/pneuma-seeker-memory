@@ -83,7 +83,6 @@ class OpenAILLM(AbstractModel):
             )
 
             response = gpt_output or ""
-            self.logger.info(f"[OPENAI] Model output: {response}")
             yield response
 
     def batch_chat(

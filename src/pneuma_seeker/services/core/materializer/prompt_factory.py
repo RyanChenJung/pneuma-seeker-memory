@@ -2,9 +2,9 @@ import json
 
 from pandas import DataFrame
 
-from pneuma_seeker.services.core.actions.action_names import ActionNames
-from pneuma_seeker.services.core.materializer.operation_description import (
-    get_operation_description,
+from pneuma_seeker.shared.schemas.core.action import ActionNames
+from pneuma_seeker.services.core.materializer.action_descriptions import (
+    get_materializer_actions,
 )
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import (
@@ -25,53 +25,68 @@ class MaterializerPromptFactory:
         column_descriptions: dict[str, dict[str, str]],
         S: str,
     ) -> str:
-        """Generates the initial planning prompt for Materializer."""
+        """Generates the planning prompt for Materializer."""
         return f"""
-You are Materializer. Your task is to fill all rows for the target tables using:
-1. Retrieved internal tables
-2. User-uploaded external tables (if any)
-3. Allowed operations described below
+You are **Materializer**. Your task is to materialize tuples for target tables (T) using allowed actions that operate on retrieved internal tables and user-uploaded external tables (if any).
 
-Treat external tables just like internal tables, except it is fixed and will never be replaced by calling {ActionNames.TABLE_RETRIEVE.value}.
+You operate through iterative steps. In each step, you may select one or more actions based on the current environment (intermediate tables, previous actions, etc.).
 
-TARGET TABLES:
+The total number of steps must not exceed **{self.config.MAX_MATERIALIZER_STEPS}**.
+
+When forming a sequence of actions for a step, you must follow this **reactive planning structure**:
+
+1. Begin with **{ActionNames.SITUATIONAL_ANALYSIS.value}** to analyze the current environment, evaluate what information is missing, and determine what action(s) are necessary.
+2. Perform one or more actions (`{ActionNames.PYTHON_EXECUTOR.value}`, `{ActionNames.ASSUMPTION_CHECK.value}`, etc.) to progress toward materializing tuples for T.
+3. An action may modify the environment, so actions that depend on previous action outputs must be in separate steps. For example, **{ActionNames.PYTHON_EXECUTOR.value}** that depends on results from `{ActionNames.TABLE_PROJECTION.value}` must occur in a subsequent step after those tools have executed and their outputs are reflected in the environment.
+
+# Target Tables (T)
+
 {json.dumps({k: list(df.columns) for k, df in T.items()}, indent=2)}
 
-COLUMN DESCRIPTIONS:
+## Column Descriptions of T
+
 {column_descriptions}
 
-REFERENCE SCRIPT (for value format guidance only — not to execute directly):
+# Script (S) to be run on (materialized) T later (just for reference, not for you to execute)
+
 {S}
 
-AVAILABLE OPERATIONS:
-{get_operation_description(self.config)}
+# Available Actions
 
-CORE RULES:
-1. Only use listed operations — no custom methods.
-2. Use external tables if available and internal tables; call {ActionNames.TABLE_RETRIEVE.value} to retrieve or re-retrieve internal tables (if necessary).
-3. Internal tables are reset each time {ActionNames.TABLE_RETRIEVE.value} is used; external tables persist.
-4. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
-5. Always assign results to the correct target table IDs, matching column names **exactly (case-sensitive)**.
-6. Perform value format conversions if needed (e.g., YES/NO instead of 0/1, YYYY-MM-DD instead of Month Day, Year).
-7. Note:
-- You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call {ActionNames.TABLE_RETRIEVE.value} again if needed. These pre-fetched tables are not guaranteed to be complete or sufficient.
+{get_materializer_actions(self.config)}
+
+# Notes
+
+## Table Handling Guidelines
+
+- Treat external tables just like internal tables, except they are fixed and will never be replaced by calling {ActionNames.TABLE_RETRIEVE.value}.
+- Use external tables (if available) and internal tables; call {ActionNames.TABLE_RETRIEVE.value} to retrieve or re-retrieve internal tables (if necessary).
+- Internal tables are reset each time {ActionNames.TABLE_RETRIEVE.value} is used; external tables persist.
+- You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use them if useful, or call {ActionNames.TABLE_RETRIEVE.value} again if needed. These pre-fetched tables are not guaranteed to be complete or sufficient.
 {f"- You may already see a web search result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web search yourself — use it if useful. This pre-fetched web search result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {f"- You may already see a web crawl result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web crawl yourself — use it if useful. This pre-fetched web crawl result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_CRAWL else ""}
-{f"8. Use {ActionNames.ASSUMPTION_CHECK.value} to validate assumptions (e.g., about the existence of values) in the tables prior to determining how best to integrate them.\n" if self.config.ENABLE_ASSUMPTION_CHECK else ""}
 
-COLUMN HANDLING:
-- (semantically_derived) and user notes are hints, not guarantees.
-- If reliable data exists for a column (tagged or untagged), fill it normally using python_executor or sql_executor — no semantic generation needed.
-- If no reliable data exists to fill a column, use the semantic_column_generator as a fallback — whether or not the column is tagged.
+# Action-Related Guidelines
 
-OUTPUT FORMAT:
-Produce exactly ONE JSON object:
+- If an action has an `assign_to` argument, set the argument to the correct target table IDs or intermediate table IDs exactly (case-sensitive).
+{f"- Use {ActionNames.ASSUMPTION_CHECK.value} to validate assumptions (e.g., about the existence of values) in the tables prior to determining how best to integrate them.\n" if self.config.ENABLE_ASSUMPTION_CHECK else ""}
+
+## Column Handling Guidelines
+
+- `(semantically_derived)` annotations in the columns of T and `caller note` are hints, not guarantees.
+- If reliable data exists for a column (tagged or untagged), fill it normally using {ActionNames.PYTHON_EXECUTOR.value}; no semantic generation needed.
+- If no reliable data exists to fill a column, use the {ActionNames.SEMANTIC_COLUMN_GENERATION.value} as a fallback; whether or not the column is tagged.
+
+# Output
+
+Return **one JSON object** describing your planned actions for this step, e.g.:
+
 {{
-    "action_type": "{ActionNames.SITUATIONAL_ANALYSIS.value}" | "operation",
-    "message": "...",        # if action_type == {ActionNames.SITUATIONAL_ANALYSIS.value}
-    "name": "<operation>",   # if action_type == operation
-    "args": {{...}},         # arguments for the operation
-    "assign_to": "<target_table_id or intermediate_table_id>"
+  "plan": [
+    {{"action": "{ActionNames.SITUATIONAL_ANALYSIS.value}", "args": {{"message": "..."}}}},
+    {{"action": "<one of the available actions>", "args": {{...}}}},
+    ...
+  ]
 }}
 """.strip()
 
@@ -80,7 +95,7 @@ Produce exactly ONE JSON object:
         retrieved_tables: list[AbstractDocument],
         intermediate_tables: list[AbstractDocument],
         recent_actions: list[str],
-        num_iterations: int,
+        step_count: int,
         user_side_note: str,
         user_uploaded_external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None,
@@ -91,95 +106,27 @@ Produce exactly ONE JSON object:
         if not join_paths:
             join_paths = "N/A"
         return f"""
-This is iteration {num_iterations} of materializing the target tables.
+This is step {step_count} out of a maximum of {self.config.MAX_MATERIALIZER_STEPS} steps to materialize the target tables (T).
 
-CURRENT PROGRESS:
-- Intermediate tables so far: {convert_retrieval_results_to_str(intermediate_tables)}
-- Recent actions: {recent_actions}
-- Retrieved internal tables: {convert_retrieval_results_to_str(retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}
-    {f"- Potential join paths between retrieved tables: {join_paths}" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
-- User-uploaded external tables: {convert_retrieval_results_to_str(user_uploaded_external_tables)}
-- User note: {user_side_note}
-{f"- Web search result (if any): {web_search_result}\n" if self.config.ENABLE_WEB_SEARCH and web_search_result else ""}
-{f"- Web crawl result (if any): {web_crawl_result}\n" if self.config.ENABLE_WEB_CRAWL and web_crawl_result else ""}
-CORE RULES:
-1. Use external tables if available and internal tables; call {ActionNames.TABLE_RETRIEVE.value} to retrieve or re-retrieve internal tables (if necessary).
-2. Internal tables are reset each time {ActionNames.TABLE_RETRIEVE.value} is used; external tables persist.
-3. Use `tables["<ID>"]` to access both internal and external tables. Never use pd.read_csv.
-4. Always match target table column names exactly (case-sensitive).
-5. Assign completed tables only to their correct target table IDs.
-6. Note:
-- You may already see some internal tables provided at the start (pre-fetched by the caller). Treat it the same as if you had retrieved it yourself — use it if useful, or call {ActionNames.TABLE_RETRIEVE.value} again if needed. These pre-fetched tables are not guaranteed to be complete or sufficient.
-{f"- You may already see a web search result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web search yourself — use it if useful. This pre-fetched web search result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_SEARCH else ""}
-{f"- You may already see a web crawl result provided at the start (pre-fetched by the caller). Treat it the same as if you had performed the web crawl yourself — use it if useful. This pre-fetched web crawl result is not guaranteed to be complete or sufficient.\n" if self.config.ENABLE_WEB_CRAWL else ""}
-{f"8. Use {ActionNames.ASSUMPTION_CHECK.value} to validate assumptions (e.g., about the existence of values) in the tables prior to determining how best to integrate them.\n" if self.config.ENABLE_ASSUMPTION_CHECK else ""}
+# Current Progress
 
-COLUMN HANDLING:
-- Treat (semantically_derived) and user notes as hints only.
-- If reliable data exists, compute normally using python_executor or sql_executor.
-- Use semantic_column_generator only when no reliable direct computation is available.
+## Recent Actions
 
-TOOL USAGE:
-- If you retrieve tables from {ActionNames.TABLE_RETRIEVE.value} and suspect other related ones (e.g., topic_2019, topic_2020) might exist but are not yet retrieved, use {ActionNames.TABLE_ENUMERATION.value} to list all matching table IDs.
-- Use {ActionNames.SEMANTIC_COLUMN_GENERATION.value} only when no reliable direct computation is available.
+{recent_actions}
 
-OUTPUT FORMAT:
-Return exactly ONE JSON object per iteration:
-{{
-  "action_type": "{ActionNames.SITUATIONAL_ANALYSIS.value}",
-  "message": "<your situational analysis>"
-}}
+## Intermediate Tables So Far
 
-OR
+{convert_retrieval_results_to_str(intermediate_tables)}
 
-{{
-  "action_type": "operation",
-  "name": "{ActionNames.TABLE_RETRIEVE.value}" | "{ActionNames.TABLE_ENUMERATION.value}" | "{ActionNames.TABLE_PROJECTION.value}",
-  "args": {{...}},
-}}
+## Retrieved Internal Tables
 
-OR
+{convert_retrieval_results_to_str(retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}
 
-{{
-  "action_type": "operation",
-  "name": "{ActionNames.PYTHON_EXECUTOR.value}" | "{ActionNames.SQL_EXECUTOR.value}",
-  "args": {{...}},
-  "assign_to": "<target_table_id_or_intermediate_id>"
-}}
+{f"### Potential Join Paths Between Retrieved Tables\n\n{join_paths}\n" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
+{f"## User-Uploaded External Tables (if any)\n\n{convert_retrieval_results_to_str(user_uploaded_external_tables)}\n" if len(user_uploaded_external_tables) > 0 else ""}
+{f"## Caller Note\n\n{user_side_note}\n" if len(user_side_note) > 0 else ""}
+{f"## Web search result (if any):\n\n{web_search_result}\n" if self.config.ENABLE_WEB_SEARCH and web_search_result else ""}
+{f"## Web crawl result (if any):\n\n{web_crawl_result}\n" if self.config.ENABLE_WEB_CRAWL and web_crawl_result else ""}
+
+Decide your next plan and output a JSON object of one or more actions.
 """.strip()
-
-    def get_fix_python_prompt(
-        self, code: str, available_tables: dict[str, DataFrame], error: Exception
-    ):
-        """Generates a prompt to fix Python code that resulted in an error."""
-        return f"""You are an expert in Python programming.
-
-This code:
-```{code}```
-
-It manipulates tables from the following list (note that table IDs may look like path):
-```{self.__format_available_tables(available_tables)}```
-
-Resulting in this error: {error}.
-
-Please provide direct feedback about what is wrong with the code, so the implementor can fix it.
-"""
-
-    def __format_available_tables(self, tables: dict[str, DataFrame]):
-        """Formats available tables for inclusion in prompts."""
-        tables_repr = ""
-        for table_id, table in tables.items():
-            tables_repr += (
-                f"\n- Table {table_id}:\ncol: {' | '.join(list(table.columns))}"
-            )
-            if len(table) > 0:
-                # Sample 5 rows to represent the table
-                sample_rows = table.sample(min(5, len(table)), random_state=42)
-                sample_row_idx = 1
-                for _, data in sample_rows.iterrows():
-                    str_data = [str(i) for i in data]
-                    tables_repr += (
-                        f"\nsample row {sample_row_idx}: {' | '.join(str_data)}"
-                    )
-                    sample_row_idx += 1
-        return tables_repr.strip()
