@@ -281,7 +281,9 @@
               <h5 class="mb-0 d-flex align-items-center">
                 <i class="bi bi-table"></i>
                 <span class="ms-2">T (Target Tables)
-                  <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="A set of relevant tables (shown with sample rows) for your information need." style="font-size: 0.9rem; cursor: help;"></i>
+                  <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+                    title="A set of relevant tables (shown with sample rows) for your information need."
+                    style="font-size: 0.9rem; cursor: help;"></i>
                 </span>
                 <span class="badge ms-2 badge-materialized">Materialized: <span
                     id="materialized-status">No</span></span>
@@ -295,7 +297,9 @@
           <h5 class="mb-3 d-flex align-items-center">
             <i class="bi bi-file-earmark-code-fill"></i>
             <span class="ms-2">S (Python Script)
-              <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip" title="A Python script that runs on the target tables (T) to satisfy your information need." style="font-size: 0.9rem; cursor: help;"></i>
+              <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+                title="A Python script that runs on the target tables (T) to satisfy your information need."
+                style="font-size: 0.9rem; cursor: help;"></i>
             </span>
             <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
           </h5>
@@ -361,7 +365,7 @@
     const downloadBtn = document.getElementById("download-tables-btn");
     downloadBtn.addEventListener("click", async () => {
       const baseUrl =
-        window.location.ancestorOrigins[0].startsWith("http://localhost")
+        window.location.ancestorOrigins && window.location.ancestorOrigins[0]?.startsWith("http://localhost")
           ? "http://localhost:8000"
           : "";
 
@@ -394,7 +398,7 @@
     const downloadProvenanceBtn = document.getElementById("download-t-provenance-btn");
     downloadProvenanceBtn.addEventListener("click", async () => {
       const baseUrl =
-        window.location.ancestorOrigins[0].startsWith("http://localhost")
+        window.location.ancestorOrigins && window.location.ancestorOrigins[0]?.startsWith("http://localhost")
           ? "http://localhost:8000"
           : "";
 
@@ -427,7 +431,7 @@
     const exportPdfBtn = document.getElementById("export-chat-pdf-btn");
     exportPdfBtn.addEventListener("click", async () => {
       const baseUrl =
-        window.location.ancestorOrigins[0].startsWith("http://localhost")
+        window.location.ancestorOrigins && window.location.ancestorOrigins[0]?.startsWith("http://localhost")
           ? "http://localhost:8000"
           : "";
 
@@ -437,7 +441,8 @@
         const payload = {
           model: "{{ model }}",
           chat_id: "{{ chat_id }}",
-          messages: {{ messages | tojson | safe }},
+          messages: {{ messages | tojson | safe
+      }},
         };
 
     const response = await fetch(url, {
@@ -596,10 +601,10 @@
     function updateCarousel() {
       const offset = -currentTableIndex * 100;
       carouselInner.style.transform = `translateX(${offset}%)`;
-      
+
       prevBtn.disabled = currentTableIndex === 0;
       nextBtn.disabled = currentTableIndex === retrievedTableNames.length - 1;
-      
+
       counterSpan.textContent = `${currentTableIndex + 1}/${retrievedTableNames.length}`;
     }
 
@@ -636,14 +641,23 @@
     const resultSection = document.getElementById("result-table-section");
     const resultContainer = document.getElementById("result-table-container");
 
+    // Disable button if script is empty
+    const scriptContent = (typeof state.S === "string") ? state.S : (state.S ? String(state.S) : "");
+    if (!scriptContent || scriptContent.trim() === "") {
+      executeBtn.disabled = true;
+      executeBtn.title = "No script available to execute";
+    }
+
     executeBtn.addEventListener("click", async () => {
       const baseUrl =
-        window.location.ancestorOrigins[0].startsWith("http://localhost")
+        window.location.ancestorOrigins && window.location.ancestorOrigins[0]?.startsWith("http://localhost")
           ? "http://localhost:8000"
           : "";
 
       const url = `${baseUrl}/execute_code/${userId}/${chatId}`;
-      
+
+      console.log("Executing script with URL:", url);
+
       executeBtn.disabled = true;
       executeStatus.textContent = "Executing...";
       executeStatus.className = "text-primary small";
@@ -653,10 +667,10 @@
         if (!response.ok) throw new Error(`Execution failed: ${response.statusText}`);
 
         const rows = await response.json();
-        
+
         // Clear previous results
         resultContainer.innerHTML = "";
-        
+
         // Display the returned table (rows is a list of records)
         if (Array.isArray(rows) && rows.length > 0) {
           const tableContainer = document.createElement("div");
@@ -707,7 +721,7 @@
           scrollWrapper.appendChild(tableEl);
           tableContainer.appendChild(scrollWrapper);
           resultContainer.appendChild(tableContainer);
-          
+
           resultSection.style.display = "block";
           executeStatus.textContent = "Execution successful!";
           executeStatus.className = "text-success small";
