@@ -409,12 +409,6 @@ class PneumaDB:
                 (new_system_response_id, Role.ASSISTANT.value, new_system_response),
             )
             con.commit()
-        except Exception as e:
-            con.rollback()
-            self.__log(f"Failed to save chat history: {e}")
-            return
-
-        try:
             if not self.config.ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING:
                 con.begin()
                 con.execute("""DELETE FROM document_metadata;""")
@@ -546,7 +540,6 @@ class PneumaDB:
             con.commit()
         except Exception as e:
             con.rollback()
-            print(f"Error during session persistence: {e}")
             self.__log(f"Failed to save state: {e}")
 
     def __insert_document(
