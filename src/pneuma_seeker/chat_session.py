@@ -31,6 +31,8 @@ class ChatSession:
         self.db_api = db_api
         self.language_model_api = language_model_api
         self.messages: list[LLMMessage] = []
+        self.__last_user_input: str = ""
+        self.__last_system_response: str = ""
 
         self.conductor = Conductor(
             self.user_id,
@@ -81,6 +83,7 @@ class ChatSession:
         else:
             self.messages = messages
 
+        self.__last_user_input = messages[-1]["content"]
         for i in range(0, len(messages) - 1, 2):
             if (
                 messages[i]["role"] == Role.USER.value
@@ -98,6 +101,7 @@ class ChatSession:
             interaction_history,
             external_data_paths,
         ):
+            self.__last_system_response = conductor_response
             yield conductor_response
 
         yield "DONE"
@@ -106,18 +110,11 @@ class ChatSession:
         """Callback to persist the current state of Provenance Graph."""
         try:
             self.__log(f"Persisting session...")
-
-            new_user_input = ""
-            new_system_response = ""
-            if len(self.messages) >= 2:
-                new_user_input = self.messages[-2]["content"]
-                new_system_response = self.messages[-1]["content"]
-
             self.db_api.persist_session(
                 self.user_id,
                 self.chat_id,
-                new_user_input,
-                new_system_response,
+                self.__last_user_input,
+                self.__last_system_response,
                 self.conductor.state,
                 self.conductor.prov_graph,
                 self.conductor.retrieved_tables,
@@ -128,7 +125,7 @@ class ChatSession:
             )
             self.__log("State persisted successfully.")
         except Exception as e:
-            self.__log(f"Failed to persist state: {e}")
+            self.__log(f"Failed to persist session: {e}")
 
     def __log(self, message: str):
         self.logger.info(f"[ChatSession] {message}")
