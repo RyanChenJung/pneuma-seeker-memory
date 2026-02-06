@@ -162,7 +162,7 @@ class Conductor:
                         current_step,
                         self.state,
                         interaction_history,
-                        self.actions,
+                        self.actions[-5:],  # only include last 5 actions for brevity
                         self.retrieved_tables,
                         user_input,
                         self.enumerated_tables,

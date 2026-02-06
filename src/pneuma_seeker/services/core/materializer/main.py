@@ -123,7 +123,7 @@ class Materializer:
                     content=self.prompt_factory.get_context_prompt(
                         self.state.retrieved_tables,
                         list(self.state.intermediate_tables),
-                        self.actions[:5],  # only include last 5 actions for brevity
+                        self.actions[-5:],  # only include last 5 actions for brevity
                         step_count,
                         client_note,
                         self.state.external_tables,
