@@ -85,7 +85,3 @@ class Config:
         self.ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING = (
             getenv("ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING", "false").lower() == "true"
         )
-        self.DB_BACKEND_PATH = getenv(
-            "DB_BACKEND_PATH",
-            path.join(path.dirname(__file__), "..", "..", "..", "data_src", "duckdb"),
-        )

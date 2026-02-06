@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import duckdb
-from pandas import DataFrame
+from pandas import DataFrame, isna, read_csv
 from tqdm import tqdm
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
@@ -49,12 +49,12 @@ class PneumaDB:
         self.logger = logger
 
         if dataset_db_path:
-            self.dataset_db_path = Path(__file__).resolve().parent / dataset_db_path
+            self.dataset_db_path = Path(dataset_db_path)
         else:
             self.dataset_db_path = Path(__file__).resolve().parent / "datasets"
 
         if workspace_db_path:
-            self.workspace_db_path = Path(__file__).resolve().parent / workspace_db_path
+            self.workspace_db_path = Path(workspace_db_path)
         else:
             self.workspace_db_path = Path(__file__).resolve().parent / "workspaces"
 
@@ -68,7 +68,8 @@ class PneumaDB:
     # ------------------------------------------------------------------
     def get_dataset_connection(self, dataset_name: str, read_only: bool = True):
         """Returns a DuckDB connection to the dataset DB file (uses .db extension)."""
-        dataset_db_file = self.dataset_db_path / f"{dataset_name}.db"
+        os.makedirs(self.dataset_db_path / dataset_name, exist_ok=True)
+        dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
         # For read-only mode, ensure the file exists first
         if read_only and not dataset_db_file.exists():
             # Create it in read-write mode first
@@ -86,11 +87,7 @@ class PneumaDB:
         - cleans column names
         - only reads file once for ingestion (fast path)
         """
-        dataset_db_file = self.dataset_db_path / f"{dataset_name}.db"
-        os.makedirs(dataset_db_file.parent, exist_ok=True)
-
         dataset_con = self.get_dataset_connection(dataset_name, read_only=False)
-
         try:
             dataset_con.begin()
             for table_file_name in tqdm(sorted(os.listdir(dataset_path))):
@@ -174,6 +171,28 @@ class PneumaDB:
                 seen[c] += 1
                 result.append(f"{c}_{seen[c]}")
         return result
+
+    def get_table_description(self, dataset_name: str, table_name: str) -> str:
+        """Returns the description of a table in the dataset."""
+        os.makedirs(self.dataset_db_path / dataset_name, exist_ok=True)
+        metadata_path = self.dataset_db_path / dataset_name / "metadata.csv"
+        if os.path.exists(metadata_path) is False:
+            return ""
+        try:
+            metadata = read_csv(metadata_path)
+        except Exception:
+            return ""
+
+        if "table_name" not in metadata.columns or "description" not in metadata.columns:
+            return ""
+
+        table_meta = metadata[metadata["table_name"] == table_name]
+        if table_meta.empty:
+            return ""
+        description = table_meta.iloc[0]["description"]
+        if description is None or isna(description):
+            return ""
+        return str(description)
 
     # ------------------------------------------------------------------
     # Workspace DB Management (one .db per user/chat)
@@ -331,7 +350,7 @@ class PneumaDB:
         """
         self.__log(f"[PneumaDB] Linking dataset '{dataset_name}' into workspace.")
         ws_db_con = self.get_ws_db_connection(user_id, chat_id)
-        dataset_db_file = self.dataset_db_path / f"{dataset_name}.db"
+        dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
         if not dataset_db_file.exists():
             raise FileNotFoundError(
                 f"Dataset DB not found: {dataset_db_file.as_posix()}"

@@ -66,20 +66,6 @@ class PneumaRetriever(AbstractRetriever):
         self.index_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "indices", "pneuma"
         )
-        metadata_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            "data_src",
-            self.config.DATA_SOURCES[0],
-            "metadata.csv",
-        )
-        self.metadata = pd.read_csv(metadata_path)
 
     @property
     def retriever_type(self) -> RetrieverType:
@@ -200,13 +186,10 @@ class PneumaRetriever(AbstractRetriever):
             actual_table = self.db_api.execute_query(
                 self.user_id, self.chat_id, query_table
             )
-
-            s = self.metadata.loc[
-                self.metadata["table_name"] == Path(table).stem, "description"
-            ]
-            table_description = str(s.iloc[0]) if len(s) > 0 else ""
             table_metadata: dict[str, str] = {
-                "description": table_description,
+                "description": self.db_api.get_table_description(
+                    self.config.DATA_SOURCES[0], table_name
+                ),
                 "dataset_name": self.config.DATA_SOURCES[0],
             }
 
@@ -217,7 +200,7 @@ class PneumaRetriever(AbstractRetriever):
                     retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                     content=actual_table,
                     metadata=table_metadata,
-                    path=table_raw,
+                    path=f'{self.config.DATA_SOURCES[0]}."{table_name}"',
                 )
             )
 
@@ -237,45 +220,35 @@ class PneumaRetriever(AbstractRetriever):
                     continue
                 if len(retrieval_results) >= k:
                     break
+
                 seen_tables.append(table_id)
+                table_description = self.db_api.get_table_description(
+                    self.config.DATA_SOURCES[0], table_id
+                )
 
-                s = self.metadata.loc[
-                    self.metadata["table_name"] == table_id, "description"
-                ]
-                table_description = str(s.iloc[0]) if len(s) > 0 else ""
-
+                booster_query = f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{table_id}"'
                 if sample_only:
-                    booster_query = f"SELECT * FROM {table_id}"
                     if sample_size is None or sample_size <= 0:
                         sample_size = 5
                     booster_query += f" LIMIT {sample_size}"
-                    with duckdb.connect(
-                        database=os.path.join(
-                            self.config.DB_BACKEND_PATH,
-                            f"{self.config.DATA_SOURCES[0]}.db",
-                        ),
-                        read_only=True,
-                    ) as con:
-                        booster_table = con.execute(booster_query).fetchdf()
-                else:
-                    booster_table = self.db_api.execute_query(
-                        self.user_id,
-                        self.chat_id,
-                        f"SELECT * FROM {self.config.DATA_SOURCES[0]}.\"{table_id}\"",
-                    )
-
+                booster_table = self.db_api.execute_query(
+                    self.user_id,
+                    self.chat_id,
+                    booster_query,
+                )
                 retrieval_results.append(
                     Table(
                         doc_id=table_id,
                         retriever_type=RetrieverType.PNEUMA_RETRIEVER,
                         content=booster_table,
                         metadata={
+                            "dataset_name": self.config.DATA_SOURCES[0],
                             "description": table_description,
                             "keywords_existence": ", ".join(
                                 sorted(table_keywords.get(table_id, []))
                             ),
                         },
-                        path=table_id,
+                        path=f'{self.config.DATA_SOURCES[0]}."{table_id}"',
                     )
                 )
 

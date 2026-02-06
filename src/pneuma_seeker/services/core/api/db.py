@@ -40,6 +40,10 @@ class DBAPI:
         - only reads file once for ingestion (fast path)
         """
         self.pneuma_db.ingest_dataset(dataset_name, dataset_path)
+    
+    def get_table_description(self, dataset_name: str, table_name: str) -> str:
+        """Returns the description of a table in the dataset."""
+        return self.pneuma_db.get_table_description(dataset_name, table_name)
 
     # ------------------------------------------------------------------
     # Dataset DB Linking into Workspace DB

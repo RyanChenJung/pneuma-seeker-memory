@@ -197,7 +197,7 @@ class TestDatasetConnections(unittest.TestCase):
         con = self.db.get_dataset_connection("test_ds", read_only=True)
         self.assertIsNotNone(con)
         # Verify it's read-only by checking the database file exists
-        db_file = self.db.dataset_db_path / "test_ds.db"
+        db_file = self.db.dataset_db_path / "test_ds" / "test_ds.db"
         self.assertTrue(db_file.exists())
         con.close()
 
@@ -215,6 +215,75 @@ class TestDatasetConnections(unittest.TestCase):
         table_names = [t[0] for t in tables]
         self.assertIn("test", table_names)
         con2.close()
+
+
+class TestTableDescription(unittest.TestCase):
+    """Tests for reading table descriptions from dataset metadata."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_table_description_returns_empty_when_metadata_missing(self):
+        dataset_name = "ds1"
+        (self.db.dataset_db_path / dataset_name).mkdir(parents=True, exist_ok=True)
+
+        desc = self.db.get_table_description(dataset_name, "users")
+        self.assertEqual(desc, "")
+
+    def test_get_table_description_returns_empty_when_table_not_in_metadata(self):
+        dataset_name = "ds2"
+        ds_dir = self.db.dataset_db_path / dataset_name
+        ds_dir.mkdir(parents=True, exist_ok=True)
+
+        pd.DataFrame(
+            [
+                {"table_name": "other_table", "description": "Other desc"},
+            ]
+        ).to_csv(ds_dir / "metadata.csv", index=False)
+
+        desc = self.db.get_table_description(dataset_name, "users")
+        self.assertEqual(desc, "")
+
+    def test_get_table_description_returns_description_when_present(self):
+        dataset_name = "ds3"
+        ds_dir = self.db.dataset_db_path / dataset_name
+        ds_dir.mkdir(parents=True, exist_ok=True)
+
+        pd.DataFrame(
+            [
+                {"table_name": "users", "description": "User table"},
+                {"table_name": "orders", "description": "Orders table"},
+            ]
+        ).to_csv(ds_dir / "metadata.csv", index=False)
+
+        desc = self.db.get_table_description(dataset_name, "users")
+        self.assertEqual(desc, "User table")
+
+    def test_get_table_description_returns_empty_when_metadata_missing_required_columns(self):
+        dataset_name = "ds4"
+        ds_dir = self.db.dataset_db_path / dataset_name
+        ds_dir.mkdir(parents=True, exist_ok=True)
+
+        # Missing 'description' column
+        pd.DataFrame(
+            [
+                {"table_name": "users", "not_description": "x"},
+            ]
+        ).to_csv(ds_dir / "metadata.csv", index=False)
+
+        desc = self.db.get_table_description(dataset_name, "users")
+        self.assertEqual(desc, "")
 
 
 class TestWorkspaceConnections(unittest.TestCase):

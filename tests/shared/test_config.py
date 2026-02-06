@@ -42,7 +42,6 @@ class ConfigTests(unittest.TestCase):
             "SEMANTIC_JOIN_ALPHA",
             "SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE",
             "SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE",
-            "DB_BACKEND_PATH",
         ]
         for var in self.config_vars:
             if var in os.environ:
@@ -101,8 +100,6 @@ class ConfigTests(unittest.TestCase):
         self.assertIsInstance(cfg.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE, int)
         
         self.assertIsInstance(cfg.ENABLE_ASSUMPTION_CHECK, bool)
-
-        self.assertIsInstance(cfg.DB_BACKEND_PATH, str)
 
     # ========== Test Environment Variable Loading ==========
 
@@ -383,26 +380,6 @@ class ConfigTests(unittest.TestCase):
         
         self.assertEqual(cfg.ALLOWED_ORIGINS, [""])
 
-    # ========== Test Path Handling ==========
-
-    def test_db_backend_path_default_construction(self):
-        """Test that DB_BACKEND_PATH is properly constructed by default."""
-        cfg = Config()
-        
-        # Should be a string
-        self.assertIsInstance(cfg.DB_BACKEND_PATH, str)
-        # Should not be empty
-        self.assertTrue(len(cfg.DB_BACKEND_PATH) > 0)
-
-    def test_db_backend_path_custom_value(self):
-        """Test DB_BACKEND_PATH with custom value from environment."""
-        custom_path = "/custom/database/path"
-        os.environ["DB_BACKEND_PATH"] = custom_path
-        
-        cfg = Config()
-        
-        self.assertEqual(cfg.DB_BACKEND_PATH, custom_path)
-
     def test_semantic_join_delimiter_default(self):
         """Test SEMANTIC_JOIN_DELIMITER default value."""
         cfg = Config()
@@ -445,7 +422,6 @@ class ConfigTests(unittest.TestCase):
         os.environ["SEMANTIC_JOIN_ALPHA"] = "0.75"
         os.environ["SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE"] = "80"
         os.environ["SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE"] = "15"
-        os.environ["DB_BACKEND_PATH"] = "/custom/db/path"
         
         cfg = Config()
         
@@ -473,7 +449,6 @@ class ConfigTests(unittest.TestCase):
         self.assertAlmostEqual(cfg.SEMANTIC_JOIN_ALPHA, 0.75)
         self.assertEqual(cfg.SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE, 80)
         self.assertEqual(cfg.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE, 15)
-        self.assertEqual(cfg.DB_BACKEND_PATH, "/custom/db/path")
 
     def test_data_sources_is_list(self):
         """Test that DATA_SOURCES is always a list."""
@@ -521,7 +496,6 @@ class ConfigTests(unittest.TestCase):
         self.assertIsInstance(cfg.OPENAI_API_KEY, str)
         self.assertIsInstance(cfg.AZURE_API_VERSION, str)
         self.assertIsInstance(cfg.SEMANTIC_JOIN_DELIMITER, str)
-        self.assertIsInstance(cfg.DB_BACKEND_PATH, str)
         
         # Integer types
         self.assertIsInstance(cfg.EMBEDDING_MAX_TOKENS, int)
