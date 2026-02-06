@@ -90,6 +90,11 @@ class ProvenanceGraph:
         if not isinstance(child, ProvenanceNode):
             raise ValueError(f"child must be a ProvenanceNode, got {type(child)}")
 
+        if parent.id not in self.nodes:
+            self.add_node(parent)
+        if child.id not in self.nodes:
+            self.add_node(child)
+
         parent_canon = self.nodes.get(parent.id, parent)
         child_canon = self.nodes.get(child.id, child)
 
