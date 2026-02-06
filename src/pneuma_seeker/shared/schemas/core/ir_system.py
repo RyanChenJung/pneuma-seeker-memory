@@ -175,6 +175,7 @@ def convert_retrieval_results_to_str(
     retrieval_results: list[AbstractDocument], multi_topic_mode: bool = False
 ):
     representation = ""
+    seen_docs: set[str] = set()
     if multi_topic_mode:
         topic_documents: dict[str, list[AbstractDocument]] = {}
         for result in retrieval_results:
@@ -186,7 +187,11 @@ def convert_retrieval_results_to_str(
         for topic, docs in topic_documents.items():
             representation += f"- Topic: {topic}\n"
             for doc in docs:
-                representation += f"  - ```{str(doc)}```\n"
+                if doc.doc_id in seen_docs:
+                    representation += f"  - Table {doc.doc_id}\n"
+                else:
+                    representation += f"  - ```{str(doc)}```\n"
+                    seen_docs.add(doc.doc_id)
     else:
         for result in retrieval_results:
             representation += f"- ```{str(result)}```\n"
