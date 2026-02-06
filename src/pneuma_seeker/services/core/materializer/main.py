@@ -578,10 +578,10 @@ class Materializer:
                         "",
                     )
                     child_node_desc = (
-                        f"Projects a table\n"
+                        f"Projects a table\n\n"
                         f"- ID: `{table_id_to_project}`\n"
-                        f"- columns: {', '.join(f'`{col}`' for col in relevant_columns)}\n"
-                        f"into a target table:\n"
+                        f"- columns: {', '.join(f'`{col}`' for col in relevant_columns)}\n\n"
+                        f"into a target table:\n\n"
                         f"`{target_table_id}`"
                     )
                     if set(relevant_columns) != set(

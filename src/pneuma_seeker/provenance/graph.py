@@ -218,6 +218,7 @@ class ProvenanceGraph:
             step_md = (
                 f"# Step {step_number + 1}\n\n"
                 f"{processing_step_node.description}\n\n"
+                f"## Python Code\n\n"
                 f"```python\n{processing_step_node.python_code}\n```"
             )
             steps.append(step_md)
