@@ -557,6 +557,7 @@ class PneumaDB:
                 )
 
             con.commit()
+            con.checkpoint()
         except Exception as e:
             con.rollback()
             self.__log(f"Failed to persist session: {e}")
