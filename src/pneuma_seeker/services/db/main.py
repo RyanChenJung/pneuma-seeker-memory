@@ -63,6 +63,16 @@ class PneumaDB:
 
         self._conn_cache: dict[tuple[str, str], duckdb.DuckDBPyConnection] = {}
 
+        self.target_tables_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "..",
+            "..",
+            "data_src",
+            "target_tables",
+        )
+
     # ------------------------------------------------------------------
     # Dataset Management (one .db per dataset)
     # ------------------------------------------------------------------
@@ -183,7 +193,10 @@ class PneumaDB:
         except Exception:
             return ""
 
-        if "table_name" not in metadata.columns or "description" not in metadata.columns:
+        if (
+            "table_name" not in metadata.columns
+            or "description" not in metadata.columns
+        ):
             return ""
 
         table_meta = metadata[metadata["table_name"] == table_name]
@@ -472,7 +485,9 @@ class PneumaDB:
             )
 
             # Insert all nodes first to satisfy FK constraints.
-            self.__log(f"Persisting provenance graph with {len(provenance_graph.nodes)} nodes...")
+            self.__log(
+                f"Persisting provenance graph with {len(provenance_graph.nodes)} nodes..."
+            )
             for provenance_node in provenance_graph.nodes.values():
                 con.execute(
                     """
@@ -529,20 +544,29 @@ class PneumaDB:
                         ),
                     )
 
-            self.__log(f"Persisting {len(retrieved_tables)} retrieved tables...")
-            for i in retrieved_tables:
+            self.__log(
+                f"=> Persisting {len(conductor_state.T)} target tables, {len(retrieved_tables)} retrieved tables, and {len(enumerated_tables)} enumerated tables..."
+            )
+            for i in conductor_state.T.values():
                 self.__insert_document(
                     con,
                     new_state_id,
                     i,
                     DocumentType.TARGET_TABLE.value,
                 )
+            for i in retrieved_tables:
+                self.__insert_document(
+                    con,
+                    new_state_id,
+                    i,
+                    DocumentType.RETRIEVED_TABLE.value,
+                )
             for e in enumerated_tables:
                 self.__insert_document(
                     con,
                     new_state_id,
                     e,
-                    DocumentType.INTERMEDIATE_TABLE.value,
+                    DocumentType.ENUMERATED_TABLE.value,
                 )
             if web_search_result:
                 self.__insert_document(
@@ -752,19 +776,30 @@ class PneumaDB:
                 child_node = nodes_dict[child_id]
                 parent_node.add_child(child_node)
 
+        conductor_state.T = {
+            i.doc_id: i
+            for i in self.__load_documents_by_role(
+                user_id,
+                chat_id,
+                con,
+                state_id,
+                DocumentType.TARGET_TABLE.value,
+            )
+        }
+
         retrieved_tables = self.__load_documents_by_role(
             user_id,
             chat_id,
             con,
             state_id,
-            DocumentType.TARGET_TABLE.value,
+            DocumentType.RETRIEVED_TABLE.value,
         )
         enumerated_tables = self.__load_documents_by_role(
             user_id,
             chat_id,
             con,
             state_id,
-            DocumentType.INTERMEDIATE_TABLE.value,
+            DocumentType.ENUMERATED_TABLE.value,
         )
         web_search_result = None
         web_crawl_result = None
@@ -786,6 +821,10 @@ class PneumaDB:
         )
         if web_crawl_docs:
             web_crawl_result = web_crawl_docs[0]
+
+        self.__log(
+            f"=> Loaded session with {len(chat_history)} chat messages, {len(provenance_graph.nodes)} provenance nodes, {len(conductor_state.T)} target tables, {len(retrieved_tables)} retrieved tables, {len(enumerated_tables)} enumerated tables, {1 if web_search_result else 0} web search results, and {1 if web_crawl_result else 0} web crawl results."
+        )
 
         return (
             chat_history,
@@ -845,7 +884,10 @@ class PneumaDB:
 
             if (
                 retriever_type == RetrieverType.PNEUMA_RETRIEVER
+                or retriever_type == RetrieverType.MATERIALIZER
+                or retriever_type == RetrieverType.CONDUCTOR
                 or retriever_type == RetrieverType.ENUMERATOR
+                or retriever_type == RetrieverType.USER
             ):
                 dataset_name = self.config.DATA_SOURCES[0]
                 if "dataset_name" in metadata:
@@ -856,11 +898,28 @@ class PneumaDB:
                     chat_id,
                     dataset_name,
                 )
-                content = self.execute_query(
-                    user_id,
-                    chat_id,
-                    f"""SELECT * FROM "{dataset_name}"."{doc_row['doc_id']}";""",
-                )
+
+                if (
+                    retriever_type == RetrieverType.MATERIALIZER
+                    or retriever_type == RetrieverType.CONDUCTOR
+                ):
+                    content = read_csv(
+                        os.path.join(
+                            self.target_tables_path,
+                            user_id,
+                            chat_id,
+                            f"{doc_row['doc_id']}.csv",
+                        )
+                    )
+                else:
+                    select_query = (
+                        f"""SELECT * FROM "{dataset_name}"."{doc_row['doc_id']}";"""
+                    )
+                    content = self.execute_query(
+                        user_id,
+                        chat_id,
+                        select_query,
+                    )
                 document = Table(
                     doc_id=doc_row["doc_id"],
                     retriever_type=retriever_type,

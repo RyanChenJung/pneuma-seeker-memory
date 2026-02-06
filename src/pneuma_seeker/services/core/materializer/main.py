@@ -577,8 +577,13 @@ class Materializer:
                         self.action_set.generate_pandas_read_csv_code(matches[0]),
                         "",
                     )
-
-                    child_node_desc = f'Projects a table\n- ID: `{table_id_to_project}`\n- columns: {", ".join(f"`{col}`" for col in relevant_columns)}\ninto a target table:\n`{target_table_id}`'
+                    child_node_desc = (
+                        f"Projects a table\n"
+                        f"- ID: `{table_id_to_project}`\n"
+                        f"- columns: {', '.join(f'`{col}`' for col in relevant_columns)}\n"
+                        f"into a target table:\n"
+                        f"`{target_table_id}`"
+                    )
                     if set(relevant_columns) != set(
                         self.state.T[target_table_id].columns
                     ):

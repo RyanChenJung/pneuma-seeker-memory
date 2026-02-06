@@ -201,7 +201,10 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
         )
         if prov_explanation_steps_markdown:
             prov_steps = [
-                markdown.markdown(step_md, extensions=["fenced_code"])
+                markdown.markdown(
+                    step_md,
+                    extensions=["fenced_code", "sane_lists"],
+                )
                 for step_md in prov_explanation_steps_markdown
             ]
         else:
