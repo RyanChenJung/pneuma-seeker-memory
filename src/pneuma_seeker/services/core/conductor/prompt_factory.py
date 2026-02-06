@@ -1,6 +1,6 @@
 """src/pneuma_seeker/core/conductor/prompt_factory.py"""
 
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.conductor.state import ConductorState
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.action import ActionNames
 from pneuma_seeker.shared.schemas.core.conductor import UserConductorInteraction
@@ -210,12 +210,12 @@ Finds/raw-crawls a specific web page (URL) and returns the extracted text conten
     def get_env_state_prompt(
         self,
         current_step: int,
-        info_need_state: InformationNeedState,
+        info_need_state: ConductorState,
         interaction_history: list[UserConductorInteraction],
         actions_taken: list[str],
         retrieved_tables: list[AbstractDocument],
         user_input: str,
-        enumerated_table_ids: list[str],
+        enumerated_table_ids: list[AbstractDocument],
         external_tables: list[AbstractDocument],
         web_search_result: AbstractDocument | None = None,
         web_crawl_result: AbstractDocument | None = None,
@@ -239,7 +239,7 @@ RECENT USER INTERACTIONS:
 RETRIEVED TABLES:
 {convert_retrieval_results_to_str(retrieved_tables, self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE)}
 {f"\n- POTENTIAL JOIN PATHS BETWEEN RETRIEVED TABLES:\n{join_paths}\n" if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}
-{f"\nOTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (FOR REFERENCE):\n{enumerated_table_ids}\n" if len(enumerated_table_ids) > 0 else ""}
+{f"\nOTHER TABLE IDS WITH SIMILAR NAMING PATTERNS (FOR REFERENCE):\n{[i.doc_id for i in enumerated_table_ids]}\n" if len(enumerated_table_ids) > 0 else ""}
 {f"\nEXTERNAL TABLES (UPLOADED BY USER):\n{convert_retrieval_results_to_str(external_tables)}\n" if len(external_tables) > 0 else ""}
 {f"\nWEB SEARCH RESULT (IF ANY):\n{convert_retrieval_results_to_str([web_search_result] if web_search_result else [])}\n" if self.config.ENABLE_WEB_SEARCH else ""}
 {f"\nWEB CRAWL RESULT (IF ANY):\n{convert_retrieval_results_to_str([web_crawl_result] if web_crawl_result else [])}" if self.config.ENABLE_WEB_CRAWL else ""}

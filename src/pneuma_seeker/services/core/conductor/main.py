@@ -9,7 +9,7 @@ from pneuma_seeker.services.core.actions.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.conductor.state import ConductorState
 from pneuma_seeker.services.core.materializer.main import Materializer
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
@@ -71,10 +71,10 @@ class Conductor:
             self.config.OPENWEBUI_BASE_URL, self.config.OPENWEBUI_API_KEY
         )
 
-        self.info_need_state = InformationNeedState()
+        self.state = ConductorState()
         self.retrieved_tables: list[AbstractDocument] = []
         self.external_tables: list[AbstractDocument] = []
-        self.enumerated_table_ids: list[str] = []
+        self.enumerated_tables: list[AbstractDocument] = []
         self.web_search_result: AbstractDocument | None = None
         self.web_crawl_result: AbstractDocument | None = None
         self.join_paths: str | None = None
@@ -90,6 +90,7 @@ class Conductor:
             "target_tables",
         )
 
+        # Short-lived state (per chat call)
         self.user_facing_response = ""
         self.is_user_facing_response = False
         self.actions: list[str] = []
@@ -148,12 +149,12 @@ class Conductor:
                     role=Role.USER.value,
                     content=self.prompt_factory.get_env_state_prompt(
                         current_step,
-                        self.info_need_state,
+                        self.state,
                         interaction_history,
                         self.actions,
                         self.retrieved_tables,
                         user_input,
-                        self.enumerated_table_ids,
+                        self.enumerated_tables,
                         self.external_tables,
                         self.web_search_result,
                         self.web_crawl_result,
@@ -438,10 +439,9 @@ class Conductor:
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                enumerated_tables = self.action_set.retrieve_documents(
-                    action_args["pattern"], RetrieverType.ENUMERATOR, 10, True, 5
+                self.enumerated_tables = self.action_set.retrieve_documents(
+                    action_args["pattern"], RetrieverType.ENUMERATOR, 10
                 )
-                self.enumerated_table_ids = [i.doc_id for i in enumerated_tables]
                 success_msg = f"Enumerated table IDs based on this pattern: {action_args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
                 self.__log(success_msg)
                 return (
@@ -488,9 +488,9 @@ class Conductor:
                                 path=target_schema_path,
                             )
 
-                        self.info_need_state.T = T_docs
-                        self.info_need_state.column_descriptions = column_descriptions
-                        self.info_need_state.is_T_materialized = False
+                        self.state.T = T_docs
+                        self.state.column_descriptions = column_descriptions
+                        self.state.is_T_materialized = False
                         is_T_modified = True
                     else:
                         error_msg = "If you want to change T, make sure to also define column_descriptions."
@@ -502,8 +502,8 @@ class Conductor:
 
                 is_S_modified = False
                 if S is not None:
-                    self.info_need_state.S = S
-                    self.info_need_state.is_S_executed = False
+                    self.state.S = S
+                    self.state.is_S_executed = False
                     is_S_modified = True
 
                 if is_T_modified and is_S_modified:
@@ -525,7 +525,7 @@ class Conductor:
                 self.__log(error_msg)
                 return error_msg, ActionExecutionStatus.ERROR
             case ActionNames.MATERIALIZER.value:
-                if len(self.info_need_state.T.keys()) == 0:
+                if len(self.state.T.keys()) == 0:
                     error_msg = (
                         "T has to already be defined before calling Materializer"
                     )
@@ -538,16 +538,16 @@ class Conductor:
 
                 self.__log(f"Materializer called (note: {note})")
 
-                self.info_need_state.T = self.__materialize_T_driver(
-                    self.info_need_state.T,
-                    self.info_need_state.column_descriptions,
-                    self.info_need_state.S,
+                self.state.T = self.__materialize_T_driver(
+                    self.state.T,
+                    self.state.column_descriptions,
+                    self.state.S,
                     note,
                     self.external_tables,
                 )
-                self.info_need_state.is_T_materialized = True
+                self.state.is_T_materialized = True
 
-                for _, T_doc in self.info_need_state.T.items():
+                for _, T_doc in self.state.T.items():
                     updated_content: pd.DataFrame = T_doc.content
                     updated_content.to_csv(T_doc.path, index=False)
 
@@ -556,8 +556,8 @@ class Conductor:
                 return success_msg, ActionExecutionStatus.SUCCESS
             case ActionNames.PYTHON_EXECUTOR.value:
                 self.__log(f"{ActionNames.PYTHON_EXECUTOR.value} called")
-                if not self.info_need_state.is_T_materialized:
-                    if len(self.info_need_state.T.keys()) > 0:
+                if not self.state.is_T_materialized:
+                    if len(self.state.T.keys()) > 0:
                         self.__log(
                             f"=> Self-triggered materialization from calling {ActionNames.PYTHON_EXECUTOR.value}..."
                         )
@@ -566,22 +566,22 @@ class Conductor:
                         error_msg = f"T has not been defined. Please define it first before calling {ActionNames.PYTHON_EXECUTOR.value}."
                         self.__log(f"=> {error_msg}")
                         return error_msg, ActionExecutionStatus.ERROR
-                if len(self.info_need_state.S) == 0:
+                if len(self.state.S) == 0:
                     error_msg = f"S is still empty, which means there is nothing to execute. Please define S first, then ensure T has been materialized using Materializer, and finally, you can call {ActionNames.PYTHON_EXECUTOR.value} again."
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
                 T_df: dict[str, pd.DataFrame] = {}
-                for t_id, i in self.info_need_state.T.items():
+                for t_id, i in self.state.T.items():
                     T_df[t_id] = i.content
 
                 try:
                     execution_result = self.action_set.execute_code(
-                        T_df, self.info_need_state.S
+                        T_df, self.state.S
                     )
                     self.__log(f"Script (S) execution result: {execution_result}")
 
-                    self.info_need_state.is_S_executed = True
+                    self.state.is_S_executed = True
                     return (
                         f"Executed S, which resulted in this output: {execution_result}",
                         ActionExecutionStatus.SUCCESS,
@@ -606,8 +606,8 @@ class Conductor:
                     all_tables[table.doc_id] = table.content
                 for table in self.external_tables:
                     all_tables[table.doc_id] = table.content
-                if self.info_need_state.is_T_materialized:
-                    for table_id, table in self.info_need_state.T.items():
+                if self.state.is_T_materialized:
+                    for table_id, table in self.state.T.items():
                         all_tables[table_id] = table.content
 
                 try:
@@ -647,7 +647,7 @@ class Conductor:
             S,
             user_side_note,
             external_tables,
-            self.retrieved_tables,
+            self.retrieved_tables + self.enumerated_tables,
             self.web_search_result,
             self.web_crawl_result,
         )

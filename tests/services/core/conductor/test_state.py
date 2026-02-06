@@ -9,14 +9,14 @@ sys.path.insert(
 
 import pandas as pd
 
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
+from pneuma_seeker.services.core.conductor.state import ConductorState
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 
 
 class InformationNeedStateTests(unittest.TestCase):
     def setUp(self):
-        self.state = InformationNeedState()
+        self.state = ConductorState()
         self.config = Config("../../../.env.test")
 
     def test_initial_state(self):

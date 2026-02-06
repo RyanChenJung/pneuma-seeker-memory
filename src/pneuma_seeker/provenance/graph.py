@@ -50,17 +50,14 @@ class ProvenanceGraph:
         self.nodes: dict[str, ProvenanceNode] = {}
         self.logger = logger
         self.ROOT_NODE_CODE = (
-            "import pandas as pd\ntables: dict[str, pd.DataFrame] = {}"
-        )
-        self.ROOT_NODE_DESCRIPTION = (
-            "Imports packages and defines a data structure to hold tables."
+            "import pandas as pd\n\ntables: dict[str, pd.DataFrame] = {}"
         )
 
         if create_default_root:
             root_node = ProvenanceNode(
                 RetrieverType.USER,
                 self.ROOT_NODE_CODE,
-                self.ROOT_NODE_DESCRIPTION,
+                "Imports packages and defines a data structure to hold tables.",
             )
             self.nodes[root_node.id] = root_node
             self.logger.info(f"[PROV GRAPH] Root node {root_node.id} initialized.")

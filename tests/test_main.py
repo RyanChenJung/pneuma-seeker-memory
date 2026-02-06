@@ -131,13 +131,13 @@ class ServerEndpointTests(unittest.TestCase):
         materializer = MagicMock()
         materializer.prov_graph = prov_graph
 
-        info_need_state = MagicMock()
-        info_need_state.get_current_state_instance.return_value = {"state": "ok"}
-        info_need_state.is_T_materialized = True
+        state = MagicMock()
+        state.get_current_state_instance.return_value = {"state": "ok"}
+        state.is_T_materialized = True
 
         conductor = MagicMock()
         conductor.materializer = materializer
-        conductor.info_need_state = info_need_state
+        conductor.state = state
 
         chat_interface = MagicMock()
         chat_interface.conductor = conductor
@@ -278,12 +278,12 @@ class ServerEndpointTests(unittest.TestCase):
             shutil.rmtree(tmp_dir)
 
     def test_combined_html_when_not_materialized_uses_default_explanation(self):
-        info_need_state = MagicMock()
-        info_need_state.get_current_state_instance.return_value = {"state": "ok"}
-        info_need_state.is_T_materialized = False
+        state = MagicMock()
+        state.get_current_state_instance.return_value = {"state": "ok"}
+        state.is_T_materialized = False
 
         conductor = MagicMock()
-        conductor.info_need_state = info_need_state
+        conductor.state = state
         conductor.materializer = MagicMock()
 
         chat_interface = MagicMock()

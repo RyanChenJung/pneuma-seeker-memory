@@ -205,7 +205,10 @@ class PneumaRetriever(AbstractRetriever):
                 self.metadata["table_name"] == Path(table).stem, "description"
             ]
             table_description = str(s.iloc[0]) if len(s) > 0 else ""
-            table_metadata: dict[str, str] = {"description": table_description}
+            table_metadata: dict[str, str] = {
+                "description": table_description,
+                "dataset_name": self.config.DATA_SOURCES[0],
+            }
 
             actual_table.rename(columns=clean_column_table_name, inplace=True)
             retrieval_results.append(

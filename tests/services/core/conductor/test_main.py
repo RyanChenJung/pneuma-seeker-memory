@@ -187,7 +187,7 @@ class ConductorTests(unittest.TestCase):
         )
         responses = list(gen)
         self.assertIn("enum done", responses[-1])
-        self.assertIsInstance(self.conductor.enumerated_table_ids, list)
+        self.assertIsInstance(self.conductor.enumerated_tables, list)
 
     def test_state_manipulation_sets_only_S(self):
         self.conductor.language_model_api.llm._responses = [  # type: ignore
@@ -204,7 +204,7 @@ class ConductorTests(unittest.TestCase):
         responses = list(gen)
         self.assertIn("S set", responses[-1])
 
-        state = self.conductor.info_need_state
+        state = self.conductor.state
         self.assertEqual(state.S, "result = something")
         self.assertFalse(state.T)
         self.assertFalse(state.is_T_materialized)
@@ -227,7 +227,7 @@ class ConductorTests(unittest.TestCase):
         responses = list(gen)
         self.assertIn("T set", responses[-1])
 
-        state = self.conductor.info_need_state
+        state = self.conductor.state
         self.assertIn("t1", state.T)
         self.assertIsInstance(state.T["t1"], AbstractDocument)
         self.assertEqual(set(state.T["t1"].content.columns), {"a", "b"})
@@ -252,7 +252,7 @@ class ConductorTests(unittest.TestCase):
 
         self.assertIn("state done", responses[-1])
 
-        state = self.conductor.info_need_state
+        state = self.conductor.state
         self.assertIn("t1", state.T)
         self.assertIsInstance(state.T["t1"], AbstractDocument)
         self.assertEqual(set(state.T["t1"].content.columns), {"a", "b"})
@@ -287,19 +287,19 @@ class ConductorTests(unittest.TestCase):
         list(gen)
 
         self.assertTrue(
-            self.conductor.info_need_state.is_T_materialized,
+            self.conductor.state.is_T_materialized,
             "T should be marked as materialized",
         )
         self.assertTrue(
-            self.conductor.info_need_state.is_S_executed,
+            self.conductor.state.is_S_executed,
             "S should be marked as executed",
         )
-        self.assertEqual(self.conductor.info_need_state.T["t1"].content.shape, (2, 2))
+        self.assertEqual(self.conductor.state.T["t1"].content.shape, (2, 2))
         self.assertEqual(
-            list(self.conductor.info_need_state.T["t1"].content["a"]), [1, 2]
+            list(self.conductor.state.T["t1"].content["a"]), [1, 2]
         )
         self.assertEqual(
-            list(self.conductor.info_need_state.T["t1"].content["b"]), [3, 4]
+            list(self.conductor.state.T["t1"].content["b"]), [3, 4]
         )
 
     def test_assumption_check_produces_expected_string(self):

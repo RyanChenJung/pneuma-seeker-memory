@@ -1,203 +1,1457 @@
-import io
+import csv
 import logging
 import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
-import uuid
-import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+)
 
+from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
+from pneuma_seeker.services.core.conductor.state import ConductorState
 from pneuma_seeker.services.db.main import PneumaDB
-from pneuma_seeker.shared.schemas.db.table_type import TableType
+from pneuma_seeker.shared.config import Config
+from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, Text
+from pneuma_seeker.shared.schemas.language_model.role import Role
 
 
-class TestDBServiceAPI(unittest.TestCase):
+class TestPneumaDBInit(unittest.TestCase):
+    """Tests for PneumaDB initialization."""
 
-    @classmethod
-    def setUpClass(cls):
-        # Instantiate service-backed DB for tests
-        global db
-        db = PneumaDB(logger=logging.getLogger("test"))
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
 
-        cls.tmpdir = tempfile.mkdtemp()
-        db.dataset_db_path = Path(cls.tmpdir) / "datasets"
-        db.workspace_db_path = Path(cls.tmpdir) / "workspaces"
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-        db.dataset_db_path.mkdir(parents=True, exist_ok=True)
-        db.workspace_db_path.mkdir(parents=True, exist_ok=True)
-
-    @classmethod
-    def tearDownClass(cls):
+    def test_init_with_default_paths(self):
+        """Test initialization with default paths."""
+        db = PneumaDB(logger=self.logger, config=self.config)
+        self.assertIsNotNone(db.dataset_db_path)
+        self.assertIsNotNone(db.workspace_db_path)
         db.close_all_connections()
-        shutil.rmtree(cls.tmpdir, ignore_errors=True)
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def _new_workspace(self):
-        return f"user_{uuid.uuid4()}", f"chat_{uuid.uuid4()}"
+    def test_init_with_custom_paths(self):
+        """Test initialization with custom paths."""
+        dataset_path = "custom_datasets"
+        workspace_path = "custom_workspaces"
+        db = PneumaDB(
+            logger=self.logger,
+            config=self.config,
+            dataset_db_path=dataset_path,
+            workspace_db_path=workspace_path,
+        )
+        self.assertTrue(str(db.dataset_db_path).endswith(dataset_path))
+        self.assertTrue(str(db.workspace_db_path).endswith(workspace_path))
+        db.close_all_connections()
 
-    def _register_external_table(self, user_id, chat_id, name="t1"):
-        df = pd.DataFrame({"a": [1, 2, 3]})
-        # Register DataFrame directly into workspace
-        db.register_external_table(user_id, chat_id, name, df)
+    def test_init_creates_directories(self):
+        """Test that initialization creates required directories."""
+        dataset_path = os.path.join(self.tmpdir, "datasets")
+        workspace_path = os.path.join(self.tmpdir, "workspaces")
+        db = PneumaDB(
+            logger=self.logger,
+            config=self.config,
+            dataset_db_path=dataset_path,
+            workspace_db_path=workspace_path,
+        )
+        db.close_all_connections()
 
-    # ------------------------------------------------------------------
-    # Dataset registration
-    # ------------------------------------------------------------------
-    def test_register_dataset_success(self):
-        tmp = tempfile.mkdtemp()
-        try:
-            df = pd.DataFrame({"x": [1, 2]})
-            csv = os.path.join(tmp, "tbl.csv")
-            df.to_csv(csv, index=False)
-            # Register dataset by pointing to directory with CSVs
-            db.register_dataset_table("my_ds", tmp)
 
-            ds_file = db.dataset_db_path / "my_ds.db"
-            self.assertTrue(ds_file.exists())
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+class TestDatasetIngestion(unittest.TestCase):
+    """Tests for dataset ingestion functionality."""
 
-    def test_register_dataset_rejects_non_csv(self):
-        tmp = tempfile.mkdtemp()
-        try:
-            # Create a non-csv file; registration should not crash
-            with open(os.path.join(tmp, "x.txt"), "wb") as f:
-                f.write(b"123")
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
 
-            db.register_dataset_table("bad", tmp)
-            ds_file = db.dataset_db_path / "bad.db"
-            self.assertTrue(ds_file.exists())
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+        # Create a test dataset directory
+        self.dataset_dir = Path(self.tmpdir) / "test_data"
+        self.dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # Dataset linking
-    # ------------------------------------------------------------------
-    def test_link_dataset_not_found(self):
-        user_id, chat_id = self._new_workspace()
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _create_test_csv(self, filename: str, data: list[dict]):
+        """Helper to create test CSV files."""
+        filepath = self.dataset_dir / filename
+        if data:
+            df = pd.DataFrame(data)
+            df.to_csv(filepath, index=False)
+        return filepath
+
+    def test_ingest_single_csv(self):
+        """Test ingesting a single CSV file."""
+        data = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+        self._create_test_csv("users.csv", data)
+
+        self.db.ingest_dataset("test_dataset", self.dataset_dir.as_posix())
+
+        # Verify table was created
+        con = self.db.get_dataset_connection("test_dataset", read_only=True)
+        tables = con.execute("SHOW TABLES;").fetchall()
+        table_names = [t[0] for t in tables]
+        self.assertIn("users", table_names)
+        con.close()
+
+    def test_ingest_multiple_csvs(self):
+        """Test ingesting multiple CSV files."""
+        users_data = [{"id": 1, "name": "Alice"}]
+        products_data = [{"product_id": 1, "title": "Widget"}]
+
+        self._create_test_csv("users.csv", users_data)
+        self._create_test_csv("products.csv", products_data)
+
+        self.db.ingest_dataset("multi_dataset", self.dataset_dir.as_posix())
+
+        con = self.db.get_dataset_connection("multi_dataset", read_only=True)
+        tables = con.execute("SHOW TABLES;").fetchall()
+        table_names = [t[0] for t in tables]
+        self.assertIn("users", table_names)
+        self.assertIn("products", table_names)
+        con.close()
+
+    def test_ingest_with_special_column_names(self):
+        """Test that column names are cleaned during ingestion."""
+        data = [{"First Name": 1, "Last-Name": "Test", "Email@Domain": "test@test.com"}]
+        self._create_test_csv("bad_columns.csv", data)
+
+        self.db.ingest_dataset("special_cols", self.dataset_dir.as_posix())
+
+        con = self.db.get_dataset_connection("special_cols", read_only=True)
+        result = con.execute("SELECT * FROM bad_columns LIMIT 1;").fetchdf()
+        # Columns should be cleaned
+        self.assertGreater(len(result.columns), 0)
+        con.close()
+
+    def test_ingest_ignores_non_csv_files(self):
+        """Test that non-CSV files are ignored during ingestion."""
+        data = [{"id": 1, "value": "test"}]
+        self._create_test_csv("data.csv", data)
+        (self.dataset_dir / "readme.txt").write_text("Some readme content")
+        (self.dataset_dir / "config.json").write_text('{"key": "value"}')
+
+        self.db.ingest_dataset("ignore_test", self.dataset_dir.as_posix())
+
+        con = self.db.get_dataset_connection("ignore_test", read_only=True)
+        tables = con.execute("SHOW TABLES;").fetchall()
+        table_names = [t[0] for t in tables]
+        self.assertEqual(len(table_names), 1)
+        self.assertIn("data", table_names)
+        con.close()
+
+    def test_ingest_deduplicates_column_names(self):
+        """Test that duplicate column names are deduplicated."""
+        # Create a CSV with duplicate column names manually
+        filepath = self.dataset_dir / "dupes.csv"
+        with open(filepath, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["id", "value", "id"])  # Duplicate 'id'
+            writer.writerow([1, "test", 2])
+
+        self.db.ingest_dataset("dedup_test", self.dataset_dir.as_posix())
+
+        con = self.db.get_dataset_connection("dedup_test", read_only=True)
+        result = con.execute("SELECT * FROM dupes LIMIT 1;").fetchdf()
+        # Should have 3 columns with 'id' deduplicated
+        self.assertEqual(len(result.columns), 3)
+        con.close()
+
+
+class TestDatasetConnections(unittest.TestCase):
+    """Tests for dataset connection management."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_dataset_connection_read_only(self):
+        """Test getting a read-only connection to a dataset."""
+        con = self.db.get_dataset_connection("test_ds", read_only=True)
+        self.assertIsNotNone(con)
+        # Verify it's read-only by checking the database file exists
+        db_file = self.db.dataset_db_path / "test_ds.db"
+        self.assertTrue(db_file.exists())
+        con.close()
+
+    def test_get_dataset_connection_read_write(self):
+        """Test getting a read-write connection to a dataset."""
+        con = self.db.get_dataset_connection("test_ds_rw", read_only=False)
+        self.assertIsNotNone(con)
+        # Create a test table
+        con.execute("CREATE TABLE test (id INTEGER, name VARCHAR);")
+        con.close()
+
+        # Verify table persists
+        con2 = self.db.get_dataset_connection("test_ds_rw", read_only=True)
+        tables = con2.execute("SHOW TABLES;").fetchall()
+        table_names = [t[0] for t in tables]
+        self.assertIn("test", table_names)
+        con2.close()
+
+
+class TestWorkspaceConnections(unittest.TestCase):
+    """Tests for workspace connection management."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_ws_db_connection_creates_new(self):
+        """Test that getting a new workspace connection initializes tables."""
+        user_id = "user_123"
+        chat_id = "chat_456"
+
+        con = self.db.get_ws_db_connection(user_id, chat_id)
+        self.assertIsNotNone(con)
+
+        # Verify tables were created
+        tables = con.execute("SHOW TABLES;").fetchdf()
+        table_names = tables["name"].tolist()
+
+        expected_tables = [
+            "chat_history",
+            "conductor_state",
+            "documents",
+            "document_metadata",
+            "state_document_roles",
+            "provenance_nodes",
+            "provenance_edges",
+        ]
+        for expected in expected_tables:
+            self.assertIn(expected, table_names)
+
+    def test_get_ws_db_connection_caching(self):
+        """Test that workspace connections are cached."""
+        user_id = "user_123"
+        chat_id = "chat_456"
+
+        con1 = self.db.get_ws_db_connection(user_id, chat_id)
+        con2 = self.db.get_ws_db_connection(user_id, chat_id)
+
+        # Should be the same connection object
+        self.assertIs(con1, con2)
+
+    def test_get_ws_db_connection_multiple_users(self):
+        """Test that different users get different connections."""
+        con1 = self.db.get_ws_db_connection("user_1", "chat_1")
+        con2 = self.db.get_ws_db_connection("user_2", "chat_1")
+
+        # Should be different connections
+        self.assertIsNot(con1, con2)
+
+    def test_close_workspace_connection(self):
+        """Test closing a specific workspace connection."""
+        user_id = "user_123"
+        chat_id = "chat_456"
+
+        con = self.db.get_ws_db_connection(user_id, chat_id)
+        self.assertIn((user_id, chat_id), self.db._conn_cache)
+
+        self.db.close_workspace_connection(user_id, chat_id)
+        self.assertNotIn((user_id, chat_id), self.db._conn_cache)
+
+    def test_close_all_connections(self):
+        """Test closing all workspace connections."""
+        self.db.get_ws_db_connection("user_1", "chat_1")
+        self.db.get_ws_db_connection("user_2", "chat_2")
+        self.db.get_ws_db_connection("user_3", "chat_3")
+
+        self.assertEqual(len(self.db._conn_cache), 3)
+
+        self.db.close_all_connections()
+        self.assertEqual(len(self.db._conn_cache), 0)
+
+
+class TestDatasetLinking(unittest.TestCase):
+    """Tests for linking dataset tables into workspace."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        # Create a test dataset
+        self.dataset_dir = Path(self.tmpdir) / "test_data"
+        self.dataset_dir.mkdir(parents=True, exist_ok=True)
+        data = [{"id": 1, "name": "Alice"}]
+        df = pd.DataFrame(data)
+        df.to_csv(self.dataset_dir / "users.csv", index=False)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_link_dataset_tables(self):
+        """Test linking a dataset into a workspace."""
+        dataset_name = "test_dataset"
+        self.db.ingest_dataset(dataset_name, self.dataset_dir.as_posix())
+
+        user_id = "user_123"
+        chat_id = "chat_456"
+        self.db.link_dataset_tables(user_id, chat_id, dataset_name)
+
+        # Verify we can query the linked tables
+        con = self.db.get_ws_db_connection(user_id, chat_id)
+        result = con.execute('SELECT * FROM "test_dataset"."users";').fetchdf()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["id"], 1)
+
+    def test_link_dataset_tables_idempotent(self):
+        """Test that linking the same dataset twice is safe."""
+        dataset_name = "test_dataset"
+        self.db.ingest_dataset(dataset_name, self.dataset_dir.as_posix())
+
+        user_id = "user_123"
+        chat_id = "chat_456"
+
+        # Link twice - should not raise an error
+        self.db.link_dataset_tables(user_id, chat_id, dataset_name)
+        self.db.link_dataset_tables(user_id, chat_id, dataset_name)
+
+    def test_link_nonexistent_dataset_raises_error(self):
+        """Test that linking a non-existent dataset raises FileNotFoundError."""
+        user_id = "user_123"
+        chat_id = "chat_456"
+
         with self.assertRaises(FileNotFoundError):
-            db.link_dataset_tables(user_id, chat_id, "missing")
+            self.db.link_dataset_tables(user_id, chat_id, "nonexistent_dataset")
 
-    # ------------------------------------------------------------------
-    # Workspace table registration
-    # ------------------------------------------------------------------
-    def test_register_and_list_external_table(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "t1")
-        tables = db.get_tables_of_type_as_dfs(user_id, chat_id, TableType.EXTERNAL)
-        self.assertIn("t1", tables.keys())
 
-    def test_preview_table(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "preview_me")
-        df = db.execute_query(
-            user_id, chat_id, 'SELECT * FROM "preview_me" LIMIT 2'
+class TestQueryExecution(unittest.TestCase):
+    """Tests for SQL query execution."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        self.user_id = "user_test"
+        self.chat_id = "chat_test"
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_execute_simple_query(self):
+        """Test executing a simple SQL query."""
+        result = self.db.execute_query(self.user_id, self.chat_id, "SELECT 1 as value;")
+        self.assertEqual(result.iloc[0]["value"], 1)
+
+    def test_execute_query_with_params(self):
+        """Test executing a query with parameters."""
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        con.execute("CREATE TABLE test_table (id INTEGER, name VARCHAR);")
+        con.execute("INSERT INTO test_table VALUES (1, 'Alice');")
+        result = self.db.execute_query(
+            self.user_id,
+            self.chat_id,
+            "SELECT * FROM test_table WHERE id = ?;",
+            (1,),
         )
-        self.assertEqual(len(df), 2)
+        con.close()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["name"], "Alice")
 
-    # ------------------------------------------------------------------
-    # Temporary tables
-    # ------------------------------------------------------------------
-    def test_register_and_unregister_temporary_table(self):
-        user_id, chat_id = self._new_workspace()
-        df = pd.DataFrame({"x": [1]})
-        db.register_temporary_table(user_id, chat_id, "tmp", df)
-
-        # ensure temp table is queryable
-        tmp_df = db.execute_query(user_id, chat_id, 'SELECT * FROM "tmp"')
-        self.assertEqual(len(tmp_df), 1)
-
-        db.unregister_temporary_table(user_id, chat_id, "tmp")
-
-    # ------------------------------------------------------------------
-    # Query execution
-    # ------------------------------------------------------------------
-    def test_execute_query(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "src")
-        df = db.execute_query(
-            user_id, chat_id, "SELECT COUNT(*) AS c FROM src"
+    def test_execute_query_returns_dataframe(self):
+        """Test that execute_query returns a DataFrame."""
+        result = self.db.execute_query(
+            self.user_id, self.chat_id, "SELECT 42 as answer;"
         )
-        self.assertEqual(int(df.iloc[0]["c"]), 3)
+        self.assertIsInstance(result, pd.DataFrame)
 
-    def test_execute_query_into_table(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "src")
-        out_df = db.execute_query_into_table(
+
+class TestSessionPersistence(unittest.TestCase):
+    """Tests for session persistence and loading."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        self.user_id = "user_test"
+        self.chat_id = "chat_test"
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_persist_and_load_basic_session(self):
+        """Test persisting and loading a basic chat session."""
+        user_input = "What is the population?"
+        system_response = "The population is 8 billion."
+
+        conductor_state = ConductorState()
+        conductor_state.is_T_materialized = True
+        conductor_state.S = "result = df.sum()"
+        conductor_state.is_S_executed = True
+
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            user_input,
+            system_response,
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+        )
+
+        # Load and verify
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved,
+            enumerated,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        self.assertEqual(len(chat_history), 2)
+        self.assertEqual(chat_history[0]["role"], Role.USER.value)
+        self.assertEqual(chat_history[0]["content"], user_input)
+        self.assertEqual(chat_history[1]["role"], Role.ASSISTANT.value)
+        self.assertEqual(chat_history[1]["content"], system_response)
+
+        self.assertEqual(loaded_state.is_T_materialized, True)
+        self.assertEqual(loaded_state.S, "result = df.sum()")
+        self.assertEqual(loaded_state.is_S_executed, True)
+
+    def test_persist_session_with_documents(self):
+        """Test persisting a session with documents."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        table_1 = pd.DataFrame({"col1": [1, 2, 3]})
+        table_2 = pd.DataFrame({"colA": ["a", "b"]})
+
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+
+        table_1.to_csv(os.path.join(self.tmpdir, "tables", "table_1.csv"), index=False)
+        table_2.to_csv(os.path.join(self.tmpdir, "tables", "table_2.csv"), index=False)
+
+        doc1 = Table(
+            doc_id="table_1",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=table_1,
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        doc2 = Table(
+            doc_id="table_2",
+            retriever_type=RetrieverType.ENUMERATOR,
+            content=table_2,
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        retrieved_tables: list[AbstractDocument] = [doc1]
+        enumerated_tables: list[AbstractDocument] = [doc2]
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Query",
+            "Response",
+            conductor_state,
+            provenance_graph,
+            retrieved_tables,
+            enumerated_tables,
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            loaded_retrieved,
+            loaded_enumerated,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        self.assertEqual(len(loaded_retrieved), 1)
+        self.assertEqual(len(loaded_enumerated), 1)
+        self.assertEqual(loaded_retrieved[0].doc_id, "table_1")
+        self.assertEqual(loaded_enumerated[0].doc_id, "table_2")
+
+        # Type integrity: retriever_type should be restored as the RetrieverType enum
+        self.assertIsInstance(loaded_retrieved[0].retriever_type, RetrieverType)
+        self.assertEqual(loaded_retrieved[0].retriever_type, RetrieverType.PNEUMA_RETRIEVER)
+        self.assertIsInstance(loaded_enumerated[0].retriever_type, RetrieverType)
+        self.assertEqual(loaded_enumerated[0].retriever_type, RetrieverType.ENUMERATOR)
+
+    def test_persist_session_with_provenance_graph(self):
+        """Test persisting a session with a provenance graph."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        # Create some nodes
+        node1 = ProvenanceNode(
+            RetrieverType.PNEUMA_RETRIEVER,
+            "df = load_data()",
+            "Load data from source",
+        )
+        node2 = ProvenanceNode(
+            RetrieverType.MATERIALIZER,
+            "df = df.filter(...)",
+            "Filter rows",
+        )
+        node3 = ProvenanceNode(
+            RetrieverType.CONDUCTOR,
+            "result = df.sum()",
+            "Aggregate result",
+        )
+
+        provenance_graph.add_node(node1)
+        provenance_graph.add_node(node2)
+        provenance_graph.add_node(node3)
+        provenance_graph.connect(node1, node2)
+        provenance_graph.connect(node2, node3)
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Query",
+            "Response",
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved,
+            enumerated,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        # Should have 4 nodes: 1 default root + 3 added
+        self.assertEqual(len(loaded_graph.nodes), 4)
+
+        # Verify connections
+        node_list = list(loaded_graph.nodes.values())
+        # Find nodes by code
+        nodes_by_code = {n.python_code: n for n in node_list}
+        self.assertIn("df = load_data()", nodes_by_code)
+        self.assertIn("df = df.filter(...)", nodes_by_code)
+        self.assertIn("result = df.sum()", nodes_by_code)
+
+        # Verify edge structure (loaded graph should preserve parent->child)
+        self.assertIn(
+            "df = df.filter(...)",
+            [c.python_code for c in nodes_by_code["df = load_data()"].children],
+        )
+        self.assertIn(
+            "result = df.sum()",
+            [c.python_code for c in nodes_by_code["df = df.filter(...)"].children],
+        )
+
+    def test_persist_overwrites_previous_state_when_not_fine_grained(self):
+        """When fine-grained tracking is disabled, state tables should be overwritten each persist."""
+        conductor_state_1 = ConductorState()
+        conductor_state_1.S = "state1"
+        conductor_state_2 = ConductorState()
+        conductor_state_2.S = "state2"
+
+        # Prepare dataset and two different tables
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+        pd.DataFrame({"a": [1]}).to_csv(
+            os.path.join(self.tmpdir, "tables", "table_1.csv"), index=False
+        )
+        pd.DataFrame({"b": [2]}).to_csv(
+            os.path.join(self.tmpdir, "tables", "table_2.csv"), index=False
+        )
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        doc1 = Table(
+            doc_id="table_1",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=pd.DataFrame({"a": [1]}),
+            metadata={"dataset_name": "test_ds"},
+        )
+        doc2 = Table(
+            doc_id="table_2",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=pd.DataFrame({"b": [2]}),
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U1",
+            "A1",
+            conductor_state_1,
+            ProvenanceGraph(self.logger),
+            [doc1],
+            [],
+        )
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U2",
+            "A2",
+            conductor_state_2,
+            ProvenanceGraph(self.logger),
+            [doc2],
+            [],
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+        docs_count = con.execute("SELECT COUNT(*) FROM documents;").fetchone()
+
+        assert state_count is not None
+        assert docs_count is not None
+        self.assertEqual(state_count[0], 1)
+        self.assertEqual(docs_count[0], 1)
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            loaded_retrieved,
+            loaded_enumerated,
+            loaded_web_search,
+            loaded_web_crawl,
+            loaded_join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        # chat_history accumulates even when state is overwritten
+        self.assertEqual(len(chat_history), 4)
+        self.assertEqual(loaded_state.S, "state2")
+        self.assertEqual(len(loaded_retrieved), 1)
+        self.assertEqual(loaded_retrieved[0].doc_id, "table_2")
+        con.close()
+
+
+class TestSessionPersistenceFineGrainedTracking(unittest.TestCase):
+    """Tests persistence when fine-grained state tracking is enabled."""
+
+    def setUp(self):
+        self.config = Config()
+        self.config.ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING = True
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        self.user_id = "user_fg"
+        self.chat_id = "chat_fg"
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_fine_grained_keeps_multiple_states_and_loads_latest(self):
+        state1 = ConductorState()
+        state1.is_T_materialized = True
+        state1.S = "print('state1')"
+        state1.is_S_executed = True
+
+        state2 = ConductorState()
+        state2.is_T_materialized = False
+        state2.S = "print('state2')"
+        state2.is_S_executed = False
+
+        graph1 = ProvenanceGraph(self.logger)
+        graph2 = ProvenanceGraph(self.logger)
+
+        table_1 = pd.DataFrame({"x": [10, 20]})
+        table_2 = pd.DataFrame({"y": [30, 40]})
+
+        doc1 = Table(
+            doc_id="table_1",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=table_1,
+            metadata={"dataset_name": "test_ds"},
+        )
+        doc2 = Table(
+            doc_id="table_2",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=table_2,
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+
+        table_1.to_csv(os.path.join(self.tmpdir, "tables", "table_1.csv"), index=False)
+        table_2.to_csv(os.path.join(self.tmpdir, "tables", "table_2.csv"), index=False)
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U1",
+            "A1",
+            state1,
+            graph1,
+            [doc1],
+            [],
+        )
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U2",
+            "A2",
+            state2,
+            graph2,
+            [doc2],
+            [],
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+        assert state_count is not None
+        self.assertEqual(state_count[0], 2)
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            loaded_retrieved,
+            loaded_enumerated,
+            loaded_web_search,
+            loaded_web_crawl,
+            loaded_join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        # chat_history still accumulates
+        self.assertEqual(len(chat_history), 4)
+
+        # load_session should return the latest state
+        self.assertEqual(loaded_state.S, state2.S)
+        self.assertEqual(loaded_state.is_S_executed, state2.is_S_executed)
+
+        # retrieved docs should correspond to latest state only
+        self.assertEqual(len(loaded_retrieved), 1)
+        self.assertEqual(loaded_retrieved[0].doc_id, "table_2")
+        self.assertIsInstance(loaded_retrieved[0].retriever_type, RetrieverType)
+
+        con.close()
+
+    def test_fine_grained_loads_latest_provenance_graph_only(self):
+        """Ensure provenance_nodes/edges are loaded only for latest state_id."""
+        # Two graphs with different non-root nodes
+        graph1 = ProvenanceGraph(self.logger)
+        graph2 = ProvenanceGraph(self.logger)
+
+        root1 = graph1.get_node({"python_code": graph1.ROOT_NODE_CODE})
+        root2 = graph2.get_node({"python_code": graph2.ROOT_NODE_CODE})
+        assert root1 is not None
+        assert root2 is not None
+
+        n1 = ProvenanceNode(RetrieverType.USER, "x = 1", "state1 node")
+        n2 = ProvenanceNode(RetrieverType.USER, "y = 2", "state2 node")
+        graph1.add_node(n1)
+        graph2.add_node(n2)
+        graph1.connect(root1, n1)
+        graph2.connect(root2, n2)
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U1",
+            "A1",
+            ConductorState(),
+            graph1,
+            [],
+            [],
+        )
+
+        # Avoid flakiness if timestamps have coarse resolution.
+        time.sleep(0.01)
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U2",
+            "A2",
+            ConductorState(),
+            graph2,
+            [],
+            [],
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            loaded_retrieved,
+            loaded_enumerated,
+            loaded_web_search,
+            loaded_web_crawl,
+            loaded_join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        loaded_codes = {n.python_code for n in loaded_graph.nodes.values()}
+        self.assertIn("y = 2", loaded_codes)
+        self.assertNotIn("x = 1", loaded_codes)
+
+        # Edge should be present for latest graph
+        loaded_node_by_code = {n.python_code: n for n in loaded_graph.nodes.values()}
+        self.assertIn("y = 2", [c.python_code for c in loaded_node_by_code[root2.python_code].children])
+
+    def test_web_result_metadata_roundtrip(self):
+        """Ensure metadata keys/values persist and reload for Text documents."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        web_search_doc = Text(
+            doc_id="web_search_meta",
+            retriever_type=RetrieverType.WEB_SEARCH,
+            content="Search result content",
+            metadata={"url": "https://example.com", "title": "Example"},
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Query",
+            "Response",
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+            web_search_result=web_search_doc,
+        )
+
+        (*_, loaded_web_search, loaded_web_crawl, __) = self.db.load_session(
+            self.user_id, self.chat_id
+        )
+        assert loaded_web_search is not None
+        self.assertEqual(loaded_web_search.metadata.get("url"), "https://example.com")
+        self.assertEqual(loaded_web_search.metadata.get("title"), "Example")
+
+    def test_last_node_id_roundtrip(self):
+        """Ensure documents with last_node_id persist and reload correctly."""
+        graph = ProvenanceGraph(self.logger)
+        root = graph.get_node({"python_code": graph.ROOT_NODE_CODE})
+        assert root is not None
+        node = ProvenanceNode(RetrieverType.USER, "z = 3", "node for last_node_id")
+        graph.add_node(node)
+        graph.connect(root, node)
+
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+        pd.DataFrame({"z": [3]}).to_csv(
+            os.path.join(self.tmpdir, "tables", "table_z.csv"), index=False
+        )
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        doc = Table(
+            doc_id="table_z",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=pd.DataFrame({"z": [3]}),
+            metadata={"dataset_name": "test_ds"},
+            last_node_id=node.id,
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U",
+            "A",
+            ConductorState(),
+            graph,
+            [doc],
+            [],
+        )
+
+        (
+            _chat_history,
+            _loaded_state,
+            _loaded_graph,
+            loaded_retrieved,
+            _loaded_enumerated,
+            _loaded_web_search,
+            _loaded_web_crawl,
+            _loaded_join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+        self.assertEqual(len(loaded_retrieved), 1)
+        self.assertEqual(loaded_retrieved[0].last_node_id, node.id)
+
+    def test_load_raises_if_dataset_db_missing_for_table_doc(self):
+        """If a Table doc references a missing dataset DB, load_session should fail loudly."""
+        # Persist a Table doc pointing at a dataset that was never ingested
+        doc = Table(
+            doc_id="some_table",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=pd.DataFrame({"a": [1]}),
+            metadata={"dataset_name": "missing_ds"},
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U",
+            "A",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [doc],
+            [],
+        )
+
+        with self.assertRaises(FileNotFoundError):
+            self.db.load_session(self.user_id, self.chat_id)
+
+    def test_fine_grained_allows_reusing_doc_id(self):
+        """Fine-grained mode should not fail when the same doc_id appears in multiple states."""
+        doc_id = "web_search_same_id"
+
+        doc_v1 = Text(
+            doc_id=doc_id,
+            retriever_type=RetrieverType.WEB_SEARCH,
+            content="v1",
+            metadata={"url": "https://example.com/v1"},
+        )
+        doc_v2 = Text(
+            doc_id=doc_id,
+            retriever_type=RetrieverType.WEB_SEARCH,
+            content="v2",
+            metadata={"url": "https://example.com/v2"},
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U1",
+            "A1",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+            web_search_result=doc_v1,
+        )
+
+        time.sleep(0.01)
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "U2",
+            "A2",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+            web_search_result=doc_v2,
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+
+        conductor_state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+        documents_count = con.execute("SELECT COUNT(*) FROM documents;").fetchone()
+
+        assert conductor_state_count is not None
+        assert documents_count is not None
+        self.assertEqual(conductor_state_count[0], 2)
+        self.assertEqual(documents_count[0], 1)
+
+        (*_, loaded_web_search, __, ___) = self.db.load_session(self.user_id, self.chat_id)
+        assert loaded_web_search is not None
+        self.assertEqual(loaded_web_search.doc_id, doc_id)
+        self.assertEqual(loaded_web_search.content, "v2")
+        self.assertEqual(loaded_web_search.metadata.get("url"), "https://example.com/v2")
+
+    def test_persist_session_with_join_paths(self):
+        """Test persisting a session with join paths."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+        join_paths_str = "table1.id = table2.fk_id"
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Query",
+            "Response",
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+            join_paths=join_paths_str,
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved,
+            enumerated,
+            web_search,
+            web_crawl,
+            loaded_join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        self.assertEqual(loaded_join_paths, join_paths_str)
+
+    def test_persist_session_with_web_results(self):
+        """Test persisting a session with web search and crawl results."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        web_search_doc = Text(
+            doc_id="web_search_1",
+            retriever_type=RetrieverType.WEB_SEARCH,
+            content="Search result content",
+            metadata={"url": "https://example.com"},
+        )
+
+        web_crawl_doc = Text(
+            doc_id="web_crawl_1",
+            retriever_type=RetrieverType.WEB_CRAWL,
+            content="Crawled page content",
+            metadata={"url": "https://example.com/page"},
+        )
+
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Query",
+            "Response",
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+            web_search_result=web_search_doc,
+            web_crawl_result=web_crawl_doc,
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved,
+            enumerated,
+            loaded_web_search,
+            loaded_web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        self.assertIsNotNone(loaded_web_search)
+        if loaded_web_search:
+            self.assertEqual(loaded_web_search.doc_id, "web_search_1")
+        self.assertIsNotNone(loaded_web_crawl)
+        if loaded_web_crawl:
+            self.assertEqual(loaded_web_crawl.doc_id, "web_crawl_1")
+
+    def test_load_session_empty_workspace(self):
+        """Test loading a session from an empty workspace."""
+        (
+            chat_history,
+            conductor_state,
+            provenance_graph,
+            retrieved,
+            enumerated,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        self.assertEqual(chat_history, [])
+        self.assertEqual(conductor_state.T, {})
+        self.assertIsNotNone(provenance_graph)
+        self.assertEqual(retrieved, [])
+        self.assertEqual(enumerated, [])
+        self.assertIsNone(web_search)
+        self.assertIsNone(web_crawl)
+        self.assertIsNone(join_paths)
+
+    def test_persist_session_accumulates_previous(self):
+        """Test that persisting a new session accumulates the previous one."""
+        # First session
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "First query",
+            "First response",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+        )
+
+        # Second session
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "Second query",
+            "Second response",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+        )
+
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved,
+            enumerated,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(self.user_id, self.chat_id)
+
+        # Should have both sessions' messages
+        self.assertEqual(len(chat_history), 4)
+        self.assertEqual(chat_history[0]["content"], "First query")
+        self.assertEqual(chat_history[1]["content"], "First response")
+        self.assertEqual(chat_history[2]["content"], "Second query")
+        self.assertEqual(chat_history[3]["content"], "Second response")
+
+
+class TestIntegration(unittest.TestCase):
+    """Integration tests for the full workflow."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        # Create test datasets
+        self.dataset_dir = Path(self.tmpdir) / "test_data"
+        self.dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create sample data
+        users_df = pd.DataFrame(
+            {"user_id": [1, 2, 3], "name": ["Alice", "Bob", "Charlie"]}
+        )
+        users_df.to_csv(self.dataset_dir / "users.csv", index=False)
+
+        orders_df = pd.DataFrame(
+            {"order_id": [1, 2, 3], "user_id": [1, 1, 2], "amount": [100, 200, 150]}
+        )
+        orders_df.to_csv(self.dataset_dir / "orders.csv", index=False)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_full_workflow(self):
+        """Test a complete workflow: ingest, link, query, and persist."""
+        dataset_name = "ecommerce"
+        user_id = "user_123"
+        chat_id = "chat_456"
+
+        # 1. Ingest dataset
+        self.db.ingest_dataset(dataset_name, self.dataset_dir.as_posix())
+
+        # 2. Link into workspace
+        self.db.link_dataset_tables(user_id, chat_id, dataset_name)
+
+        # 3. Execute a query
+        result = self.db.execute_query(
             user_id,
             chat_id,
-            "SELECT a * 2 AS b FROM src",
-            "derived",
-            sample_size=10,
+            f'SELECT * FROM "{dataset_name}"."users" WHERE user_id = 1;',
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.iloc[0]["name"], "Alice")
+
+        # 4. Persist session
+        conductor_state = ConductorState()
+        conductor_state.is_T_materialized = True
+        conductor_state.S = "SELECT * FROM users WHERE user_id = 1;"
+        conductor_state.is_S_executed = True
+
+        provenance_graph = ProvenanceGraph(self.logger)
+        node = ProvenanceNode(
+            RetrieverType.PNEUMA_RETRIEVER,
+            'query = "SELECT * FROM users WHERE user_id = 1;"',
+            "Retrieve user data",
+        )
+        provenance_graph.add_node(node)
+
+        retrieved_doc = Table(
+            doc_id="users",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=result,
+            metadata={"dataset_name": dataset_name},
         )
 
-        self.assertEqual(len(out_df), 3)
-
-    # ------------------------------------------------------------------
-    # Delete tables
-    # ------------------------------------------------------------------
-    def test_delete_tables_of_type(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "t1")
-        self._register_external_table(user_id, chat_id, "t2")
-        deleted = db.delete_all_tables_of_type(user_id, chat_id, TableType.EXTERNAL)
-        self.assertEqual(deleted, 2)
-
-    # ------------------------------------------------------------------
-    # Download
-    # ------------------------------------------------------------------
-    def test_download_tables_zip(self):
-        user_id, chat_id = self._new_workspace()
-        self._register_external_table(user_id, chat_id, "t1")
-        tables = db.get_tables_of_type_as_dfs(user_id, chat_id, TableType.EXTERNAL)
-        self.assertIn("t1", tables)
-
-        # create zip in-memory (simulate export) and ensure t1.csv would be present
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, mode="w") as zf:
-            for name, df in tables.items():
-                zf.writestr(f"{name}.csv", df.to_csv(index=False))
-
-        z = zipfile.ZipFile(io.BytesIO(buf.getvalue()))
-        self.assertIn("t1.csv", z.namelist())
-
-    def test_download_tables_empty(self):
-        user_id, chat_id = self._new_workspace()
-        tables = db.get_tables_of_type_as_dfs(user_id, chat_id, TableType.EXTERNAL)
-        self.assertEqual(len(tables), 0)
-
-    # ------------------------------------------------------------------
-    # State persistence
-    # ------------------------------------------------------------------
-    def test_save_and_load_state(self):
-        user_id, chat_id = self._new_workspace()
-
-        payload = {
-            "info_need_state": {"q": "hello"},
-            "retrieved_tables": [{"t": "x"}],
-            "enumerated_table_ids": ["a", "b"],
-            "provenance_graph": {"edges": []},
-        }
-
-        db.save_state(
+        self.db.persist_session(
             user_id,
             chat_id,
-            payload["info_need_state"],
-            payload["retrieved_tables"],
-            payload["enumerated_table_ids"],
-            payload["provenance_graph"],
+            "Show me Alice's info",
+            "Here is Alice's information",
+            conductor_state,
+            provenance_graph,
+            [retrieved_doc],
+            [],
         )
 
-        info_need_state, retrieved, enumerated, prov = db.load_state(user_id, chat_id)
-        self.assertEqual(info_need_state, payload["info_need_state"])
+        # 5. Load session and verify
+        (
+            chat_history,
+            loaded_state,
+            loaded_graph,
+            retrieved_tables,
+            enumerated_tables,
+            web_search,
+            web_crawl,
+            join_paths,
+        ) = self.db.load_session(user_id, chat_id)
+
+        self.assertEqual(len(chat_history), 2)
+        self.assertEqual(chat_history[0]["content"], "Show me Alice's info")
+        self.assertEqual(loaded_state.S, conductor_state.S)
+        self.assertEqual(len(retrieved_tables), 1)
+        self.assertEqual(retrieved_tables[0].doc_id, "users")
+
+    def test_multi_user_isolation(self):
+        """Test that different users' data is isolated."""
+        dataset_name = "ecommerce"
+
+        # Ingest dataset once
+        self.db.ingest_dataset(dataset_name, self.dataset_dir.as_posix())
+
+        # Two different users
+        user1_id = "user_1"
+        chat1_id = "chat_1"
+        user2_id = "user_2"
+        chat2_id = "chat_2"
+
+        # Both link the same dataset
+        self.db.link_dataset_tables(user1_id, chat1_id, dataset_name)
+        self.db.link_dataset_tables(user2_id, chat2_id, dataset_name)
+
+        # User 1 persists a session
+        self.db.persist_session(
+            user1_id,
+            chat1_id,
+            "User 1 query",
+            "User 1 response",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+        )
+
+        # User 2 persists a different session
+        self.db.persist_session(
+            user2_id,
+            chat2_id,
+            "User 2 query",
+            "User 2 response",
+            ConductorState(),
+            ProvenanceGraph(self.logger),
+            [],
+            [],
+        )
+
+        # Load and verify isolation
+        (chat1_history, *_) = self.db.load_session(user1_id, chat1_id)
+        (chat2_history, *_) = self.db.load_session(user2_id, chat2_id)
+
+        self.assertEqual(chat1_history[0]["content"], "User 1 query")
+        self.assertEqual(chat2_history[0]["content"], "User 2 query")
+
+
+class TestTransactionRollback(unittest.TestCase):
+    """Tests for transaction rollback and recovery in persist_session."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+        self.user_id = "user_rollback"
+        self.chat_id = "chat_rollback"
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_rollback_on_error(self):
+        """Test that persist_session rolls back and DB remains consistent after error."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        table = pd.DataFrame({"a": [1, 2]})
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+        table.to_csv(os.path.join(self.tmpdir, "tables", "table.csv"), index=False)
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        # Provide a document so persist_session will call __insert_document.
+        # We'll force that call to raise to simulate a mid-transaction failure.
+        failing_doc = Table(
+            doc_id="doc_fail",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=table,
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        # Patch __insert_document to raise an exception to simulate failure
+        with patch.object(
+            self.db,
+            "_PneumaDB__insert_document",
+            side_effect=Exception("Simulated failure"),
+        ):
+            # Should not raise, but should log and rollback
+            self.db.persist_session(
+                self.user_id,
+                self.chat_id,
+                "User input",
+                "System response",
+                conductor_state,
+                provenance_graph,
+                [failing_doc],
+                [],
+            )
+
+        # After failure, DB should not have any documents, provenance_nodes, or conductor_state rows
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        chat_count = con.execute("SELECT COUNT(*) FROM chat_history;").fetchone()
+        doc_count = con.execute("SELECT COUNT(*) FROM documents;").fetchone()
+        node_count = con.execute("SELECT COUNT(*) FROM provenance_nodes;").fetchone()
+        state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+
+        assert isinstance(chat_count, tuple)
+        assert isinstance(doc_count, tuple)
+        assert isinstance(node_count, tuple)
+        assert isinstance(state_count, tuple)
+
+        # Chat history is intentionally persisted in its own transaction.
+        self.assertEqual(chat_count[0], 2)
+        self.assertEqual(doc_count[0], 0)
+        self.assertEqual(node_count[0], 0)
+        self.assertEqual(state_count[0], 0)
+        con.close()
+
+    def test_recovery_after_failure(self):
+        """Test that after a failed persist_session, subsequent calls succeed and DB is consistent."""
+        conductor_state = ConductorState()
+        provenance_graph = ProvenanceGraph(self.logger)
+
+        table = pd.DataFrame({"a": [1, 2]})
+        os.makedirs(os.path.join(self.tmpdir, "tables"), exist_ok=True)
+        table.to_csv(os.path.join(self.tmpdir, "tables", "table.csv"), index=False)
+        self.db.ingest_dataset("test_ds", os.path.join(self.tmpdir, "tables"))
+
+        failing_doc = Table(
+            doc_id="doc_fail",
+            retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+            content=table,
+            metadata={"dataset_name": "test_ds"},
+        )
+
+        # Simulate failure
+        with patch.object(
+            self.db,
+            "_PneumaDB__insert_document",
+            side_effect=Exception("Simulated failure"),
+        ):
+            self.db.persist_session(
+                self.user_id,
+                self.chat_id,
+                "User input",
+                "System response",
+                conductor_state,
+                provenance_graph,
+                [failing_doc],
+                [],
+            )
+
+        # Now call persist_session normally
+        self.db.persist_session(
+            self.user_id,
+            self.chat_id,
+            "User input",
+            "System response",
+            conductor_state,
+            provenance_graph,
+            [],
+            [],
+        )
+
+        # DB should now have chat_history and conductor_state rows
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        chat_count = con.execute("SELECT COUNT(*) FROM chat_history;").fetchone()
+        state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+
+        assert isinstance(chat_count, tuple)
+        assert isinstance(state_count, tuple)
+
+        # 2 messages from failed call + 2 from successful call
+        self.assertEqual(chat_count[0], 4)
+        self.assertEqual(state_count[0], 1)
+        con.close()
 
 
 if __name__ == "__main__":

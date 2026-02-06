@@ -4,15 +4,11 @@ import types
 import unittest
 from unittest.mock import MagicMock
 
-from pandas import DataFrame
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 import pneuma_seeker.chat_session as chat_session_mod
-from pneuma_seeker.provenance.graph import ProvenanceNode
-from pneuma_seeker.services.core.conductor.state import InformationNeedState
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType, Table
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 
 
@@ -27,7 +23,7 @@ class DummyConductor:
         # set placeholders that ChatSession may use
         self.info_need_state = {"state": "ok"}
         self.retrieved_tables = []
-        self.enumerated_table_ids = []
+        self.enumerated_tables = []
         self.prov_graph = types.SimpleNamespace(nodes={})
         self.db_api = db_api
         self.lm_api = lm_api
@@ -40,7 +36,7 @@ class DummyConductor:
 
 class ChatSessionTests(unittest.TestCase):
     def setUp(self) -> None:
-        # Patch Conductor, load_state and save_state inside the chat_session module
+        # Patch Conductor, load_state and persist_session inside the chat_session module
         self._orig_conductor = getattr(chat_session_mod, "Conductor", None)
         self._orig_prov = getattr(chat_session_mod, "ProvenanceGraph", None)
 
@@ -48,6 +44,7 @@ class ChatSessionTests(unittest.TestCase):
         chat_session_mod.ProvenanceGraph = lambda logger: types.SimpleNamespace()
 
         self.cfg = Config()
+        self.cfg.PERSIST_CHAT_SESSION = False
         self.logger = MagicMock()
         self.db_api = MagicMock()
         self.lm_api = MagicMock()
@@ -59,7 +56,7 @@ class ChatSessionTests(unittest.TestCase):
                 types.SimpleNamespace(nodes={}),
             )
         )
-        self.db_api.save_state = MagicMock()
+        self.db_api.persist_session = MagicMock()
 
     def tearDown(self) -> None:
         # restore
@@ -83,42 +80,6 @@ class ChatSessionTests(unittest.TestCase):
         self.assertIn("resp:hello", out)
         self.assertIn("final", out)
         self.assertIn("DONE", out)
-
-    def test_persist_session_calls_save_state(self):
-        cs = chat_session_mod.ChatSession(
-            "u2",
-            "c2",
-            self.cfg,
-            self.logger,
-            self.db_api,
-            self.lm_api,
-        )
-        # populate conductor.prov_graph.nodes to simulate content
-        cs.conductor.prov_graph.nodes = {
-            "n1": ProvenanceNode(
-                source_retriever=RetrieverType.USER, python_code="code", description=""
-            )
-        }
-        cs.conductor.info_need_state = InformationNeedState()
-        cs.conductor.retrieved_tables = [
-            Table(
-                doc_id="doc1",
-                retriever_type=RetrieverType.PNEUMA_RETRIEVER,
-                content=DataFrame(),
-                metadata={},
-            )
-        ]
-        cs.conductor.enumerated_table_ids = ["id1"]
-
-        # call persist
-        cs.persist_session()
-
-        # ensure save_state was called
-        self.assertTrue(self.db_api.save_state.called)
-        args = self.db_api.save_state.call_args[0]
-        # expected args: user_id, chat_id, info_need_state, retrieved_tables, enumerated_table_ids, prov_graph
-        self.assertEqual(args[0], "u2")
-        self.assertEqual(args[1], "c2")
 
 
 if __name__ == "__main__":

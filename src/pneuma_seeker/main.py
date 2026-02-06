@@ -125,9 +125,9 @@ async def execute_code(user_id: str, chat_id: str):
         execution_result = conductor.action_set.execute_code(
             {
                 doc_id: doc.content
-                for doc_id, doc in conductor.info_need_state.T.items()
+                for doc_id, doc in conductor.state.T.items()
             },
-            conductor.info_need_state.S,
+            conductor.state.S,
         )
         return serialize_dataframe(execution_result, config.TABLE_MAX_ROWS_DISPLAY)
     except Exception as e:
@@ -190,12 +190,12 @@ async def download_chat_pdf(data: dict):
 @app.post("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_combined_html(request: Request, user_id: str, chat_id: str, data: dict):
     conductor = session_manager.get_chat_session(user_id, chat_id).conductor
-    state = conductor.info_need_state.get_current_state_instance(
+    state = conductor.state.get_current_state_instance(
         config.TABLE_MAX_ROWS_DISPLAY
     )
 
     prov_explanation = "<strong>T</strong> is not materialized yet."
-    if conductor.info_need_state.is_T_materialized:
+    if conductor.state.is_T_materialized:
         prov_explanation_markdown = (
             conductor.materializer.prov_graph.get_graph_explanation()
         )

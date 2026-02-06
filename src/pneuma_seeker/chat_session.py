@@ -30,6 +30,7 @@ class ChatSession:
         self.logger = logger
         self.db_api = db_api
         self.language_model_api = language_model_api
+        self.messages: list[LLMMessage] = []
 
         self.conductor = Conductor(
             self.user_id,
@@ -42,26 +43,44 @@ class ChatSession:
         )
 
         if self.config.PERSIST_CHAT_SESSION:
-            info_need_state, retrieved_tables, enumerated_table_ids, prov_graph = (
-                self.db_api.load_state(
-                    self.user_id,
-                    self.chat_id,
-                )
+            (
+                messages,
+                conductor_state,
+                provenance_graph,
+                retrieved_tables,
+                enumerated_tables,
+                web_search_result,
+                web_crawl_result,
+                join_paths,
+            ) = self.db_api.load_session(
+                self.user_id,
+                self.chat_id,
             )
-
-            self.conductor.info_need_state = info_need_state
+            self.messages = messages
+            self.conductor.state = conductor_state
+            self.conductor.prov_graph = provenance_graph
             self.conductor.retrieved_tables = retrieved_tables
-            self.conductor.enumerated_table_ids = enumerated_table_ids
-            self.conductor.prov_graph = prov_graph
+            self.conductor.enumerated_tables = enumerated_tables
+            self.conductor.web_search_result = web_search_result
+            self.conductor.web_crawl_result = web_crawl_result
+            self.conductor.join_paths = join_paths
 
     def chat(
         self,
-        messages: list[LLMMessage],
+        messages: list[LLMMessage] | None = None,
         external_data_paths: list[str] | None = None,
     ):
         """Processes chat messages and yields responses from the Conductor."""
         external_data_paths = external_data_paths or []
         interaction_history: list[UserConductorInteraction] = []
+
+        if not messages and len(self.messages) == 0:
+            raise ValueError("No messages provided for chat session.")
+        if not messages:
+            messages = self.messages
+        else:
+            self.messages = messages
+
         for i in range(0, len(messages) - 1, 2):
             if (
                 messages[i]["role"] == Role.USER.value
@@ -86,20 +105,30 @@ class ChatSession:
     def persist_session(self):
         """Callback to persist the current state of Provenance Graph."""
         try:
-            node_count = len(self.conductor.prov_graph.nodes)
-            self.conductor.logger.info(
-                f"[Persist] Saving provenance graph with {node_count} nodes"
-            )
-            self.db_api.save_state(
+            self.__log(f"Persisting session...")
+
+            new_user_input = ""
+            new_system_response = ""
+            if len(self.messages) >= 2:
+                new_user_input = self.messages[-2]["content"]
+                new_system_response = self.messages[-1]["content"]
+
+            self.db_api.persist_session(
                 self.user_id,
                 self.chat_id,
-                self.conductor.info_need_state,
-                self.conductor.retrieved_tables,
-                self.conductor.enumerated_table_ids,
+                new_user_input,
+                new_system_response,
+                self.conductor.state,
                 self.conductor.prov_graph,
+                self.conductor.retrieved_tables,
+                self.conductor.enumerated_tables,
+                self.conductor.web_search_result,
+                self.conductor.web_crawl_result,
+                self.conductor.join_paths,
             )
-            self.conductor.logger.info("[ChatSession] State persisted successfully.")
+            self.__log("State persisted successfully.")
         except Exception as e:
-            self.conductor.logger.exception(
-                f"[ChatSession] Failed to persist state: {e}"
-            )
+            self.__log(f"Failed to persist state: {e}")
+
+    def __log(self, message: str):
+        self.logger.info(f"[ChatSession] {message}")

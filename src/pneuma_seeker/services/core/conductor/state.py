@@ -2,7 +2,7 @@ from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 from pneuma_seeker.shared.table_serializer import serialize_dataframe
 
 
-class InformationNeedState:
+class ConductorState:
     """
     Represents a user's information need as a pair (T,S), where T is a set of
     tables and S is a Python script to be executed over them. For example,
