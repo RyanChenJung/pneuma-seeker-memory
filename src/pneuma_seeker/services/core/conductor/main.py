@@ -141,6 +141,7 @@ class Conductor:
             and current_step < self.config.MAX_CONDUCTOR_STEPS
         ):
             current_step += 1
+            yield f"LOG: [Step {current_step} / up to {self.config.MAX_CONDUCTOR_STEPS}] Planning the next sequence of actions..."
             self.__log(
                 f"Asking the model to produce a sequence of actions (Current step: {current_step}/{self.config.MAX_CONDUCTOR_STEPS})..."
             )
@@ -175,7 +176,6 @@ class Conductor:
             )
 
             try:
-                yield "LOG: Parsing plan..."
                 self.__log("==> Parsing plan...")
                 plan: list[dict[str, Any]] = parse_json(full_response).get("plan", [])
 
