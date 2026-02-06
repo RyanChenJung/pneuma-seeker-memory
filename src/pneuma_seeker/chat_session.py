@@ -60,7 +60,7 @@ class ChatSession:
             )
             self.messages = messages
             self.conductor.state = conductor_state
-            self.conductor.prov_graph = provenance_graph
+            self.conductor.set_prov_graph(provenance_graph)
             self.conductor.retrieved_tables = retrieved_tables
             self.conductor.enumerated_tables = enumerated_tables
             self.conductor.web_search_result = web_search_result

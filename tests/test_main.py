@@ -123,10 +123,10 @@ class ServerEndpointTests(unittest.TestCase):
         finally:
             main.session_manager.get_chat_session = original_get
 
-    def test_combined_html_calls_prov_explanation_and_renders(self):
+    def test_combined_html_calls_prov_steps_and_renders(self):
         # Prepare a chat_interface mock where T is materialized and prov_graph returns markdown
         prov_graph = MagicMock()
-        prov_graph.get_graph_explanation.return_value = "**md** code"
+        prov_graph.get_graph_explanation.return_value = ["**md** code"]
 
         materializer = MagicMock()
         materializer.prov_graph = prov_graph
@@ -149,11 +149,11 @@ class ServerEndpointTests(unittest.TestCase):
         original_templates = main.templates
 
         def fake_template_response(template_name, context):
-            # Ensure prov_explanation was computed from prov_graph markdown
-            self.assertIn("prov_explanation", context)
+            # Ensure prov_steps was computed from prov_graph markdown
+            self.assertIn("prov_steps", context)
             # It should include HTML converted from markdown (bold -> <strong>) or at least the markdown content
-            self.assertTrue("md" in context["prov_explanation"])
-            return HTMLResponse(content=context["prov_explanation"], status_code=200)
+            self.assertTrue("md" in context["prov_steps"][0])
+            return HTMLResponse(content="\n".join(context["prov_steps"]), status_code=200)
 
         # Replace the templates object with a minimal object exposing TemplateResponse
         main.templates = types.SimpleNamespace(
@@ -167,7 +167,7 @@ class ServerEndpointTests(unittest.TestCase):
             }
             r = self.client.post("/combined/html/u1/c1", json=payload)
             self.assertEqual(r.status_code, 200)
-            # Body should contain the prov_explanation we returned
+            # Body should contain the prov_steps we returned
             self.assertIn("md", r.text)
             # ensure the prov_graph method was called
             prov_graph.get_graph_explanation.assert_called()
@@ -295,9 +295,9 @@ class ServerEndpointTests(unittest.TestCase):
         original_templates = main.templates
 
         def fake_template_response(template_name, context):
-            self.assertIn("prov_explanation", context)
-            self.assertIn("not materialized", context["prov_explanation"])
-            return HTMLResponse(content=context["prov_explanation"], status_code=200)
+            self.assertIn("prov_steps", context)
+            self.assertIn("not materialized", context["prov_steps"][-1])
+            return HTMLResponse(content="\n".join(context["prov_steps"]), status_code=200)
 
         main.templates = types.SimpleNamespace(TemplateResponse=fake_template_response)
 

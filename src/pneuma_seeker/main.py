@@ -194,14 +194,18 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
         config.TABLE_MAX_ROWS_DISPLAY
     )
 
-    prov_explanation = "<strong>T</strong> is not materialized yet."
+    prov_steps: list[str] = ["<strong>T</strong> is not materialized yet."]
     if conductor.state.is_T_materialized:
-        prov_explanation_markdown = (
+        prov_explanation_steps_markdown = (
             conductor.materializer.prov_graph.get_graph_explanation()
         )
-        prov_explanation = markdown.markdown(
-            prov_explanation_markdown, extensions=["fenced_code"]
-        )
+        if prov_explanation_steps_markdown:
+            prov_steps = [
+                markdown.markdown(step_md, extensions=["fenced_code"])
+                for step_md in prov_explanation_steps_markdown
+            ]
+        else:
+            prov_steps = ["No materialization steps recorded for <strong>T</strong>."]
 
     messages = data.get("messages", [])
     model = data.get("model", "assistant")
@@ -216,7 +220,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
         {
             "request": request,
             "state": state,
-            "prov_explanation": prov_explanation,
+            "prov_steps": prov_steps,
             "user_id": user_id,
             "chat_id": chat_id,
             "model": model,

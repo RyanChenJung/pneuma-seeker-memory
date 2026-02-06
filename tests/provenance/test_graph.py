@@ -50,15 +50,32 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.assertIn(parent, child.parents)
         self.logger.info.assert_called()
 
-    def test_reset_for_materialization(self):
-        """Tests resetting the graph for materialization."""
+    def test_reset_materialization_nodes(self):
+        """reset_materialization_nodes should remove only MATERIALIZER nodes."""
         node_user = ProvenanceNode(RetrieverType.USER, "u", "")
         node_web = ProvenanceNode(RetrieverType.WEB_SEARCH, "w", "")
+        node_mat = ProvenanceNode(RetrieverType.MATERIALIZER, "m", "")
+
         self.graph.add_node(node_user)
         self.graph.add_node(node_web)
-        self.graph.reset_for_materialization()
+        self.graph.add_node(node_mat)
+        self.graph.connect(node_web, node_mat)
+        self.graph.connect(node_user, node_mat)
+
+        self.graph.reset_materialization_nodes()
+
+        # USER + WEB_SEARCH nodes should remain.
         self.assertIn(node_user.id, self.graph.nodes)
-        self.assertNotIn(node_web.id, self.graph.nodes)
+        self.assertIn(node_web.id, self.graph.nodes)
+        # MATERIALIZER node should be removed.
+        self.assertNotIn(node_mat.id, self.graph.nodes)
+        # Edges to removed nodes should be cleaned.
+        kept_user = self.graph.get_node_by_id(node_user.id)
+        kept_web = self.graph.get_node_by_id(node_web.id)
+        self.assertIsNotNone(kept_user)
+        self.assertIsNotNone(kept_web)
+        self.assertEqual(getattr(kept_user, "children", []), [])  # type: ignore
+        self.assertEqual(getattr(kept_web, "children", []), [])  # type: ignore
         self.logger.info.assert_called()
 
     def test_get_node_by_id_and_filters(self):
@@ -107,7 +124,7 @@ class ProvenanceGraphTests(unittest.TestCase):
         self.assertTrue(html_output.strip().startswith("<!DOCTYPE html>") or "<html" in html_output)
 
     def test_get_graph_explanation(self):
-        """Tests the textual explanation returned by get_graph_explanation."""
+        """Tests the explanation steps returned by get_graph_explanation."""
         # Create a used data node and a processing (materializer) node
         used_node = ProvenanceNode(RetrieverType.WEB_SEARCH, "df = load_data()", "")
         materializer_node = ProvenanceNode(RetrieverType.MATERIALIZER, "result = process(df)", "")
@@ -119,15 +136,17 @@ class ProvenanceGraphTests(unittest.TestCase):
 
         explanation = self.graph.get_graph_explanation()
 
-        # The used data python code should appear in a code block
-        self.assertIn(f"```python\n{used_node.python_code}\n```", explanation)
+        # Now returns a list of Markdown step strings.
+        self.assertIsInstance(explanation, list)
+        self.assertGreaterEqual(len(explanation), 1)
+        step_1 = explanation[0]
 
         # The materializer node should be listed as a processing step
-        self.assertIn("Step 1", explanation)
-        self.assertIn(materializer_node.python_code, explanation)
+        self.assertIn("Step 1", step_1)
+        self.assertIn(materializer_node.python_code, step_1)
 
         # The default root node code should not be listed under used data
-        self.assertNotIn(self.graph.ROOT_NODE_CODE, explanation)
+        self.assertNotIn(self.graph.ROOT_NODE_CODE, step_1)
 
     def test_get_graph_code_concatenation_simple(self):
         """Tests simple linear graph code concatenation."""
@@ -233,21 +252,21 @@ class ProvenanceGraphTests(unittest.TestCase):
         result = self.graph.get_nodes({"python_code": "unique_code", "source_retriever": RetrieverType.USER})
         self.assertIn(node, result)
 
-    def test_reset_for_materialization_cleans_edges(self):
-        """reset_for_materialization should remove non-USER nodes and strip edges to them."""
+    def test_reset_materialization_nodes_cleans_edges(self):
+        """reset_materialization_nodes should strip edges to removed MATERIALIZER nodes."""
         user_node = ProvenanceNode(RetrieverType.USER, "u", "")
-        non_user = ProvenanceNode(RetrieverType.WEB_SEARCH, "w", "")
-        non_user.add_child(user_node)
+        materializer = ProvenanceNode(RetrieverType.MATERIALIZER, "m", "")
+        materializer.add_child(user_node)
         self.graph.add_node(user_node)
-        self.graph.add_node(non_user)
+        self.graph.add_node(materializer)
 
         # Ensure the parent relationship exists before reset
-        self.assertIn(non_user, user_node.parents)
+        self.assertIn(materializer, user_node.parents)
 
-        self.graph.reset_for_materialization()
+        self.graph.reset_materialization_nodes()
 
-        # non_user should be removed
-        self.assertNotIn(non_user.id, self.graph.nodes)
+        # materializer should be removed
+        self.assertNotIn(materializer.id, self.graph.nodes)
 
         # user_node should remain, but should no longer have the non-user parent
         kept = self.graph.get_node_by_id(user_node.id)

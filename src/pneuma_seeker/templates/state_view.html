@@ -50,14 +50,16 @@
     .carousel-container {
       position: relative;
       display: flex;
-      align-items: center;
-      gap: 1rem;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
     }
 
     .carousel-tables {
       flex: 1;
       overflow: hidden;
       border-radius: 6px;
+      width: 100%;
     }
 
     .carousel-inner-tables {
@@ -104,6 +106,13 @@
       white-space: nowrap;
       min-width: 30px;
       text-align: center;
+    }
+
+    .carousel-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
     }
 
     .table-title {
@@ -199,6 +208,36 @@
       margin: 0.75rem 0;
       border-top: 1px solid #e9ecef;
     }
+
+    /* --- Provenance carousel --- */
+    .prov-carousel-viewport {
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    .prov-carousel-inner {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+
+    .prov-carousel-item {
+      width: 100%;
+      min-width: 100%;
+      flex-shrink: 0;
+    }
+
+    .prov-step-panel {
+      max-height: 420px;
+      overflow: auto;
+    }
+
+    .prov-carousel-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
   </style>
 </head>
 
@@ -237,7 +276,10 @@
         data-bs-target="#retrievedTablesCardBody" aria-expanded="false" aria-controls="retrievedTablesCardBody">
         <div class="d-flex align-items-center">
           <i class="bi bi-files me-2"></i>
-          Retrieved Tables
+          <span class="me-2">Retrieved Tables</span>
+          <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+            title="A set of retrieved tables from Pneuma-Seeker's indices."
+            style="font-size: 0.9rem; cursor: help;"></i>
         </div>
         <i class="bi bi-chevron-down small"></i>
       </div>
@@ -245,17 +287,19 @@
       <div id="retrievedTablesCardBody" class="collapse">
         <div class="card-body">
           <div class="carousel-container">
-            <button id="carousel-prev-btn" class="carousel-nav-btn" aria-label="Previous table">
-              <i class="bi bi-chevron-left"></i>
-            </button>
             <div class="carousel-tables">
               <div id="retrieved-tables" class="carousel-inner-tables"></div>
             </div>
-            <button id="carousel-next-btn" class="carousel-nav-btn" aria-label="Next table">
-              <i class="bi bi-chevron-right"></i>
-            </button>
-            <div class="carousel-counter">
-              <span id="carousel-counter">0/0</span>
+            <div class="carousel-footer">
+              <button id="carousel-prev-btn" class="carousel-nav-btn" aria-label="Previous table">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <div class="carousel-counter">
+                <span id="carousel-counter">0/0</span>
+              </div>
+              <button id="carousel-next-btn" class="carousel-nav-btn" aria-label="Next table">
+                <i class="bi bi-chevron-right"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -268,7 +312,10 @@
         data-bs-target="#pneumaCardBody" aria-expanded="true" aria-controls="pneumaCardBody">
         <div class="d-flex align-items-center">
           <i class="bi bi-database-fill me-2"></i>
-          State (T, S)
+          <span class="me-2">State (T, S)</span>
+          <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+            title="A representation of your information need in Pneuma-Seeker."
+            style="font-size: 0.9rem; cursor: help;"></i>
         </div>
         <i class="bi bi-chevron-down small"></i>
       </div>
@@ -282,7 +329,7 @@
                 <i class="bi bi-table"></i>
                 <span class="ms-2">T (Target Tables)
                   <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
-                    title="A set of relevant tables (shown with sample rows) for your information need."
+                    title="A set of relevant tables (shown with sample rows)."
                     style="font-size: 0.9rem; cursor: help;"></i>
                 </span>
                 <span class="badge ms-2 badge-materialized">Materialized: <span
@@ -298,7 +345,7 @@
             <i class="bi bi-file-earmark-code-fill"></i>
             <span class="ms-2">S (Python Script)
               <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
-                title="A Python script that runs on the target tables (T) to satisfy your information need."
+                title="A Python script that runs on the target tables (T)."
                 style="font-size: 0.9rem; cursor: help;"></i>
             </span>
             <span class="badge ms-2 badge-executed">Executed: <span id="script-status">No</span></span>
@@ -333,7 +380,10 @@
         data-bs-target="#provCardBody" aria-expanded="true" aria-controls="provCardBody">
         <div class="d-flex align-items-center">
           <i class="bi bi-code-slash me-2"></i>
-          Provenance of T
+          <span class="me-2">Provenance of T</span>
+          <i class="bi bi-question-circle ms-1" data-bs-toggle="tooltip"
+            title="This section describes how T was generated, including all source data and processing steps."
+            style="font-size: 0.9rem; cursor: help;"></i>
         </div>
         <i class="bi bi-chevron-down small"></i>
       </div>
@@ -341,7 +391,20 @@
       <div id="provCardBody" class="collapse show">
         <div class="card-body">
           <div id="prov-code-container" aria-live="polite" aria-atomic="true">
-            <div id="prov-code-pre" class="prov-html"></div>
+            <div class="prov-carousel-viewport">
+              <div id="prov-carousel-inner" class="prov-carousel-inner"></div>
+            </div>
+            <div class="prov-carousel-footer">
+              <button id="prov-prev-btn" class="carousel-nav-btn" aria-label="Previous provenance step">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <div class="carousel-counter">
+                <span id="prov-carousel-counter">0/0</span>
+              </div>
+              <button id="prov-next-btn" class="carousel-nav-btn" aria-label="Next provenance step">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -356,6 +419,7 @@
     const userId = "{{ user_id }}";
     const chatId = "{{ chat_id }}";
     const retrievedTables = {{ retrieved_tables | tojson | safe }};
+    const provSteps = {{ prov_steps | tojson | safe }};
 
     // Update statuses
     document.getElementById("materialized-status").textContent = state.is_T_materialized ? "Yes" : "No";
@@ -740,10 +804,61 @@
       }
     });
 
-    // Render Provenance Code (now properly formatted as HTML)
-    const provCodePre = document.getElementById("prov-code-pre");
-    const provCode = {{ prov_explanation | tojson | safe }};
-    provCodePre.innerHTML = typeof provCode === "string" ? provCode : (provCode ? String(provCode) : "");
+    // Render Provenance Steps (horizontal carousel)
+    const provCarouselInner = document.getElementById("prov-carousel-inner");
+    const provPrevBtn = document.getElementById("prov-prev-btn");
+    const provNextBtn = document.getElementById("prov-next-btn");
+    const provCounterSpan = document.getElementById("prov-carousel-counter");
+
+    const provStepList = Array.isArray(provSteps) ? provSteps : (provSteps ? [String(provSteps)] : []);
+    let currentProvIndex = 0;
+
+    provCarouselInner.innerHTML = "";
+    provStepList.forEach((stepHtml, idx) => {
+      const item = document.createElement("div");
+      item.className = "prov-carousel-item";
+
+      const panel = document.createElement("div");
+      panel.className = "prov-step-panel";
+      panel.setAttribute("role", "group");
+      panel.setAttribute("aria-label", `Provenance step ${idx + 1}`);
+      panel.innerHTML = typeof stepHtml === "string" ? stepHtml : String(stepHtml);
+
+      item.appendChild(panel);
+      provCarouselInner.appendChild(item);
+    });
+
+    function updateProvCarousel() {
+      const offset = -currentProvIndex * 100;
+      provCarouselInner.style.transform = `translateX(${offset}%)`;
+
+      const total = provStepList.length;
+      provPrevBtn.disabled = currentProvIndex === 0;
+      provNextBtn.disabled = currentProvIndex >= total - 1;
+      provCounterSpan.textContent = total > 0 ? `${currentProvIndex + 1}/${total}` : "0/0";
+    }
+
+    provPrevBtn.addEventListener("click", () => {
+      if (currentProvIndex > 0) {
+        currentProvIndex--;
+        updateProvCarousel();
+      }
+    });
+
+    provNextBtn.addEventListener("click", () => {
+      if (currentProvIndex < provStepList.length - 1) {
+        currentProvIndex++;
+        updateProvCarousel();
+      }
+    });
+
+    if (provStepList.length > 0) {
+      updateProvCarousel();
+    } else {
+      provPrevBtn.disabled = true;
+      provNextBtn.disabled = true;
+      provCounterSpan.textContent = "0/0";
+    }
   </script>
 </body>
 

@@ -96,6 +96,16 @@ class Conductor:
         self.actions: list[str] = []
         self.llm_messages: list[LLMMessage] = []
 
+    def set_prov_graph(self, prov_graph: ProvenanceGraph) -> None:
+        """Replace the provenance graph and propagate it to subcomponents.
+
+        This is important when restoring a session from persistence; the ActionSet
+        and Materializer both keep their own references.
+        """
+        self.prov_graph = prov_graph
+        self.action_set.prov_graph = prov_graph
+        self.materializer.prov_graph = prov_graph
+
     def chat(
         self,
         user_input: str,

@@ -186,7 +186,7 @@ class Materializer:
                 )
                 step_count -= 1
                 continue
-            
+
             self.__log(f"==> Executing the planned actions: {plan}...")
             for action_plan in plan:
                 action_name: str = action_plan.get("action", "")
@@ -355,7 +355,7 @@ class Materializer:
                     python_code=self.action_set.generate_view_textual_document_code(
                         self.state.web_search_result
                     ),
-                    description=f"Searches the web using this query: {prompt}.",
+                    description=f"Searches the web using this query:\n{prompt}",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_search_result.last_node_id = new_node.id
@@ -399,7 +399,7 @@ class Materializer:
                     python_code=self.action_set.generate_view_textual_document_code(
                         self.state.web_crawl_result
                     ),
-                    description=f"Crawls the web page with this URL.",
+                    description=f"Crawls this web page:\n{prompt}",
                 )
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_crawl_result.last_node_id = new_node.id
@@ -427,7 +427,7 @@ class Materializer:
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.ENUMERATOR,
                         python_code=read_code,
-                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern: {pattern}.",
+                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern:\n{pattern}.",
                     )
                     self.prov_graph.add_node(new_node, True)
 
@@ -578,7 +578,7 @@ class Materializer:
                         "",
                     )
 
-                    child_node_desc = f"Directly selects a table (ID: `{table_id_to_project}`; columns: {relevant_columns}) to form a target table: `{target_table_id}`"
+                    child_node_desc = f'Projects a table\n- ID: `{table_id_to_project}`\n- columns: {", ".join(f"`{col}`" for col in relevant_columns)}\ninto a target table:\n`{target_table_id}`'
                     if set(relevant_columns) != set(
                         self.state.T[target_table_id].columns
                     ):
@@ -722,7 +722,7 @@ class Materializer:
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=sem_col_code,
-                    description=f"Semantically generates a column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: `{table_relevant_columns}`.",
+                    description=f"Uses an LLM to generate column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: {', '.join(f'`{col}`' for col in table_relevant_columns)}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_id is not None:
@@ -883,6 +883,15 @@ class Materializer:
                     )
                     return
 
+                if len(left_table) > len(right_table):
+                    # Swap to make sure the smaller table is on the left for better performance
+                    left_table, right_table = right_table, left_table
+                    left_table_doc, right_table_doc = right_table_doc, left_table_doc
+                    relevant_left_cols, relevant_right_cols = (
+                        relevant_right_cols,
+                        relevant_left_cols,
+                    )
+
                 joined_table = self.action_set.join_semantic(
                     left_table,
                     right_table,
@@ -919,7 +928,7 @@ class Materializer:
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=join_code,
-                    description=f"Semantically joins tables `{left_table_id}` and `{right_table_id}` with `top-k = {self.config.SEMANTIC_JOIN_TOP_K}`.",
+                    description=f"Semantically joins `{left_table_id}` and `{right_table_id}`. For each row in the left table, keeps the `top-{self.config.SEMANTIC_JOIN_TOP_K}` matches from the right table (i.e., the most similar rows based on syntactic and semantic similarity). Similarity is computed based on these columns:\n- Left table: {', '.join(f'`{col}`' for col in relevant_left_cols)}\n- Right table: {', '.join(f'`{col}`' for col in relevant_right_cols)}",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_1_id is not None:
@@ -988,6 +997,17 @@ class Materializer:
                         if parent_node is not None:
                             parent_nodes.append(parent_node)
 
+                    code_nl_summary = "".join(
+                        self.language_model_api.chat(
+                            [
+                                LLMMessage(
+                                    role=Role.SYSTEM.value,
+                                    content=f"Summarize in 1-3 sentences what the following Python code does, especially in terms of how it uses the tables as inputs, and what it produces as output. Use the following style for the summary: \nExecutes Python code to produce a new table named {assign_to} by <summary of the code's operations on the used tables>.",
+                                )
+                            ]
+                        )
+                    )
+
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
                         python_code=self.action_set.append_comment_to_existing_code(
@@ -997,7 +1017,7 @@ class Materializer:
                                 f"{assign_to}.csv",
                             )}",
                         ),
-                        description="Executes Python code.",
+                        description=code_nl_summary,
                     )
                     self.prov_graph.add_node(new_node, True)
                     for parent_node in parent_nodes:
@@ -1192,7 +1212,7 @@ class Materializer:
         """Reset the state and clear intermediate files."""
         self.__log("Resetting materializer...")
         self.state.reset()
-        self.prov_graph.reset_for_materialization()
+        self.prov_graph.reset_materialization_nodes()
         self.__clear_csv_files()
         self.actions = []
         self.llm_messages = []

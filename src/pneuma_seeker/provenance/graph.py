@@ -1,12 +1,11 @@
 # src/pneuma_seeker/provenance/graph.py
 import html
-from logging import Logger
 import uuid
+from logging import Logger
 
 from pyvis.network import Network
 
 from pneuma_seeker.shared.schemas.core.ir_system import RetrieverType
-
 
 
 class ProvenanceNode:
@@ -185,7 +184,9 @@ class ProvenanceGraph:
 
         # Detect cycles (non-DAG)
         if visited_count != len(self.nodes):
-            self.logger.warning("[PROV GRAPH] Cycle detected during topological ordering!")
+            self.logger.warning(
+                "[PROV GRAPH] Cycle detected during topological ordering!"
+            )
 
         return ordered_nodes
 
@@ -198,48 +199,30 @@ class ProvenanceGraph:
         code_sections = [node.python_code for node in ordered_nodes if node.python_code]
         return "\n\n".join(code_sections)
 
-    def get_graph_explanation(self) -> str:
-        """Returns a textual explanation of the provenance graph."""
+    def get_graph_explanation(self) -> list[str]:
+        """Return a list of step explanations for the provenance graph.
+
+        Each list item represents one materialization step in Markdown.
+        This format is friendlier for UIs that want to page/carousel through
+        steps horizontally instead of rendering a single long document.
+        """
         ordered_nodes = self.topological_sort()
-        used_data_nodes: list[ProvenanceNode] = []
-        processing_steps_nodes: list[ProvenanceNode] = []
-        for node in ordered_nodes:
-            if node.source_retriever in [
-                RetrieverType.PNEUMA_RETRIEVER,
-                RetrieverType.USER,
-                RetrieverType.ENUMERATOR,
-                RetrieverType.DOCUMENT_DB,
-                RetrieverType.WEB_SEARCH,
-            ]:
-                if node.source_retriever == RetrieverType.USER and node.python_code == self.ROOT_NODE_CODE:
-                    continue  # Skip the root node
-                if node.children:  # Only include if it has downstream usage
-                    used_data_nodes.append(node)
-            if node.source_retriever == RetrieverType.MATERIALIZER:
-                processing_steps_nodes.append(node)
+        processing_steps_nodes: list[ProvenanceNode] = [
+            node
+            for node in ordered_nodes
+            if node.source_retriever == RetrieverType.MATERIALIZER
+        ]
 
-        textual_explanations: list[str] = []
-        textual_explanations.append(
-            f"""This document describes how **T** was generated, including all source data and processing steps.
-
----
-
-## Used Data
-
-The following source data was used:"""
-        )
-        for used_data_node in used_data_nodes:
-            textual_explanations.append(f"```python\n{used_data_node.python_code}\n```")
-        
-        textual_explanations.append(
-            """## Data Processing Steps\nThe following processing steps were applied to the source data to generate **T**:"""
-        )
+        steps: list[str] = []
         for step_number, processing_step_node in enumerate(processing_steps_nodes):
-            textual_explanations.append(
-                f"### Step {step_number + 1}: {processing_step_node.description}\n```python\n{processing_step_node.python_code}\n```"
+            step_md = (
+                f"# Step {step_number + 1}\n\n"
+                f"{processing_step_node.description}\n\n"
+                f"```python\n{processing_step_node.python_code}\n```"
             )
+            steps.append(step_md)
 
-        return "\n".join(textual_explanations)
+        return steps
 
     def to_text(self) -> str:
         """Returns a textual representation of the graph."""
@@ -295,12 +278,18 @@ The following source data was used:"""
 
         return net.generate_html()
 
-    def reset_for_materialization(self):
-        """Resets the graph to include only USER retriever nodes and USER-USER connections."""
+    def reset_materialization_nodes(self):
+        """Removes previous materialization (processing) nodes.
+
+        This is intended to be called at the beginning of a new materialization run,
+        so that the resulting provenance reflects the latest pipeline while still
+        keeping upstream/source nodes (retrieved tables, web results, user-provided
+        context, etc.).
+        """
         keep = {
             node_id: node
             for node_id, node in self.nodes.items()
-            if node.source_retriever == RetrieverType.USER
+            if node.source_retriever != RetrieverType.MATERIALIZER
         }
 
         for node in keep.values():
@@ -308,4 +297,6 @@ The following source data was used:"""
             node.children = [c for c in node.children if c.id in keep]
 
         self.nodes = keep
-        self.logger.info("[PROV GRAPH] The graph has been reset successfully.")
+        self.logger.info(
+            "[PROV GRAPH] Materialization nodes cleared (non-materializer nodes kept)."
+        )

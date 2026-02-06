@@ -472,6 +472,7 @@ class PneumaDB:
             )
 
             # Insert all nodes first to satisfy FK constraints.
+            self.__log(f"Persisting provenance graph with {len(provenance_graph.nodes)} nodes...")
             for provenance_node in provenance_graph.nodes.values():
                 con.execute(
                     """
@@ -527,6 +528,8 @@ class PneumaDB:
                             provenance_node.id,
                         ),
                     )
+
+            self.__log(f"Persisting {len(retrieved_tables)} retrieved tables...")
             for i in retrieved_tables:
                 self.__insert_document(
                     con,
