@@ -1,1 +1,0 @@
-tenant_id,id,type,delay,timeout,max_retries,http_method,url_path,expected_codes,admin_state_up,provisioning_status,name

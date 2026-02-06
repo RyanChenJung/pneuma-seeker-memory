@@ -1,4 +1,0 @@
-tenant_id,id,type,delay,timeout,max_retries,http_method,url_path,expected_codes,admin_state_up
-98333a1a28e746fa8c629c83a818ad57,12373804-bd7c-4ea0-86c1-a74985093e9d,HTTP,3,3,3,GET,/,200,1
-0fe46c69adaf4d2fb01401e0dd952815,a9ec94c3-756f-40ad-ac48-1570196fd8fc,PING,300,3,3,GET,/,200,1
-98333a1a28e746fa8c629c83a818ad57,b96f96fe-beb1-4225-a73c-0b42ed6a792a,HTTP,5,2,3,GET,/,302,1

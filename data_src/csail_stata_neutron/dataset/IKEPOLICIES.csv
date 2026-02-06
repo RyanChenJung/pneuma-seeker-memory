@@ -1,1 +1,0 @@
-tenant_id,id,name,description,auth_algorithm,encryption_algorithm,phase1_negotiation_mode,lifetime_units,lifetime_value,ike_version,pfs
