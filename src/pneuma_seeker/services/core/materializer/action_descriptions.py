@@ -23,7 +23,7 @@ def get_materializer_actions(
     - All tables — whether internal, external, or intermediate — are available via `tables["<ID>"]` (Pandas DataFrame).
     - Never use `pd.read_csv`; tables are already provided in memory.
     - Pandas, NumPy, and SciPy are available for data manipulation (remember to add relevant import statements in the code if you need them).
-    - You can perform many things, including transforming the values of certain columns. For example, if the SQLs (S) expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
+    - You can perform many things, including renaming columns, reordering columns, transforming the values of certain columns, etc. For example, if the SQLs (S) expect "yyyy-mm-dd" format for a column, and the column values use "Month Date, Year" format, you can adjust it. Another example is a SQL query may expect uppercase values like "YES" instead of "yes", so adjust the values as well in this case.
     - Make sure to assign the result, which must be a **SINGLE** pandas DataFrame, to a variable named 'result'
     - Args: {{"code": "<Python code string>", "asign_to": "<ID of the resulting intermediate table>"}}
 {get_assumption_check_description() if config.ENABLE_ASSUMPTION_CHECK else ""}

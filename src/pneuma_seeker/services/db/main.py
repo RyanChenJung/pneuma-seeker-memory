@@ -559,7 +559,7 @@ class PneumaDB:
             con.commit()
         except Exception as e:
             con.rollback()
-            self.__log(f"Failed to save state: {e}")
+            self.__log(f"Failed to persist session: {e}")
 
     def __insert_document(
         self,
@@ -570,6 +570,24 @@ class PneumaDB:
     ):
         """Inserts a document and its metadata into the workspace DB."""
         document_content = document.content
+        last_node_id = document.last_node_id
+        if last_node_id is not None:
+            try:
+                if isna(last_node_id):
+                    last_node_id = None
+            except Exception:
+                pass
+        if isinstance(last_node_id, str) and last_node_id.strip() in {
+            "",
+            "<NA>",
+            "NA",
+            "N/A",
+            "nan",
+            "NaN",
+            "None",
+            "null",
+        }:
+            last_node_id = None
         if isinstance(document_content, DataFrame):
             if "dataset_name" in document.metadata:
                 dataset_name = document.metadata["dataset_name"]
@@ -598,7 +616,7 @@ class PneumaDB:
                 document.retriever_type.value,
                 document_content,
                 document.path,
-                document.last_node_id,
+                last_node_id,
             ),
         )
 
@@ -627,7 +645,8 @@ class PneumaDB:
                 state_id,
                 doc_id,
                 role
-            ) VALUES (?, ?, ?);
+            ) VALUES (?, ?, ?)
+            ON CONFLICT (state_id, doc_id, role) DO NOTHING
             """,
             (state_id, document.doc_id, role),
         )
