@@ -263,9 +263,10 @@ class Conductor:
                     content=self.prompt_factory.get_direct_response_anyway_prompt(),
                 )
             )
-            user_facing_response = "".join(
+            self.user_facing_response = "".join(
                 self.language_model_api.chat(self.llm_messages, LLMOption(stream=True))
             )
+            self.is_user_facing_response = True
 
         yield self.user_facing_response
 
