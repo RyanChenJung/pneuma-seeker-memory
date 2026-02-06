@@ -110,6 +110,7 @@ class ChatSession:
         """Callback to persist the current state of Provenance Graph."""
         try:
             self.__log(f"Persisting session...")
+            self.__log(f"=> Number of provenance nodes: {len(self.conductor.prov_graph.nodes)}")
             self.db_api.persist_session(
                 self.user_id,
                 self.chat_id,
