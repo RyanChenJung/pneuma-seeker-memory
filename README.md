@@ -84,7 +84,6 @@ pneuma_seeker/
 │   └── main.py               # FastAPI endpoints (backend entry points)
 │
 ├── tests/                    # Unit tests
-├── configs/                  # Configuration files
 ├── .env                      # Sample environment configuration
 ├── requirements.txt          # Python dependencies
 └── README.md                 # Project documentation
