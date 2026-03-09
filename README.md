@@ -65,7 +65,7 @@ python -m unittest discover
 ```
 pneuma_seeker/
 ├── data_src/                 # Datasets used in experiments
-├── experiments/              # Research experiments and baselines
+├── baselines/                # Baselines used in experiments
 ├── openwebui_functions/      # OpenWebUI functions that call the Pneuma-Seeker backend
 │
 ├── src/pneuma_seeker/
