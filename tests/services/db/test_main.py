@@ -7,7 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
@@ -19,7 +19,13 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.services.core.conductor.state import ConductorState
 from pneuma_seeker.services.db.main import PneumaDB
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, Text
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+    Text,
+)
+from pneuma_seeker.shared.schemas.db.document_type import DocumentType
 from pneuma_seeker.shared.schemas.language_model.role import Role
 
 
@@ -270,7 +276,9 @@ class TestTableDescription(unittest.TestCase):
         desc = self.db.get_table_description(dataset_name, "users")
         self.assertEqual(desc, "User table")
 
-    def test_get_table_description_returns_empty_when_metadata_missing_required_columns(self):
+    def test_get_table_description_returns_empty_when_metadata_missing_required_columns(
+        self,
+    ):
         dataset_name = "ds4"
         ds_dir = self.db.dataset_db_path / dataset_name
         ds_dir.mkdir(parents=True, exist_ok=True)
@@ -477,6 +485,106 @@ class TestQueryExecution(unittest.TestCase):
         self.assertIsInstance(result, pd.DataFrame)
 
 
+class TestPersistDf(unittest.TestCase):
+    """Tests for persist_df helper."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+        self.user_id = "user_doc"
+        self.chat_id = "chat_doc"
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_persist_df_creates_table(self):
+        """DataFrames should be persisted as workspace DB tables."""
+        df = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
+
+        self.db.persist_df(
+            self.user_id,
+            self.chat_id,
+            df,
+            "external_table",
+            overwrite_content=False,
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        tables = con.execute("SHOW TABLES;").fetchdf()
+        table_names = tables["name"].tolist()
+        self.assertIn("external_table", table_names)
+
+        result = con.execute('SELECT * FROM "external_table" ORDER BY id;').fetchdf()
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result.iloc[0]["name"], "A")
+
+    def test_persist_df_does_not_overwrite_when_false(self):
+        """Tables should not be overwritten when overwrite_content=False."""
+        df_v1 = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
+
+        self.db.persist_df(
+            self.user_id,
+            self.chat_id,
+            df_v1,
+            "external_no_overwrite",
+            overwrite_content=False,
+        )
+
+        df_v2 = pd.DataFrame({"id": [1, 2], "name": ["Z", "Y"]})
+
+        self.db.persist_df(
+            self.user_id,
+            self.chat_id,
+            df_v2,
+            "external_no_overwrite",
+            overwrite_content=False,
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        result = con.execute(
+            'SELECT * FROM "external_no_overwrite" ORDER BY id;'
+        ).fetchdf()
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result.iloc[0]["name"], "A")
+
+    def test_persist_df_overwrites_when_true(self):
+        """Tables should be overwritten when overwrite_content=True."""
+        df_v1 = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
+
+        self.db.persist_df(
+            self.user_id,
+            self.chat_id,
+            df_v1,
+            "external_overwrite",
+            overwrite_content=True,
+        )
+
+        df_v2 = pd.DataFrame({"id": [1, 2], "name": ["Z", "Y"]})
+
+        self.db.persist_df(
+            self.user_id,
+            self.chat_id,
+            df_v2,
+            "external_overwrite",
+            overwrite_content=True,
+        )
+
+        con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
+        result = con.execute(
+            'SELECT * FROM "external_overwrite" ORDER BY id;'
+        ).fetchdf()
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result.iloc[0]["name"], "Z")
+
+
 class TestSessionPersistence(unittest.TestCase):
     """Tests for session persistence and loading."""
 
@@ -603,7 +711,9 @@ class TestSessionPersistence(unittest.TestCase):
 
         # Type integrity: retriever_type should be restored as the RetrieverType enum
         self.assertIsInstance(loaded_retrieved[0].retriever_type, RetrieverType)
-        self.assertEqual(loaded_retrieved[0].retriever_type, RetrieverType.PNEUMA_RETRIEVER)
+        self.assertEqual(
+            loaded_retrieved[0].retriever_type, RetrieverType.PNEUMA_RETRIEVER
+        )
         self.assertIsInstance(loaded_enumerated[0].retriever_type, RetrieverType)
         self.assertEqual(loaded_enumerated[0].retriever_type, RetrieverType.ENUMERATOR)
 
@@ -925,7 +1035,10 @@ class TestSessionPersistenceFineGrainedTracking(unittest.TestCase):
 
         # Edge should be present for latest graph
         loaded_node_by_code = {n.python_code: n for n in loaded_graph.nodes.values()}
-        self.assertIn("y = 2", [c.python_code for c in loaded_node_by_code[root2.python_code].children])
+        self.assertIn(
+            "y = 2",
+            [c.python_code for c in loaded_node_by_code[root2.python_code].children],
+        )
 
     def test_web_result_metadata_roundtrip(self):
         """Ensure metadata keys/values persist and reload for Text documents."""
@@ -1074,7 +1187,9 @@ class TestSessionPersistenceFineGrainedTracking(unittest.TestCase):
 
         con = self.db.get_ws_db_connection(self.user_id, self.chat_id)
 
-        conductor_state_count = con.execute("SELECT COUNT(*) FROM conductor_state;").fetchone()
+        conductor_state_count = con.execute(
+            "SELECT COUNT(*) FROM conductor_state;"
+        ).fetchone()
         documents_count = con.execute("SELECT COUNT(*) FROM documents;").fetchone()
 
         assert conductor_state_count is not None
@@ -1082,11 +1197,15 @@ class TestSessionPersistenceFineGrainedTracking(unittest.TestCase):
         self.assertEqual(conductor_state_count[0], 2)
         self.assertEqual(documents_count[0], 1)
 
-        (*_, loaded_web_search, __, ___) = self.db.load_session(self.user_id, self.chat_id)
+        (*_, loaded_web_search, __, ___) = self.db.load_session(
+            self.user_id, self.chat_id
+        )
         assert loaded_web_search is not None
         self.assertEqual(loaded_web_search.doc_id, doc_id)
         self.assertEqual(loaded_web_search.content, "v2")
-        self.assertEqual(loaded_web_search.metadata.get("url"), "https://example.com/v2")
+        self.assertEqual(
+            loaded_web_search.metadata.get("url"), "https://example.com/v2"
+        )
 
     def test_persist_session_with_join_paths(self):
         """Test persisting a session with join paths."""
@@ -1386,6 +1505,141 @@ class TestIntegration(unittest.TestCase):
 
         self.assertEqual(chat1_history[0]["content"], "User 1 query")
         self.assertEqual(chat2_history[0]["content"], "User 2 query")
+
+
+class TestPostgresDatasetLinking(unittest.TestCase):
+    """Tests for PostgreSQL dataset linking via register_postgres_dataset."""
+
+    def setUp(self):
+        self.config = Config()
+        self.logger = logging.getLogger("test")
+        self.tmpdir = tempfile.mkdtemp()
+        self.db = PneumaDB(logger=self.logger, config=self.config)
+        self.db.dataset_db_path = Path(self.tmpdir) / "datasets"
+        self.db.workspace_db_path = Path(self.tmpdir) / "workspaces"
+        self.db.dataset_db_path.mkdir(parents=True, exist_ok=True)
+        self.db.workspace_db_path.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.db.close_all_connections()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _make_mock_ws_con(self, already_attached_alias: str | None = None):
+        """Returns a MagicMock workspace connection pre-configured for link_dataset_tables tests."""
+        mock_con = MagicMock()
+        name_col = [already_attached_alias] if already_attached_alias else []
+        mock_con.execute.return_value.fetchdf.return_value = pd.DataFrame({"name": name_col})
+        return mock_con
+
+    def test_register_stores_connection_string(self):
+        """register_postgres_dataset should store the connection string in the registry."""
+        conn_str = "host=localhost port=5432 dbname=mydb user=reader"
+        self.db.register_postgres_dataset("pg_ds", conn_str)
+        self.assertIn("pg_ds", self.db._pg_registry)
+        self.assertEqual(self.db._pg_registry["pg_ds"], conn_str)
+
+    def test_register_overrides_previous_connection_string(self):
+        """Re-registering a dataset name updates the stored connection string."""
+        self.db.register_postgres_dataset("ds", "host=server1")
+        self.db.register_postgres_dataset("ds", "host=server2")
+        self.assertEqual(self.db._pg_registry["ds"], "host=server2")
+
+    def test_link_issues_attach_with_type_postgres(self):
+        """link_dataset_tables should ATTACH with TYPE postgres for PG-registered datasets."""
+        conn_str = "host=localhost port=5432 dbname=mydb user=reader"
+        self.db.register_postgres_dataset("pg_ds", conn_str)
+
+        mock_con = self._make_mock_ws_con()
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_con):
+            self.db.link_dataset_tables("u", "c", "pg_ds")
+
+        executed_sqls = [call[0][0] for call in mock_con.execute.call_args_list]
+        attach_sqls = [s for s in executed_sqls if "ATTACH" in s.upper()]
+        self.assertEqual(len(attach_sqls), 1)
+        self.assertIn("TYPE POSTGRES", attach_sqls[0].upper())
+        self.assertIn(conn_str, attach_sqls[0])
+        self.assertIn('"pg_ds"', attach_sqls[0])
+
+    def test_link_postgres_attach_is_read_only(self):
+        """The postgres ATTACH should always include READ_ONLY."""
+        self.db.register_postgres_dataset("pg_ro", "host=localhost dbname=testdb")
+
+        mock_con = self._make_mock_ws_con()
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_con):
+            self.db.link_dataset_tables("u", "c", "pg_ro")
+
+        executed_sqls = [call[0][0] for call in mock_con.execute.call_args_list]
+        attach_sqls = [s for s in executed_sqls if "ATTACH" in s.upper()]
+        self.assertEqual(len(attach_sqls), 1)
+        self.assertIn("READ_ONLY", attach_sqls[0].upper())
+
+    def test_link_postgres_does_not_check_filesystem(self):
+        """Linking a PG-registered dataset must not raise FileNotFoundError."""
+        self.db.register_postgres_dataset("pg_only", "host=no-such-server")
+
+        mock_con = self._make_mock_ws_con()
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_con):
+            # Should not raise even though no local .db file exists
+            self.db.link_dataset_tables("u", "c", "pg_only")
+
+    def test_link_postgres_idempotent_skips_attach_when_already_attached(self):
+        """If the alias is already in PRAGMA database_list, ATTACH is not called again."""
+        conn_str = "host=localhost dbname=testdb"
+        self.db.register_postgres_dataset("pg_idem", conn_str)
+
+        # Simulate already attached (alias == clean_column_table_name("pg_idem") == "pg_idem")
+        mock_con = self._make_mock_ws_con(already_attached_alias="pg_idem")
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_con):
+            self.db.link_dataset_tables("u", "c", "pg_idem")
+
+        attach_calls = [
+            call[0][0]
+            for call in mock_con.execute.call_args_list
+            if "ATTACH" in call[0][0].upper()
+        ]
+        self.assertEqual(len(attach_calls), 0)
+
+    def test_link_postgres_first_call_attaches_second_skips(self):
+        """First link_dataset_tables call ATTACHes; second call (alias already present) skips."""
+        conn_str = "host=localhost dbname=testdb"
+        self.db.register_postgres_dataset("pg_idem2", conn_str)
+
+        # First call: not yet attached
+        mock_first = self._make_mock_ws_con()
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_first):
+            self.db.link_dataset_tables("u", "c", "pg_idem2")
+
+        attach_count_first = sum(
+            1
+            for call in mock_first.execute.call_args_list
+            if "ATTACH" in call[0][0].upper()
+        )
+        self.assertEqual(attach_count_first, 1)
+
+        # Second call: simulate already attached
+        mock_second = self._make_mock_ws_con(already_attached_alias="pg_idem2")
+        with patch.object(self.db, "get_ws_db_connection", return_value=mock_second):
+            self.db.link_dataset_tables("u", "c", "pg_idem2")
+
+        attach_count_second = sum(
+            1
+            for call in mock_second.execute.call_args_list
+            if "ATTACH" in call[0][0].upper()
+        )
+        self.assertEqual(attach_count_second, 0)
+
+    def test_unregistered_dataset_raises_file_not_found(self):
+        """Non-PG datasets still raise FileNotFoundError when the .db file is missing."""
+        with self.assertRaises(FileNotFoundError):
+            self.db.link_dataset_tables("u", "c", "no_such_local_ds")
+
+    def test_local_dataset_unaffected_by_pg_registry(self):
+        """Registering a PG dataset does not affect unrelated local dataset behaviour."""
+        self.db.register_postgres_dataset("pg_other", "host=localhost")
+
+        # "local_ds" is not in the registry, so it should raise FileNotFoundError
+        with self.assertRaises(FileNotFoundError):
+            self.db.link_dataset_tables("u", "c", "local_ds")
 
 
 class TestTransactionRollback(unittest.TestCase):

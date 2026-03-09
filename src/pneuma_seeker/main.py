@@ -1,16 +1,14 @@
 # src/pneuma_seeker/main.py
-import asyncio
-import io
-import json
-import tempfile
-import zipfile
+from asyncio import create_task, sleep
 from datetime import datetime
+from io import BytesIO, StringIO
+from json import dumps
 from pathlib import Path
 from queue import Queue
+from tempfile import NamedTemporaryFile
 from typing import Any
+from zipfile import ZIP_DEFLATED, ZipFile
 
-import markdown
-import markdown2
 from anyio import to_thread
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,12 +19,14 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.templating import Jinja2Templates
+from markdown import markdown
+from markdown2 import markdown as markdown_2
+
 from pneuma_seeker.session_manager import SessionManager
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import setup_logger
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.table_serializer import serialize_dataframe
-
 
 app = FastAPI(title="Pneuma-Seeker")
 logger = setup_logger("Core Service")
@@ -64,7 +64,7 @@ def now_ms() -> int:
 def stream_payload(sender: str, text: str) -> str:
     """Formats a message payload for streaming responses."""
     return (
-        json.dumps(
+        dumps(
             {
                 "sender": sender,
                 "text": text,
@@ -122,13 +122,20 @@ async def execute_code(user_id: str, chat_id: str):
     """
     conductor = session_manager.get_chat_session(user_id, chat_id).conductor
     try:
-        execution_result = conductor.action_set.execute_code(
-            {
-                doc_id: doc.content
-                for doc_id, doc in conductor.state.T.items()
-            },
-            conductor.state.S,
-        )
+        try:
+            execution_result = conductor.db_api.execute_query(
+                user_id,
+                chat_id,
+                f"SELECT * FROM conductor_s_execution LIMIT {config.TABLE_MAX_ROWS_DISPLAY};",
+            )
+            if len(execution_result) == 0:
+                execution_result = conductor.action_set.execute_code(
+                    conductor.state.S, "conductor_s_execution"
+                )
+        except:
+            execution_result = conductor.action_set.execute_code(
+                conductor.state.S, "conductor_s_execution"
+            )
         return serialize_dataframe(execution_result, config.TABLE_MAX_ROWS_DISPLAY)
     except Exception as e:
         logger.error(f"Error during code execution: {e}")
@@ -150,7 +157,7 @@ async def download_chat_pdf(data: dict):
     for msg in messages:
         role = "User" if msg["role"] == "user" else model.capitalize()
         color = "#f2f2f2" if msg["role"] == "user" else "#e8f0fe"
-        content_html = markdown2.markdown(msg["content"])
+        content_html = markdown_2(msg["content"])
         html_messages += f"""
             <div style="margin-bottom: 16px; padding: 10px; border-radius: 10px; background-color: {color}">
                 <strong>{role}:</strong><br>{content_html}
@@ -180,7 +187,7 @@ async def download_chat_pdf(data: dict):
     </html>
     """
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         HTML(string=full_html).write_pdf(tmp_file.name)
         return FileResponse(
             tmp_file.name, filename=f"chat_{chat_id}.pdf", media_type="application/pdf"
@@ -190,9 +197,7 @@ async def download_chat_pdf(data: dict):
 @app.post("/combined/html/{user_id}/{chat_id}", response_class=HTMLResponse)
 async def read_combined_html(request: Request, user_id: str, chat_id: str, data: dict):
     conductor = session_manager.get_chat_session(user_id, chat_id).conductor
-    state = conductor.state.get_current_state_instance(
-        config.TABLE_MAX_ROWS_DISPLAY
-    )
+    state = conductor.state.get_current_state_instance(config.TABLE_MAX_ROWS_DISPLAY)
 
     prov_steps: list[str] = ["<strong>T</strong> is not materialized yet."]
     if conductor.state.is_T_materialized:
@@ -201,7 +206,7 @@ async def read_combined_html(request: Request, user_id: str, chat_id: str, data:
         )
         if prov_explanation_steps_markdown:
             prov_steps = [
-                markdown.markdown(
+                markdown(
                     step_md,
                     extensions=["fenced_code", "sane_lists"],
                 )
@@ -257,7 +262,7 @@ async def chat(request: Request):
         start = datetime.now().timestamp()
 
         yield stream_payload("log", "Pneuma connected. Starting processing...")
-        await asyncio.sleep(0)
+        await sleep(0)
 
         response_queue: Queue[str | None] = Queue()
 
@@ -268,8 +273,51 @@ async def chat(request: Request):
             finally:
                 response_queue.put(None)
 
-        producer = asyncio.create_task(
-            to_thread.run_sync(run_chat, abandon_on_cancel=True)
+        def run_chat_with_profiling():
+            from psutil import Process
+            from os import getpid
+            from gc import collect
+            from tracemalloc import start, stop, get_traced_memory
+            from time import time
+
+            p = Process(getpid())
+
+            def rss_mb():
+                return p.memory_info().rss / 1024 / 1024
+
+            collect()
+            start()
+
+            baseline_rss = rss_mb()
+            t0 = time()
+
+            logger.info(f"[MEM] baseline RSS: {baseline_rss:.2f} MB")
+
+            peak_rss = baseline_rss
+
+            try:
+                for msg in chat_session.chat(llm_messages, files):
+                    cur = rss_mb()
+                    peak_rss = max(peak_rss, cur)
+                    logger.info(f"[MEM] RSS now: {cur:.2f} MB")
+                    response_queue.put(msg)
+            finally:
+                cur, peak = get_traced_memory()
+                stop()
+                logger.info(f"[MEM] end RSS: {rss_mb():.2f} MB")
+                logger.info(f"[MEM] delta RSS: {rss_mb() - baseline_rss:.2f} MB")
+                logger.info(f"[MEM] peak RSS delta: {peak_rss - baseline_rss:.2f} MB")
+                logger.info(
+                    f"[MEM] tracemalloc peak Python alloc: {peak / 1024 / 1024:.2f} MB"
+                )
+                logger.info(f"[TIME] took {time() - t0:.2f}s")
+                response_queue.put(None)
+
+        producer = create_task(
+            to_thread.run_sync(
+                run_chat_with_profiling if config.ENABLE_MEMORY_PROFILING else run_chat,
+                abandon_on_cancel=True,
+            )
         )
 
         try:
@@ -291,7 +339,7 @@ async def chat(request: Request):
                         payload = stream_payload("assistant", response)
 
                     yield payload
-                    await asyncio.sleep(0)
+                    await sleep(0)
                 except Exception as e:
                     break
         finally:
@@ -310,29 +358,32 @@ def download_all_tables(user_id: str, chat_id: str):
     Download all tables (CSV files) for a given user and chat as a ZIP file.
     Example: /tables/u123/c45/all
     """
-    user_dir = TABLES_DIR / user_id
-    chat_dir = user_dir / chat_id
 
-    # Check existence of user and chat directories
-    if not user_dir.exists():
-        raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
+    conductor = session_manager.get_chat_session(user_id, chat_id).conductor
+    target_table_ids = list(conductor.state.T.keys()) if conductor.state.T else []
 
-    if not chat_dir.exists():
-        raise HTTPException(
-            status_code=404, detail=f"Chat '{chat_id}' not found for user '{user_id}'"
-        )
-
-    # Gather all CSV files
-    csv_files = list(chat_dir.glob("*.csv"))
-    if not csv_files:
-        raise HTTPException(status_code=404, detail="No tables found for this chat")
+    if not target_table_ids:
+        raise HTTPException(status_code=404, detail="No target tables found")
 
     # Create a ZIP file in memory (no temp file needed)
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for csv_path in csv_files:
-            # The arcname ensures zip has clean folder structure (just filenames)
-            zipf.write(csv_path, arcname=csv_path.name)
+    zip_buffer = BytesIO()
+    with ZipFile(zip_buffer, "w", ZIP_DEFLATED) as zipf:
+        for table_id in target_table_ids:
+            try:
+                df = conductor.db_api.execute_query(
+                    user_id,
+                    chat_id,
+                    f"SELECT * FROM {table_id};",
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to load table '{table_id}': {exc}",
+                )
+
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            zipf.writestr(f"{table_id}.csv", csv_buffer.getvalue())
 
     zip_buffer.seek(0)
 
@@ -354,7 +405,7 @@ def download_materializer_code(user_id: str, chat_id: str):
     chat_session = session_manager.get_chat_session(user_id, chat_id)
     materializer_code = chat_session.conductor.materializer.prov_graph.get_graph_code()
 
-    file_stream = io.BytesIO()
+    file_stream = BytesIO()
     file_stream.write(materializer_code.encode("utf-8"))
     file_stream.seek(0)
 

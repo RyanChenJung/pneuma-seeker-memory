@@ -1,5 +1,5 @@
 # src/pneuma_seeker/shared/config.py
-from os import getenv, path
+from os import getenv
 
 from dotenv import load_dotenv
 
@@ -11,8 +11,8 @@ class Config:
             load_dotenv(env_path)
 
         # Language Model Settings
-        self.LLM_PATH = getenv("LLM_PATH", "o4-mini")
-        self.LLM_MAX_TOKENS = int(getenv("LLM_MAX_TOKENS", "128000"))
+        self.LLM_PATH = getenv("LLM_PATH", "o3-2025-04-16")
+        self.LLM_MAX_TOKENS = int(getenv("LLM_MAX_TOKENS", "200000"))
         self.EMBED_MODEL_PATH = getenv("EMBED_MODEL_PATH", "text-embedding-3-small")
         self.EMBEDDING_MAX_TOKENS = int(getenv("EMBEDDING_MAX_TOKENS", "1536"))
 
@@ -33,29 +33,26 @@ class Config:
         self.TABLE_MAX_ROWS_DISPLAY = int(getenv("TABLE_MAX_ROWS_DISPLAY", "10"))
 
         # Core Configuration Settings
-        self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "7"))
+        self.MAX_CONDUCTOR_STEPS = int(getenv("MAX_CONDUCTOR_STEPS", "10"))
         self.MAX_MATERIALIZER_STEPS = int(getenv("MAX_MATERIALIZER_STEPS", "10"))
         self.PERSIST_CHAT_SESSION = (
             getenv("PERSIST_CHAT_SESSION", "true").lower() == "true"
         )
-        self.DATA_SOURCES = ["biomedical"]
+        self.DATA_SOURCES = ["archeology"]
+        self.ENABLE_MEMORY_PROFILING = (
+            getenv("ENABLE_MEMORY_PROFILING", "false").lower() == "true"
+        )
 
         # Action Settings
         ## Retrieval Action Settings
         self.ENABLE_WEB_SEARCH = getenv("ENABLE_WEB_SEARCH", "false").lower() == "true"
         self.ENABLE_WEB_CRAWL = getenv("ENABLE_WEB_CRAWL", "true").lower() == "true"
         self.WEB_CRAWL_MAX_CHARS = int(getenv("WEB_CRAWL_MAX_CHARS", "5000"))     
-        self.ENABLE_JOIN_PATH_EXTRACTION = (
-            getenv("ENABLE_JOIN_PATH_EXTRACTION", "true").lower() == "true"
-        )
         self.JOIN_PATH_EXTRACTION_ALPHA = float(
             getenv("JOIN_PATH_EXTRACTION_NAME_SIMILARITY_WEIGHT", "0.6")
         )
         self.JOIN_PATH_EXTRACTION_TOP_K = int(
             getenv("JOIN_PATH_EXTRACTION_TOP_K", "5")
-        )
-        self.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE = (
-            getenv("ENABLE_MULTI_TOPIC_TABLE_RETRIEVE", "true").lower() == "true"
         )
         self.TABLE_RETRIEVE_MAX_TOPICS = int(getenv("TABLE_RETRIEVE_MAX_TOPICS", "3"))
         self.TABLE_RETRIEVE_ENABLE_ENTITIES_RELEVANCE_BOOSTER = (
@@ -63,6 +60,9 @@ class Config:
         )
 
         ## Semantic Action Settings
+        self.ENABLE_SEMANTIC_JOIN = getenv("ENABLE_SEMANTIC_JOIN", "false").lower() == "true"
+        self.ENABLE_SEMANTIC_COL_GEN = getenv("ENABLE_SEMANTIC_COL_GEN", "false").lower() == "true"
+
         self.SEMANTIC_JOIN_TOP_K = 1
         self.SEMANTIC_JOIN_BATCH_SIZE = max(
             1, int(getenv("SEMANTIC_JOIN_BATCH_SIZE", "30"))
@@ -73,12 +73,12 @@ class Config:
             1, int(getenv("SEMANTIC_COL_GEN_ROW_PROCESSING_BATCH_SIZE", "60"))
         )
         self.SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE = max(
-            1, int(getenv("SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE", "10"))
+            1, int(getenv("SEMANTIC_COL_GEN_VALUE_GENERATION_BATCH_SIZE", "20"))
         )
 
         ## Other Action Settings
-        self.ENABLE_ASSUMPTION_CHECK = (
-            getenv("ENABLE_ASSUMPTION_CHECK", "true").lower() == "true"
+        self.ENABLE_CONTEXT_EXTRACTION = (
+            getenv("ENABLE_CONTEXT_EXTRACTION", "true").lower() == "true"
         )
         
         # Database Settings

@@ -1,11 +1,11 @@
-import os
 from logging import Logger
+from time import time
 from typing import Any, cast
 
-import pandas as pd
+from pandas import DataFrame
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
-from pneuma_seeker.services.core.actions.main import ActionSet
+from pneuma_seeker.services.core.action_set.main import ActionSet
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
 from pneuma_seeker.services.core.conductor.prompt_factory import ConductorPromptFactory
@@ -46,8 +46,6 @@ class Conductor:
         self.db_api = db_api
         self.language_model_api = language_model_api
 
-        self.prompt_factory = ConductorPromptFactory(self.config)
-
         self.action_set = ActionSet(
             self.user_id,
             self.chat_id,
@@ -57,6 +55,7 @@ class Conductor:
             self.db_api,
             self.language_model_api,
         )
+        self.prompt_factory = ConductorPromptFactory(self.config, self.action_set)
         self.materializer = Materializer(
             self.user_id,
             self.chat_id,
@@ -78,17 +77,6 @@ class Conductor:
         self.web_search_result: AbstractDocument | None = None
         self.web_crawl_result: AbstractDocument | None = None
         self.join_paths: str | None = None
-
-        self.target_tables_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            "data_src",
-            "target_tables",
-        )
 
         # Short-lived state (per chat call)
         self.user_facing_response = ""
@@ -113,8 +101,9 @@ class Conductor:
         external_table_paths: list[str],
     ):
         """Processes user input and yields responses."""
+        chat_start_time = time()
         self.__log(f"Processing user input: {user_input}")
-        self.reset_conductor()
+        self.__reset_conductor()
         self.external_tables = self.table_reader.process_external_tables(
             external_table_paths
         )
@@ -138,14 +127,25 @@ class Conductor:
                 self.prov_graph.add_node(new_node, True)
                 doc.last_node_id = new_node.id
 
+                self.db_api.persist_df(
+                    self.user_id,
+                    self.chat_id,
+                    cast(DataFrame, doc.content),
+                    doc.doc_id,
+                    True,
+                )
+
         self.llm_messages = [
             LLMMessage(
                 role=Role.SYSTEM.value,
                 content=self.prompt_factory.get_sys_prompt(),
             )
         ]
-        current_step = 0
 
+        current_step = 0
+        previous_step_input_tokens = 0
+        previous_step_output_tokens = 0
+        last_env_state_idx: int | None = None
         while (
             not self.is_user_facing_response
             and current_step < self.config.MAX_CONDUCTOR_STEPS
@@ -157,7 +157,7 @@ class Conductor:
             )
             self.llm_messages.append(
                 LLMMessage(
-                    role=Role.USER.value,
+                    role=Role.SYSTEM.value,
                     content=self.prompt_factory.get_env_state_prompt(
                         current_step,
                         self.state,
@@ -173,17 +173,30 @@ class Conductor:
                     ),
                 )
             )
+            last_env_state_idx = len(self.llm_messages) - 1
 
-            full_response = "".join(
-                self.language_model_api.chat(
-                    self.llm_messages,
-                    LLMOption(json_mode=True, stream=True, temperature=0, top_p=0.1),
+            try:
+                full_response = "".join(
+                    self.language_model_api.chat(
+                        self.llm_messages,
+                        LLMOption(json_mode=True, stream=True, top_p=0.1),
+                    )
                 )
-            )
+            except Exception as exc:
+                error_msg = f"An unexpected error occurred while generating the plan: {exc}."
+                self.__log(error_msg)
+                yield f"LOG: {error_msg}"
+                raise exc
             self.__log(f"=> Model responded with a plan: {full_response}")
             self.llm_messages.append(
                 LLMMessage(role=Role.ASSISTANT.value, content=full_response)
             )
+            if last_env_state_idx is not None:
+                self.llm_messages[last_env_state_idx]["content"] = (
+                    self.prompt_factory.get_skeleton_env_state_prompt(
+                        current_step,
+                    )
+                )
 
             try:
                 self.__log("==> Parsing plan...")
@@ -206,7 +219,10 @@ class Conductor:
 
                 plan = cast(list[dict[str, Any]], plan)
                 executor_part_of_plan = False
+                materializer_part_of_plan = False
                 user_facing_communication_part_of_plan = False
+                table_retrieve_part_of_plan = False
+                assumption_check_part_of_plan = False
                 for action_plan in plan:
                     assert isinstance(action_plan, dict)
                     if action_plan.get("action") is None:
@@ -230,11 +246,19 @@ class Conductor:
                         == ActionNames.USER_FACING_COMMUNICATION.value
                     ):
                         user_facing_communication_part_of_plan = True
-
+                    if (
+                        action_plan.get("action")
+                        == ActionNames.MATERIALIZER.value
+                    ):
+                        materializer_part_of_plan = True
+                    if action_plan.get("action") == ActionNames.TABLE_RETRIEVE.value:
+                        table_retrieve_part_of_plan = True
+                    if action_plan.get("action") == ActionNames.CONTEXT_EXTRACTION.value:
+                        assumption_check_part_of_plan = True
                 # Ensure there is no user-facing communication in the same plan as code execution (simply remove the user-facing part)
-                if executor_part_of_plan and user_facing_communication_part_of_plan:
+                if (executor_part_of_plan or materializer_part_of_plan or table_retrieve_part_of_plan or assumption_check_part_of_plan) and user_facing_communication_part_of_plan:
                     self.__log(
-                        "==> Removing user-facing communication from plan due to presence of code execution."
+                        "==> Removing user-facing communication from plan due to presence of code execution or materialization or table retrieval or assumption check."
                     )
                     plan = [
                         action_plan
@@ -265,6 +289,20 @@ class Conductor:
                     LLMMessage(role=Role.USER.value, content=action_outcome)
                 )
 
+            if hasattr(self.language_model_api.llm, "total_input_tokens"):
+                step_input_tokens = self.language_model_api.llm.total_input_tokens - previous_step_input_tokens  # type: ignore
+                previous_step_input_tokens = step_input_tokens
+                self.__log(
+                    f"==> [PROFILING] Total input tokens for this step: {step_input_tokens} tokens."
+                )
+
+            if hasattr(self.language_model_api.llm, "total_output_tokens"):
+                step_output_tokens = self.language_model_api.llm.total_output_tokens - previous_step_output_tokens  # type: ignore
+                previous_step_output_tokens = step_output_tokens
+                self.__log(
+                    f"==> [PROFILING] Total output tokens for this step: {step_output_tokens} tokens."
+                )
+
         if not self.is_user_facing_response:
             self.__log("Force produce user-facing response")
             self.llm_messages.append(
@@ -279,6 +317,26 @@ class Conductor:
             self.is_user_facing_response = True
 
         yield self.user_facing_response
+
+        chat_end_time = time()
+        if hasattr(self.language_model_api.llm, "total_llm_time"):
+            self.__log(
+                f"==> [PROFILING] Total LLM time for this chat: {self.language_model_api.llm.total_llm_time:.2f} seconds."  # type: ignore
+            )
+            self.__log(
+                f"==> [PROFILING] Total Non-LLM time for this chat: {(chat_end_time - chat_start_time) - self.language_model_api.llm.total_llm_time:.2f} seconds."  # type: ignore
+            )
+        self.__log(
+            f"[PROFILING] [OVERALL] Chat completed in {chat_end_time - chat_start_time:.2f} seconds."
+        )
+        if hasattr(self.language_model_api.llm, "total_input_tokens"):
+            self.__log(
+                f"==> [PROFILING] Total input tokens for this chat: {self.language_model_api.llm.total_input_tokens} tokens."  # type: ignore
+            )
+        if hasattr(self.language_model_api.llm, "total_output_tokens"):
+            self.__log(
+                f"==> [PROFILING] Total output tokens for this chat: {self.language_model_api.llm.total_output_tokens} tokens."  # type: ignore
+            )
 
     def __execute_action(
         self, action_name: str, action_args: dict[str, Any]
@@ -326,53 +384,36 @@ class Conductor:
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
-                    if "prompts" not in action_args:
-                        error_msg = "=> `args` must have a `prompts` property"
-                        self.__log(f"=> {error_msg}")
-                        return error_msg, ActionExecutionStatus.ERROR
+                if "prompts" not in action_args:
+                    error_msg = "=> `args` must have a `prompts` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                    if not isinstance(action_args["prompts"], list) or not all(
-                        isinstance(p, str) for p in action_args["prompts"]
-                    ):
-                        error_msg = "=> `prompts` must be a list of strings"
-                        self.__log(f"=> {error_msg}")
-                        return error_msg, ActionExecutionStatus.ERROR
+                if not isinstance(action_args["prompts"], list) or not all(
+                    isinstance(p, str) for p in action_args["prompts"]
+                ):
+                    error_msg = "=> `prompts` must be a list of strings"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
 
-                    self.retrieved_tables = (
-                        self.action_set.retrieve_multi_topic_documents(
-                            action_args["prompts"], RetrieverType.PNEUMA_RETRIEVER, 10
-                        )
+                self.retrieved_tables = (
+                    self.action_set.retrieve_multi_topic_documents(
+                        action_args["prompts"],
+                        RetrieverType.PNEUMA_RETRIEVER,
+                        10,
+                        True,
+                        3,
                     )
-                else:
-                    if "prompt" not in action_args:
-                        error_msg = "=> `args` must have a `prompt` property"
-                        self.__log(f"=> {error_msg}")
-                        return error_msg, ActionExecutionStatus.ERROR
-
-                    if not isinstance(action_args["prompt"], str):
-                        error_msg = "=> `prompt` must be a string"
-                        self.__log(f"=> {error_msg}")
-                        return error_msg, ActionExecutionStatus.ERROR
-
-                    if len(action_args["prompt"].strip()) == 0:
-                        error_msg = "=> `prompt` must be a non-empty string"
-                        self.__log(f"=> {error_msg}")
-                        return error_msg, ActionExecutionStatus.ERROR
-
-                    self.retrieved_tables = self.action_set.retrieve_documents(
-                        action_args["prompt"], RetrieverType.PNEUMA_RETRIEVER, 10
-                    )
+                )
 
                 self.__log(
                     f"Retrieved tables:\n {[i.doc_id for i in self.retrieved_tables]}"
                 )
 
                 try:
-                    if self.config.ENABLE_JOIN_PATH_EXTRACTION:
-                        self.join_paths = self.action_set.discover_join_paths(
-                            self.retrieved_tables
-                        )
+                    self.join_paths = self.action_set.discover_join_paths(
+                        self.retrieved_tables
+                    )
                 except Exception as e:
                     self.__log(f"=> Error during join path extraction: {e}")
 
@@ -442,18 +483,37 @@ class Conductor:
                 self.__log(f"Table Enumerator request with params: {action_args}")
 
                 if not isinstance(action_args, dict):
-                    error_msg = "`args` must be an object with a `pattern` property"
-                    self.__log(f"=> {error_msg}")
-                    return error_msg, ActionExecutionStatus.ERROR
-                if "pattern" not in action_args:
-                    error_msg = "`args` must have a `pattern` property"
+                    error_msg = "=> `args` must be an object with a `pattern` property"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                self.enumerated_tables = self.action_set.retrieve_documents(
-                    action_args["pattern"], RetrieverType.ENUMERATOR, 10
+                if "patterns" not in action_args:
+                    error_msg = "=> `args` must have a `patterns` property"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+
+                if not isinstance(action_args["patterns"], list) or not all(
+                    isinstance(p, str) for p in action_args["patterns"]
+                ):
+                    error_msg = "=> `patterns` must be a list of strings"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+
+                if not all(len(p.strip()) > 0 for p in action_args["patterns"]):
+                    error_msg = "=> `patterns` must be a list of non-empty strings"
+                    self.__log(f"=> {error_msg}")
+                    return error_msg, ActionExecutionStatus.ERROR
+
+                self.enumerated_tables = (
+                    self.action_set.retrieve_multi_topic_documents(
+                        action_args["patterns"],
+                        RetrieverType.ENUMERATOR,
+                        20,
+                        True,
+                        2,
+                    )
                 )
-                success_msg = f"Enumerated table IDs based on this pattern: {action_args['pattern']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
+                success_msg = f"Enumerated table IDs based on these patterns: {action_args['patterns']}. If there are any matches, the IDs will be reflected in `OTHER TABLE IDS WITH SIMILAR NAMING PATTERNS`."
                 self.__log(success_msg)
                 return (
                     success_msg,
@@ -476,29 +536,30 @@ class Conductor:
                 is_T_modified = False
                 if T is not None and len(T) > 0:
                     if column_descriptions is not None:
+                        if self.state.T is not None and len(self.state.T) > 0:
+                            for schema_id in self.state.T.keys():
+                                self.db_api.execute_query(
+                                    self.user_id,
+                                    self.chat_id,
+                                    f'DROP TABLE IF EXISTS "{schema_id}";',
+                                )
                         T_docs: dict[str, AbstractDocument] = dict()
                         for schema_id in T:
-                            target_schema_df = pd.DataFrame(columns=T[schema_id])
-
-                            target_schema_path = os.path.join(
-                                self.target_tables_path,
-                                self.user_id,
-                                self.chat_id,
-                                f"{schema_id}.csv",
-                            )
-                            os.makedirs(
-                                os.path.dirname(target_schema_path), exist_ok=True
-                            )
-
-                            target_schema_df.to_csv(target_schema_path, index=False)
+                            target_schema_df = DataFrame(columns=T[schema_id])
                             T_docs[schema_id] = Table(
                                 doc_id=schema_id,
                                 retriever_type=RetrieverType.CONDUCTOR,
                                 content=target_schema_df,
                                 metadata={},
-                                path=target_schema_path,
+                                path=schema_id,
                             )
-
+                            self.db_api.persist_df(
+                                self.user_id,
+                                self.chat_id,
+                                T_docs[schema_id].content,
+                                T_docs[schema_id].doc_id,
+                                True,
+                            )
                         self.state.T = T_docs
                         self.state.column_descriptions = column_descriptions
                         self.state.is_T_materialized = False
@@ -557,11 +618,6 @@ class Conductor:
                     self.external_tables,
                 )
                 self.state.is_T_materialized = True
-
-                for _, T_doc in self.state.T.items():
-                    updated_content: pd.DataFrame = T_doc.content
-                    updated_content.to_csv(T_doc.path, index=False)
-
                 success_msg = "Successfully materialized T."
                 self.__log(success_msg)
                 return success_msg, ActionExecutionStatus.SUCCESS
@@ -582,13 +638,9 @@ class Conductor:
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                T_df: dict[str, pd.DataFrame] = {}
-                for t_id, i in self.state.T.items():
-                    T_df[t_id] = i.content
-
                 try:
                     execution_result = self.action_set.execute_code(
-                        T_df, self.state.S
+                        self.state.S, "conductor_s_execution"
                     )
                     self.__log(f"Script (S) execution result: {execution_result}")
 
@@ -601,7 +653,7 @@ class Conductor:
                     error_msg = f"Error during script (S) execution: {e}"
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
-            case ActionNames.ASSUMPTION_CHECK.value:
+            case ActionNames.CONTEXT_EXTRACTION.value:
                 self.__log(f"Assumption Check request with params: {action_args}")
                 if not isinstance(action_args, dict):
                     error_msg = "=> `args` must be an object with a `code` property"
@@ -612,20 +664,27 @@ class Conductor:
                     self.__log(f"=> {error_msg}")
                     return error_msg, ActionExecutionStatus.ERROR
 
-                all_tables: dict[str, pd.DataFrame] = {}
-                for table in self.retrieved_tables:
-                    all_tables[table.doc_id] = table.content
-                for table in self.external_tables:
-                    all_tables[table.doc_id] = table.content
-                if self.state.is_T_materialized:
-                    for table_id, table in self.state.T.items():
-                        all_tables[table_id] = table.content
-
                 try:
                     execution_result = self.action_set.execute_code(
-                        all_tables, action_args["code"]
+                        action_args["code"], "conductor_assumption_check"
                     )
                     self.__log(f"Assumption Check execution result: {execution_result}")
+                    # Assumption checks may materialize either a *table* or a *view*.
+                    # In DuckDB, attempting to DROP the wrong object type throws.
+                    # Cleanup must be best-effort and must not turn a successful
+                    # assumption_check into a failure.
+                    for cleanup_stmt in (
+                        "DROP VIEW IF EXISTS conductor_assumption_check;",
+                        "DROP TABLE IF EXISTS conductor_assumption_check;",
+                    ):
+                        try:
+                            self.db_api.execute_query(
+                                self.user_id, self.chat_id, cleanup_stmt
+                            )
+                        except Exception as cleanup_exc:
+                            self.__log(
+                                f"Assumption Check cleanup warning ({cleanup_stmt}): {cleanup_exc}"
+                            )
                     return (
                         f"Executed Assumption Check, which resulted in this output: {execution_result}",
                         ActionExecutionStatus.SUCCESS,
@@ -648,11 +707,17 @@ class Conductor:
         user_side_note: str,
         external_tables: list[AbstractDocument],
     ):
-        T_dfs: dict[str, pd.DataFrame] = {}
+        T_dfs: dict[str, DataFrame] = {}
         for T_id, T_doc in T.items():
             T_dfs[T_id] = T_doc.content
 
-        materialized_T_dfs = self.materializer.materialize_T(
+        (
+            retrieved_tables,
+            web_search_result,
+            web_crawl_result,
+            join_paths,
+            materialized_T_dfs,
+        ) = self.materializer.materialize_T(
             T_dfs,
             col_descriptions,
             S,
@@ -663,17 +728,29 @@ class Conductor:
             self.web_crawl_result,
         )
 
+        if len(retrieved_tables) > 0:
+            self.retrieved_tables = retrieved_tables
+        if web_search_result is not None:
+            self.web_search_result = web_search_result
+        if web_crawl_result is not None:
+            self.web_crawl_result = web_crawl_result
+        if join_paths is not None:
+            self.join_paths = join_paths
+
         materialized_T: dict[str, AbstractDocument] = {}
         for T_id, T_df in materialized_T_dfs.items():
             materialized_T[T_id] = T[T_id]
             materialized_T[T_id].content = T_df
         return materialized_T
 
-    def reset_conductor(self):
+    def __reset_conductor(self):
         self.user_facing_response = ""
         self.is_user_facing_response = False
         self.actions = []
         self.llm_messages = []
+
+        if hasattr(self.language_model_api.llm, "reset_metrics"):
+            self.language_model_api.llm.reset_metrics()  # type: ignore
 
     def __log(self, text):
         formatted_log(self.logger, "CONDUCTOR", text)

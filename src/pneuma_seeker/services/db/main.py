@@ -62,6 +62,7 @@ class PneumaDB:
         os.makedirs(self.workspace_db_path, exist_ok=True)
 
         self._conn_cache: dict[tuple[str, str], duckdb.DuckDBPyConnection] = {}
+        self._pg_registry: dict[str, str] = {}
 
         self.target_tables_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -353,21 +354,35 @@ class PneumaDB:
         self._conn_cache.clear()
 
     # ------------------------------------------------------------------
+    # PostgreSQL Dataset Registry
+    # ------------------------------------------------------------------
+    def register_postgres_dataset(self, dataset_name: str, connection_string: str) -> None:
+        """Registers a PostgreSQL-backed dataset by storing its libpq connection string.
+
+        When link_dataset_tables is called for this dataset_name, DuckDB will ATTACH
+        via the postgres extension (READ_ONLY) instead of looking for a local .db file.
+
+        Note: Prefer using DuckDB secrets over embedding credentials directly in the
+        connection string to avoid accidental credential exposure in error output.
+        See: https://duckdb.org/docs/stable/core_extensions/postgres#configuring-via-secrets
+        """
+        self._pg_registry[dataset_name] = connection_string
+
+    # ------------------------------------------------------------------
     # Dataset DB Linking into Workspace DB
     # ------------------------------------------------------------------
     def link_dataset_tables(self, user_id: str, chat_id: str, dataset_name: str):
         """
-        Attach a dataset DB into the workspace connection under a safe alias.
-        The alias is the cleaned dataset_name.
-        This is idempotent (no error if already attached).
+        Attach a dataset into the workspace connection under a safe alias.
+
+        - If dataset_name was registered via register_postgres_dataset, attaches
+          using DuckDB's postgres extension (READ_ONLY).
+        - Otherwise, attaches a local .db file (original behaviour).
+
+        The alias is clean_column_table_name(dataset_name). Idempotent.
         """
         self.__log(f"[PneumaDB] Linking dataset '{dataset_name}' into workspace.")
         ws_db_con = self.get_ws_db_connection(user_id, chat_id)
-        dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
-        if not dataset_db_file.exists():
-            raise FileNotFoundError(
-                f"Dataset DB not found: {dataset_db_file.as_posix()}"
-            )
 
         alias = clean_column_table_name(dataset_name)
 
@@ -377,10 +392,21 @@ class PneumaDB:
         if "name" in attached.columns and alias in attached["name"].tolist():
             return  # already attached
 
-        # Attach read-only
-        ws_db_con.execute(
-            f"ATTACH DATABASE '{dataset_db_file.as_posix()}' AS \"{alias}\" (READ_ONLY)"
-        )
+        if dataset_name in self._pg_registry:
+            conn_str = self._pg_registry[dataset_name]
+            ws_db_con.execute(
+                f"ATTACH '{conn_str}' AS \"{alias}\" (TYPE postgres, READ_ONLY)"
+            )
+        else:
+            dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
+            if not dataset_db_file.exists():
+                raise FileNotFoundError(
+                    f"Dataset DB not found: {dataset_db_file.as_posix()}"
+                )
+            # Attach read-only
+            ws_db_con.execute(
+                f"ATTACH DATABASE '{dataset_db_file.as_posix()}' AS \"{alias}\" (READ_ONLY)"
+            )
 
     # ------------------------------------------------------------------
     # Query Execution
@@ -398,6 +424,77 @@ class PneumaDB:
     # ------------------------------------------------------------------
     # Session Persistence
     # ------------------------------------------------------------------
+    def register_temporary_df(
+        self, user_id: str, chat_id: str, df: DataFrame, table_name: str
+    ):
+        """Registers a temporary DataFrame in the workspace DB connection.
+
+        Note: DuckDB's `con.register(name, df)` creates a view-like relation that can
+        shadow an existing persistent table with the same name. To prevent subtle
+        correctness issues (e.g., accidentally replacing a materialized target table
+        with a small preview DF), we refuse to register a DF under a name that
+        already exists as a BASE TABLE in the workspace schema.
+        """
+
+        con = self.get_ws_db_connection(user_id, chat_id)
+
+        existing = con.execute(
+            """
+            SELECT table_type
+            FROM information_schema.tables
+            WHERE table_schema = 'main' AND table_name = ?
+            """,
+            (table_name,),
+        ).fetchall()
+
+        if any(row[0] == "BASE TABLE" for row in existing):
+            raise ValueError(
+                f"Refusing to register temporary DataFrame as '{table_name}' because a persistent table with that name already exists. "
+                "Use a different temporary name (e.g., '<name>__preview' or 'tmp_<name>')."
+            )
+
+        try:
+            # If a temporary view with this name already exists (e.g., from a prior
+            # register call), try to unregister it and re-register.
+            if existing:
+                try:
+                    con.unregister(table_name)
+                except Exception:
+                    pass
+            con.register(table_name, df)
+        except Exception as e:
+            self.__log(f"Failed to register temporary DataFrame: {e}")
+            raise
+
+    def persist_df(
+        self,
+        user_id: str,
+        chat_id: str,
+        df: DataFrame,
+        table_name: str,
+        overwrite_content: bool,
+    ):
+        """Persists a DataFrame as a table in the workspace DB (skip if exists)."""
+        con = self.get_ws_db_connection(user_id, chat_id)
+        try:
+            con.begin()
+            con.register("df", df)
+            if overwrite_content:
+                con.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+            con.execute(
+                f'CREATE TABLE IF NOT EXISTS "{table_name}" AS SELECT * FROM df'
+            )
+            con.commit()
+            con.checkpoint()
+        except Exception as e:
+            con.rollback()
+            self.__log(f"Failed to persist DataFrame: {e}")
+        finally:
+            try:
+                con.unregister("df")
+            except Exception:
+                pass
+
     def persist_session(
         self,
         user_id: str,
@@ -592,36 +689,20 @@ class PneumaDB:
     def __insert_document(
         self,
         con: duckdb.DuckDBPyConnection,
-        state_id: UUID,
+        state_id: UUID | None,
         document: AbstractDocument,
         role: str,
     ):
         """Inserts a document and its metadata into the workspace DB."""
         document_content = document.content
-        last_node_id = document.last_node_id
-        if last_node_id is not None:
-            try:
-                if isna(last_node_id):
-                    last_node_id = None
-            except Exception:
-                pass
-        if isinstance(last_node_id, str) and last_node_id.strip() in {
-            "",
-            "<NA>",
-            "NA",
-            "N/A",
-            "nan",
-            "NaN",
-            "None",
-            "null",
-        }:
-            last_node_id = None
+        last_node_id = self.__get_document_last_node_id(document)
         if isinstance(document_content, DataFrame):
             if "dataset_name" in document.metadata:
                 dataset_name = document.metadata["dataset_name"]
                 document_content = f"{dataset_name}.{document.doc_id}"
             else:
                 document_content = document.doc_id
+
         # doc_id is a PRIMARY KEY, so in fine-grained tracking we must support reusing
         # the same doc_id across states. Upsert keeps the latest document representation.
         con.execute(
@@ -667,17 +748,41 @@ class PneumaDB:
                 """,
                 (document.doc_id, meta_key, meta_value),
             )
-        con.execute(
-            """
-            INSERT INTO state_document_roles (
-                state_id,
-                doc_id,
-                role
-            ) VALUES (?, ?, ?)
-            ON CONFLICT (state_id, doc_id, role) DO NOTHING
-            """,
-            (state_id, document.doc_id, role),
-        )
+
+        if state_id is not None:
+            con.execute(
+                """
+                INSERT INTO state_document_roles (
+                    state_id,
+                    doc_id,
+                    role
+                ) VALUES (?, ?, ?)
+                ON CONFLICT (state_id, doc_id, role) DO NOTHING
+                """,
+                (state_id, document.doc_id, role),
+            )
+
+    def __get_document_last_node_id(self, doc: AbstractDocument) -> str | None:
+        """Helper to get the last_node_id for a document, handling potential NaN or missing values."""
+        last_node_id = doc.last_node_id
+        if last_node_id is not None:
+            try:
+                if isna(last_node_id):
+                    last_node_id = None
+            except Exception:
+                pass
+        if isinstance(last_node_id, str) and last_node_id.strip() in {
+            "",
+            "<NA>",
+            "NA",
+            "N/A",
+            "nan",
+            "NaN",
+            "None",
+            "null",
+        }:
+            last_node_id = None
+        return last_node_id
 
     def load_session(
         self,
@@ -903,23 +1008,18 @@ class PneumaDB:
                     retriever_type == RetrieverType.MATERIALIZER
                     or retriever_type == RetrieverType.CONDUCTOR
                 ):
-                    content = read_csv(
-                        os.path.join(
-                            self.target_tables_path,
-                            user_id,
-                            chat_id,
-                            f"{doc_row['doc_id']}.csv",
-                        )
+                    select_query = (
+                        f"""SELECT * FROM "{doc_row['doc_id']}";"""
                     )
                 else:
                     select_query = (
                         f"""SELECT * FROM "{dataset_name}"."{doc_row['doc_id']}";"""
                     )
-                    content = self.execute_query(
-                        user_id,
-                        chat_id,
-                        select_query,
-                    )
+                content = self.execute_query(
+                    user_id,
+                    chat_id,
+                    select_query,
+                )
                 document = Table(
                     doc_id=doc_row["doc_id"],
                     retriever_type=retriever_type,

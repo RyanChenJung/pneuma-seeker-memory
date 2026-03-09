@@ -1,14 +1,12 @@
 # src/pneuma_seeker/core/materializer/main.py
-import glob
-import os
 from logging import Logger
 from typing import Any
 
 from pandas import DataFrame
 
-from pneuma_seeker.services.core.actions.main import ActionSet
+from pneuma_seeker.services.core.action_set.main import ActionSet
 from pneuma_seeker.shared.schemas.core.action import ActionNames
-from pneuma_seeker.services.core.actions.operators.semantic_join import (
+from pneuma_seeker.services.core.action_set.impl.semantic_join import (
     SyntacticSimMetric,
 )
 from pneuma_seeker.services.core.api.db import DBAPI
@@ -29,6 +27,10 @@ from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import formatted_log
 from pneuma_seeker.shared.parser import parse_code, parse_json
+from pneuma_seeker.shared.str_processor import (
+    extract_table_ids_from_code,
+    extract_tables_from_sql_regex,
+)
 
 
 class Materializer:
@@ -61,10 +63,11 @@ class Materializer:
             f"Initializing Materializer for user_id: {self.user_id}, chat_id: {self.chat_id}"
         )
 
-        self.prompt_factory = MaterializerPromptFactory(self.config)
-        self.state = MaterializerState()
+        self.prompt_factory = MaterializerPromptFactory(self.config, self.action_set)
+        self.state = MaterializerState(self.user_id, self.chat_id, self.db_api)
         self.actions: list[str] = []
         self.llm_messages: list[LLMMessage] = []
+        self.last_intermediate_table_ids: set[str] = set()
 
     def materialize_T(
         self,
@@ -77,7 +80,13 @@ class Materializer:
         prefetched_web_search_result: AbstractDocument | None = None,
         prefetched_web_crawl_result: AbstractDocument | None = None,
         precomputed_join_paths: str | None = None,
-    ) -> dict[str, DataFrame]:
+    ) -> tuple[
+        list[AbstractDocument],  # Retrieved tables
+        AbstractDocument | None,  # Web search result
+        AbstractDocument | None,  # Web crawl result
+        str | None,  # Join paths
+        dict[str, DataFrame],  # Materialized T
+    ]:
         """Materialize target tables T based on the provided script S and external tables."""
         self.__log(f"Materializing {len(T)} target tables...")
         self.__reset_materializer()
@@ -85,6 +94,10 @@ class Materializer:
         self.state.T = T
         self.state.column_descriptions = column_descriptions
         self.state.S = S
+
+        self.db_api.link_dataset_tables(
+            self.user_id, self.chat_id, self.config.DATA_SOURCES[0]
+        )
 
         if len(prefetched_tables) > 0:
             self.state.retrieved_tables = prefetched_tables
@@ -107,15 +120,17 @@ class Materializer:
                 ),
             )
         ]
-        step_count = 0
+
+        current_step = 0
+        last_env_state_idx: int | None = None
         while (
             not self.__check_completion(self.state.T)
-            and step_count < self.config.MAX_MATERIALIZER_STEPS
+            and current_step < self.config.MAX_MATERIALIZER_STEPS
         ):
             self.__log(
-                f"=> [Step {step_count}/{self.config.MAX_MATERIALIZER_STEPS}] Planning materialization actions..."
+                f"=> [Step {current_step}/{self.config.MAX_MATERIALIZER_STEPS}] Planning materialization actions..."
             )
-            step_count += 1
+            current_step += 1
 
             self.llm_messages.append(
                 LLMMessage(
@@ -124,7 +139,7 @@ class Materializer:
                         self.state.retrieved_tables,
                         list(self.state.intermediate_tables),
                         self.actions[-5:],  # only include last 5 actions for brevity
-                        step_count,
+                        current_step,
                         client_note,
                         self.state.external_tables,
                         self.state.web_search_result,
@@ -133,10 +148,11 @@ class Materializer:
                     ),
                 )
             )
+            last_env_state_idx = len(self.llm_messages) - 1
 
             llm_response = "".join(
                 self.language_model_api.chat(
-                    self.llm_messages, LLMOption(json_mode=True)
+                    self.llm_messages, LLMOption(json_mode=True, max_new_tokens=2500)
                 )
             )
             self.llm_messages.append(
@@ -145,6 +161,12 @@ class Materializer:
                     content=llm_response,
                 )
             )
+            if last_env_state_idx is not None:
+                self.llm_messages[last_env_state_idx]["content"] = (
+                    self.prompt_factory.get_skeleton_context_prompt(
+                        current_step,
+                    )
+                )
 
             try:
                 self.__log("==> Parsing the response...")
@@ -184,7 +206,7 @@ class Materializer:
                         content=error_msg,
                     )
                 )
-                step_count -= 1
+                current_step -= 1
                 continue
 
             self.__log(f"==> Executing the planned actions: {plan}...")
@@ -194,13 +216,22 @@ class Materializer:
                 self.__execute_action(action_name, action_args)
 
         self.__log("Materialization completed successfully!")
+        self.last_intermediate_table_ids = set(
+            i.doc_id for i in self.state.intermediate_tables
+        )
         final_result: dict[str, DataFrame] = {}
         for intermediate_table_doc in self.state.intermediate_tables:
             if intermediate_table_doc.doc_id in self.state.T.keys():
                 final_result[intermediate_table_doc.doc_id] = (
                     intermediate_table_doc.content
                 )
-        return final_result
+        return (
+            self.state.retrieved_tables,
+            self.state.web_search_result,
+            self.state.web_crawl_result,
+            self.state.join_paths,
+            final_result,
+        )
 
     def __execute_action(
         self,
@@ -224,60 +255,34 @@ class Materializer:
                     )
                 )
             case ActionNames.TABLE_RETRIEVE.value:
-                if self.config.ENABLE_MULTI_TOPIC_TABLE_RETRIEVE:
-                    prompts = action_args.get("prompts", [])
-                    if not isinstance(prompts, list) or not all(
-                        isinstance(p, str) for p in prompts
-                    ):
-                        error_msg = "The 'prompts' argument must be a list of strings."
-                        self.__log(f"==> {error_msg}")
-                        self.llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=error_msg,
-                            )
-                        )
-                        return
-                    if len(prompts) == 0:
-                        error_msg = "The 'prompts' list cannot be empty."
-                        self.__log(f"==> {error_msg}")
-                        self.llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=error_msg,
-                            )
-                        )
-                        return
-                    self.state.retrieved_tables = (
-                        self.action_set.retrieve_multi_topic_documents(
-                            prompts, RetrieverType.PNEUMA_RETRIEVER, 10
+                prompts = action_args.get("prompts", [])
+                if not isinstance(prompts, list) or not all(
+                    isinstance(p, str) for p in prompts
+                ):
+                    error_msg = "The 'prompts' argument must be a list of strings."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
                         )
                     )
-                else:
-                    prompt = action_args.get("prompt")
-                    if not isinstance(prompt, str):
-                        error_msg = "The 'prompt' argument must be a string."
-                        self.__log(f"==> {error_msg}")
-                        self.llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=error_msg,
-                            )
+                    return
+                if len(prompts) == 0:
+                    error_msg = "The 'prompts' list cannot be empty."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
                         )
-                        return
-                    if len(prompt.strip()) == 0:
-                        error_msg = "The 'prompt' argument cannot be empty."
-                        self.__log(f"==> {error_msg}")
-                        self.llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=error_msg,
-                            )
-                        )
-                        return
-                    self.state.retrieved_tables = self.action_set.retrieve_documents(
-                        prompt, RetrieverType.PNEUMA_RETRIEVER, 10
                     )
+                    return
+                self.state.retrieved_tables = (
+                    self.action_set.retrieve_multi_topic_documents(
+                        prompts, RetrieverType.PNEUMA_RETRIEVER, 10, True, 5
+                    )
+                )
 
                 if len(self.state.retrieved_tables) == 0:
                     error_msg = f"No tables were retrieved."
@@ -289,10 +294,9 @@ class Materializer:
                         )
                     )
                 else:
-                    if self.config.ENABLE_JOIN_PATH_EXTRACTION:
-                        self.state.join_paths = self.action_set.discover_join_paths(
-                            self.state.retrieved_tables
-                        )
+                    self.state.join_paths = self.action_set.discover_join_paths(
+                        self.state.retrieved_tables
+                    )
                     success_msg = f'Successfully retrieved tables. Notice that the "retrieved internal tables" have been filled.'
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
@@ -341,7 +345,7 @@ class Materializer:
                     )
                     return
                 self.state.web_search_result = web_search_results[0]
-                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value}. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled.{" Join paths have been updated accordingly." if self.config.ENABLE_JOIN_PATH_EXTRACTION else ""}'
+                success_msg = f'Successfully retrieved information from {ActionNames.WEB_SEARCH.value}. Notice that the "{ActionNames.WEB_SEARCH.value} result" have been filled. Join paths have also been updated accordingly."'
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
                     LLMMessage(
@@ -404,15 +408,38 @@ class Materializer:
                 self.prov_graph.add_node(new_node, True)
                 self.state.web_crawl_result.last_node_id = new_node.id
             case ActionNames.TABLE_ENUMERATION.value:
-                pattern = action_args.get("pattern", "")
+                patterns = action_args.get("patterns", [])
+                if not isinstance(patterns, list) or not all(
+                    isinstance(p, str) for p in patterns
+                ):
+                    error_msg = "The 'patterns' argument must be a list of strings."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
+                if len(patterns) == 0:
+                    error_msg = "The 'patterns' list cannot be empty."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
                 extra_tables: list[AbstractDocument] = (
-                    self.action_set.retrieve_documents(
-                        pattern, RetrieverType.ENUMERATOR, 10, True, 5
+                    self.action_set.retrieve_multi_topic_documents(
+                        patterns, RetrieverType.ENUMERATOR, 20, True, 5
                     )
                 )
+                pattern_desc = str(patterns)
 
                 if len(extra_tables) > 0:
-                    success_msg = f'Successfully retrieved all tables that match the pattern {pattern}. You can use them to materialize T, even if you have not called {ActionNames.TABLE_RETRIEVE.value} before, as these tables have been included to "retrieved internal tables".'
+                    success_msg = f'Successfully retrieved all tables that match the pattern(s) {pattern_desc}. You can use them to materialize T, even if you have not called {ActionNames.TABLE_RETRIEVE.value} before, as these tables have been included to "retrieved internal tables".'
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
@@ -427,7 +454,7 @@ class Materializer:
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.ENUMERATOR,
                         python_code=read_code,
-                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern:\n{pattern}.",
+                        description=f"Enumerates all tables whose names match this regular expression (RegEx) pattern:\n{pattern_desc}.",
                     )
                     self.prov_graph.add_node(new_node, True)
 
@@ -490,10 +517,50 @@ class Materializer:
                     ).strip()
                     if table_id_to_project.startswith("Table "):
                         table_id_to_project = table_id_to_project[6:].strip()
-                    relevant_columns = retrieved_table_info.get("columns", [])
+                    column_mapping = retrieved_table_info.get("columns", {})
                     target_table_id = target_table_id.strip()
 
-                    if table_id_to_project not in all_table_doc_ids:
+                    if not isinstance(column_mapping, dict):
+                        error_msg = "Invalid 'columns' for table_projection: expected a dict mapping output column names to source column names."
+                        self.__log(f"==> {error_msg}")
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.USER.value,
+                                content=error_msg,
+                            )
+                        )
+                        return
+                    if len(column_mapping) == 0:
+                        error_msg = "Invalid 'columns' for table_projection: empty mapping provided."
+                        self.__log(f"==> {error_msg}")
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.USER.value,
+                                content=error_msg,
+                            )
+                        )
+                        return
+                    if not all(
+                        isinstance(out_col, str) and isinstance(src_col, str)
+                        for out_col, src_col in column_mapping.items()
+                    ):
+                        error_msg = "Invalid 'columns' for table_projection: mapping must be str->str."
+                        self.__log(f"==> {error_msg}")
+                        self.llm_messages.append(
+                            LLMMessage(
+                                role=Role.USER.value,
+                                content=error_msg,
+                            )
+                        )
+                        return
+
+                    output_columns = list(column_mapping.keys())
+                    source_columns = list(column_mapping.values())
+
+                    if (
+                        table_id_to_project.split(".")[-1].strip('"')
+                        not in all_table_doc_ids
+                    ):
                         error_msg = (
                             "Invalid table ID to select. Ensure the table exists."
                         )
@@ -519,21 +586,13 @@ class Materializer:
                         )
                         return
 
-                    matches = [i for i in all_tables if i.doc_id == table_id_to_project]
+                    matches = [
+                        i
+                        for i in all_tables
+                        if i.doc_id == table_id_to_project.split(".")[-1].strip('"')
+                    ]
                     if not matches:
-                        error_msg = f"Table {table_id_to_project!r} not found in the available tables."
-                        self.__log(f"==> {error_msg}")
-                        self.llm_messages.append(
-                            LLMMessage(
-                                role=Role.USER.value,
-                                content=error_msg,
-                            )
-                        )
-                        return
-
-                    table_to_project = matches[0].content
-                    if not isinstance(table_to_project, DataFrame):
-                        error_msg = f"Content of table {table_id_to_project!r} is not a valid DataFrame."
+                        error_msg = f"Table {table_id_to_project.split('.')[-1].strip('"')!r} not found in the available tables."
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
@@ -547,13 +606,12 @@ class Materializer:
                     self.__log(
                         f"==> target_table_id: {target_table_id}; table_id_to_project: {table_id_to_project}"
                     )
-
                     try:
-                        projected_table = self.action_set.project_table(
-                            table_to_project, relevant_columns
+                        projected_table_sample_rows = self.action_set.project_table(
+                            table_id_to_project, target_table_id, column_mapping
                         )
                     except Exception as e:
-                        error_msg = f"Failed selecting columns {relevant_columns!r} from table {table_id_to_project!r}: {e}"
+                        error_msg = f"Failed projecting columns {column_mapping!r} from table {table_id_to_project!r}: {e}"
                         self.__log(f"==> {error_msg}")
                         self.llm_messages.append(
                             LLMMessage(
@@ -567,7 +625,7 @@ class Materializer:
                     select_code = self.action_set.generate_table_select_code(
                         target_table_id,
                         table_id_to_project,
-                        relevant_columns,
+                        source_columns,
                     )
 
                     # Try to create/get a read node for the source doc to connect from
@@ -580,11 +638,11 @@ class Materializer:
                     child_node_desc = (
                         f"Projects a table\n\n"
                         f"- ID: `{table_id_to_project}`\n"
-                        f"- columns: {', '.join(f'`{col}`' for col in relevant_columns)}\n\n"
+                        f"- columns: {', '.join(f'`{col}`' for col in output_columns)}\n\n"
                         f"into a target table:\n\n"
                         f"`{target_table_id}`"
                     )
-                    if set(relevant_columns) != set(
+                    if set(output_columns) != set(
                         self.state.T[target_table_id].columns
                     ):
                         child_node_desc += " (partially)."
@@ -608,13 +666,12 @@ class Materializer:
                         Table(
                             doc_id=target_table_id,
                             retriever_type=RetrieverType.MATERIALIZER,
-                            content=projected_table,
+                            content=projected_table_sample_rows,
                             metadata={},
                             last_node_id=new_node_id,
                         )
                     )
-                    self.__save_new_or_updated_intermediate_table(target_table_id)
-                    success_msg = "Successfully selected retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
+                    success_msg = "Successfully projected retrieved tables in the mapping as target tables. Notice the state's intermediate tables have changed, but please CHECK if the schemas in the selected tables match, either fully or partially, with the ones in target tables."
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
                         LLMMessage(
@@ -622,16 +679,194 @@ class Materializer:
                             content=success_msg,
                         )
                     )
+            case ActionNames.EQUALITY_JOIN.value:
+                left_table_id = action_args.get("left_table_id")
+                right_table_id = action_args.get("right_table_id")
+                left_keys = action_args.get("left_table_column_keys")
+                right_keys = action_args.get("right_table_column_keys")
+                result_table_id = action_args.get("result_table_id")
+
+                if not isinstance(left_table_id, str) or not isinstance(
+                    right_table_id, str
+                ):
+                    error_msg = "Invalid equality_join args: left_table_id and right_table_id must be strings."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if not isinstance(left_keys, list) or not all(
+                    isinstance(x, str) for x in left_keys
+                ):
+                    error_msg = "Invalid equality_join args: left_table_column_keys must be a list[str]."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if not isinstance(right_keys, list) or not all(
+                    isinstance(x, str) for x in right_keys
+                ):
+                    error_msg = "Invalid equality_join args: right_table_column_keys must be a list[str]."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if not isinstance(result_table_id, str):
+                    error_msg = (
+                        "Invalid equality_join args: result_table_id must be a string."
+                    )
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+
+                try:
+                    joined_preview = self.action_set.join_equality(
+                        left_table_id,
+                        right_table_id,
+                        left_keys,
+                        right_keys,
+                        result_table_id,
+                    )
+                except Exception as e:
+                    error_msg = f"Failed equality_join: {e}"
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+
+                child_node = ProvenanceNode(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code="",
+                    description=(
+                        f"Equality-joins tables\n\n"
+                        f"- left: `{left_table_id}` on {left_keys}\n"
+                        f"- right: `{right_table_id}` on {right_keys}\n"
+                        f"- result: `{result_table_id}`"
+                    ),
+                )
+                self.prov_graph.add_node(child_node, True)
+
+                self.state.add_intermediate_table(
+                    Table(
+                        doc_id=result_table_id,
+                        retriever_type=RetrieverType.MATERIALIZER,
+                        content=joined_preview,
+                        metadata={},
+                        last_node_id=child_node.id,
+                    )
+                )
+
+                success_msg = "Successfully performed equality join and materialized the result table."
+                self.__log(f"==> {success_msg}")
+                self.llm_messages.append(
+                    LLMMessage(role=Role.USER.value, content=success_msg)
+                )
+            case ActionNames.TABLE_UNION.value:
+                table_ids = action_args.get("table_ids")
+                result_table_id = action_args.get("result_table_id")
+                provenance_regex = action_args.get("provenance_regex")
+                provenance_column_name = action_args.get("provenance_column_name")
+
+                if not isinstance(table_ids, list) or not all(
+                    isinstance(x, str) for x in table_ids
+                ):
+                    error_msg = (
+                        "Invalid table_union args: table_ids must be a list[str]."
+                    )
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if not isinstance(result_table_id, str):
+                    error_msg = (
+                        "Invalid table_union args: result_table_id must be a string."
+                    )
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if (
+                    not isinstance(provenance_column_name, str)
+                    or not provenance_column_name
+                ):
+                    error_msg = "Invalid table_union args: provenance_column_name must be a non-empty string."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+                if not isinstance(provenance_regex, str) or not provenance_regex:
+                    error_msg = "Invalid table_union args: provenance_regex must be a non-empty string."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+
+                try:
+                    union_preview = self.action_set.union_tables(
+                        table_ids=table_ids,
+                        result_table_id=result_table_id,
+                        provenance_column_name=str(provenance_column_name),
+                        provenance_regex=str(provenance_regex),
+                    )
+                except Exception as e:
+                    error_msg = f"Failed table_union: {e}"
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(role=Role.USER.value, content=error_msg)
+                    )
+                    return
+
+                child_node = ProvenanceNode(
+                    source_retriever=RetrieverType.MATERIALIZER,
+                    python_code="",
+                    description=(
+                        f"Unions tables into `{result_table_id}`\n\n"
+                        f"- sources: {table_ids}\n"
+                        f"- provenance: `{provenance_column_name}` via regex"
+                    ),
+                )
+                self.prov_graph.add_node(child_node, True)
+
+                self.state.add_intermediate_table(
+                    Table(
+                        doc_id=result_table_id,
+                        retriever_type=RetrieverType.MATERIALIZER,
+                        content=union_preview,
+                        metadata={},
+                        last_node_id=child_node.id,
+                    )
+                )
+
+                success_msg = (
+                    "Successfully unioned tables and materialized the result table."
+                )
+                self.__log(f"==> {success_msg}")
+                self.llm_messages.append(
+                    LLMMessage(role=Role.USER.value, content=success_msg)
+                )
             case ActionNames.SEMANTIC_COLUMN_GENERATION.value:
                 table_id: str | None = action_args.get("table_id")
                 new_column_name: str | None = action_args.get("new_column_name")
-                table_relevant_columns: list[str] | None = action_args.get(
+                src_table_columns: list[str] | None = action_args.get(
                     "relevant_columns"
                 )
                 instruction: str | None = action_args.get("instruction")
 
-                if table_id is None or table_id not in [i.doc_id for i in all_tables]:
-                    error_msg = "table_id is not valid (not part of retrieved tables or the state's intermediate tables)."
+                if table_id is None or table_id not in [
+                    i.doc_id for i in self.state.intermediate_tables
+                ]:
+                    error_msg = (
+                        "table_id is not valid (not part of intermediate tables)."
+                    )
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
@@ -650,7 +885,7 @@ class Materializer:
                         )
                     )
                     return
-                if table_relevant_columns is None:
+                if src_table_columns is None:
                     error_msg = "relevant_columns is not provided."
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
@@ -661,13 +896,24 @@ class Materializer:
                     )
                     return
 
-                conditioned_table_doc = [i for i in all_tables if i.doc_id == table_id][
-                    0
-                ]
-                conditioned_table: DataFrame = conditioned_table_doc.content
+                conditioned_table_doc = [
+                    i for i in self.state.intermediate_tables if i.doc_id == table_id
+                ][0]
+                if conditioned_table_doc.retriever_type != RetrieverType.MATERIALIZER:
+                    error_msg = "Semantic column generation is only supported for intermediate tables generated within the materialization process."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
 
-                if not set(table_relevant_columns) <= set(
-                    list(conditioned_table.columns)
+                conditioned_table_sample_rows: DataFrame = conditioned_table_doc.content
+
+                if not set(src_table_columns) <= set(
+                    list(conditioned_table_sample_rows.columns)
                 ):
                     error_msg = f"relevant_columns must be a subset of the columns of table {table_id}."
                     self.__log(f"==> {error_msg}")
@@ -689,12 +935,13 @@ class Materializer:
                     )
                     return
 
-                augmented_table = self.action_set.generate_semantic_column(
-                    conditioned_table[table_relevant_columns],
+                augmented_table_sample_rows = self.action_set.generate_semantic_column(
+                    conditioned_table_doc.doc_id,
+                    src_table_columns,
                     new_column_name,
                     instruction,
                 )
-                conditioned_table_doc.content = augmented_table
+                conditioned_table_doc.content = augmented_table_sample_rows
                 success_msg = f"Successfully added a new column named {new_column_name} to table with ID {table_id}."
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
@@ -705,14 +952,10 @@ class Materializer:
                 )
 
                 sem_col_code = self.action_set.generate_semantic_col_generator_code(
-                    table_relevant_columns,
+                    src_table_columns,
                     conditioned_table_doc,
                     new_column_name,
-                    list(augmented_table[new_column_name]),
-                    os.path.join(
-                        self._get_intermediate_table_dir_path(),
-                        f"{conditioned_table_doc.doc_id}.csv",
-                    ),
+                    list(augmented_table_sample_rows[new_column_name]),
                 )
                 # Ensure we have a parent node for the conditioned table (read node)
                 parent_node_id = self.__create_or_get_read_node(
@@ -727,18 +970,14 @@ class Materializer:
                 new_node = ProvenanceNode(
                     source_retriever=RetrieverType.MATERIALIZER,
                     python_code=sem_col_code,
-                    description=f"Uses an LLM to generate column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: {', '.join(f'`{col}`' for col in table_relevant_columns)}.",
+                    description=f"Uses an LLM to generate column named `{new_column_name}` in the table `{table_id}`, conditioned on the following columns: {', '.join(f'`{col}`' for col in src_table_columns)}.",
                 )
                 self.prov_graph.add_node(new_node, True)
                 if parent_node_id is not None:
                     parent_node = self.prov_graph.get_node_by_id(parent_node_id)
                     if parent_node is not None:
                         self.prov_graph.connect(parent_node, new_node)
-
                 conditioned_table_doc.last_node_id = new_node.id
-                self.__save_new_or_updated_intermediate_table(
-                    conditioned_table_doc.doc_id
-                )
             case ActionNames.SEMANTIC_JOIN.value:
                 left_table_id: str | None = action_args.get("left_table_id")
                 right_table_id: str | None = action_args.get("right_table_id")
@@ -888,20 +1127,12 @@ class Materializer:
                     )
                     return
 
-                if len(left_table) > len(right_table):
-                    # Swap to make sure the smaller table is on the left for better performance
-                    left_table, right_table = right_table, left_table
-                    left_table_doc, right_table_doc = right_table_doc, left_table_doc
-                    relevant_left_cols, relevant_right_cols = (
-                        relevant_right_cols,
-                        relevant_left_cols,
-                    )
-
-                joined_table = self.action_set.join_semantic(
-                    left_table,
-                    right_table,
+                joined_table_sample_rows = self.action_set.join_semantic(
+                    left_table_id,
+                    right_table_id,
                     relevant_left_cols,
                     relevant_right_cols,
+                    joined_table_id,
                     syntactic_sim_metric=SyntacticSimMetric.JACCARD_QGRAM,
                     top_k=self.config.SEMANTIC_JOIN_TOP_K,
                 )
@@ -912,10 +1143,6 @@ class Materializer:
                     relevant_left_cols,
                     relevant_right_cols,
                     self.config.SEMANTIC_JOIN_TOP_K,
-                    os.path.join(
-                        self._get_intermediate_table_dir_path(),
-                        f"{joined_table_id}.csv",
-                    ),
                 )
                 parent_node_1_id = self.__create_or_get_read_node(
                     left_table_doc,
@@ -949,12 +1176,11 @@ class Materializer:
                     Table(
                         doc_id=joined_table_id,
                         retriever_type=RetrieverType.MATERIALIZER,
-                        content=joined_table,
+                        content=joined_table_sample_rows,
                         metadata={},
                         last_node_id=new_node.id,
                     )
                 )
-                self.__save_new_or_updated_intermediate_table(joined_table_id)
                 success_msg = "Successfully joined the left and right tables semantically. Notice the state's intermediate tables have changed."
                 self.__log(f"==> {success_msg}")
                 self.llm_messages.append(
@@ -964,10 +1190,8 @@ class Materializer:
                     )
                 )
             case ActionNames.PYTHON_EXECUTOR.value:
-                id_dfs: dict[str, DataFrame] = {}
                 id_docs: dict[str, AbstractDocument] = {}
                 for table_doc in all_tables:
-                    id_dfs[table_doc.doc_id] = table_doc.content
                     id_docs[table_doc.doc_id] = table_doc
                 assign_to: str | None = action_args.get("assign_to")
                 if assign_to is None or assign_to.strip() == "":
@@ -983,44 +1207,35 @@ class Materializer:
 
                 try:
                     python_code: str = parse_code(action_args.get("code", ""))
-                    exec_res = self.action_set.execute_code(id_dfs, python_code)
-                    used_table_ids = self.action_set.extract_table_ids_from_code(
-                        python_code
-                    )
+                    exec_res = self.action_set.execute_code(python_code, assign_to)
+                    used_table_ids = extract_table_ids_from_code(python_code)
 
                     used_table_retrievers: list[RetrieverType] = []
                     parent_nodes: list[ProvenanceNode] = []
                     for used_table_id in used_table_ids:
-                        used_table_retrievers.append(
-                            id_docs[used_table_id].retriever_type
-                        )
+                        try:
+                            used_table_id = used_table_id.split(".")[-1].strip('"')
+                            used_table_retrievers.append(
+                                id_docs[used_table_id].retriever_type
+                            )
 
-                        used_table_doc = id_docs[used_table_id]
-                        parent_node = self.prov_graph.get_node_by_id(
-                            used_table_doc.last_node_id or ""
-                        )
-                        if parent_node is not None:
-                            parent_nodes.append(parent_node)
+                            used_table_doc = id_docs[used_table_id]
+                            parent_node = self.prov_graph.get_node_by_id(
+                                used_table_doc.last_node_id or ""
+                            )
+                            if parent_node is not None:
+                                parent_nodes.append(parent_node)
+                        except Exception as e:
+                            self.__log(
+                                f"Warning: Failed to extract retriever type or provenance node for used table ID {used_table_id}: {e}"
+                            )
+                            continue
 
-                    code_nl_summary = "".join(
-                        self.language_model_api.chat(
-                            [
-                                LLMMessage(
-                                    role=Role.SYSTEM.value,
-                                    content=f"Summarize in 1-3 sentences what the following Python code does, especially in terms of how it uses the tables as inputs, and what it produces as output. Use the following style for the summary: \nExecutes Python code to produce a new table named {assign_to} by <summary of the code's operations on the used tables>.",
-                                )
-                            ]
-                        )
-                    )
-
+                    code_nl_summary = f"Executes Python code to produce a new table named {assign_to} by performing operations on the following tables: {', '.join(f'`{tid}`' for tid in used_table_ids)}. The code uses these tables as inputs and produces a new table as output."
                     new_node = ProvenanceNode(
                         source_retriever=RetrieverType.MATERIALIZER,
                         python_code=self.action_set.append_comment_to_existing_code(
-                            python_code,
-                            f"Result path: {os.path.join(
-                                self._get_intermediate_table_dir_path(),
-                                f"{assign_to}.csv",
-                            )}",
+                            python_code, f"Result: {assign_to}"
                         ),
                         description=code_nl_summary,
                     )
@@ -1049,7 +1264,6 @@ class Materializer:
                             last_node_id=new_node.id,
                         )
                     )
-                    self.__save_new_or_updated_intermediate_table(assign_to)
                     success_msg = f"Successfully executed the Python code, resulting in a table named {assign_to}"
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
@@ -1069,9 +1283,14 @@ class Materializer:
                             content=error_msg,
                         )
                     )
-            case ActionNames.ASSUMPTION_CHECK.value:
-                if not self.config.ENABLE_ASSUMPTION_CHECK:
-                    error_msg = f"{ActionNames.ASSUMPTION_CHECK.value} is not enabled in the configuration."
+            case ActionNames.QUERY_EXECUTOR.value:
+                id_docs: dict[str, AbstractDocument] = {}
+                for table_doc in all_tables:
+                    id_docs[table_doc.doc_id] = table_doc
+
+                assign_to: str | None = action_args.get("assign_to")
+                if assign_to is None or assign_to.strip() == "":
+                    error_msg = "'assign_to' argument is missing or empty."
                     self.__log(f"==> {error_msg}")
                     self.llm_messages.append(
                         LLMMessage(
@@ -1081,12 +1300,109 @@ class Materializer:
                     )
                     return
 
-                id_dfs: dict[str, DataFrame] = {}
-                for table_doc in all_tables:
-                    id_dfs[table_doc.doc_id] = table_doc.content
+                query = action_args.get("query")
+                if not isinstance(query, str) or query.strip() == "":
+                    error_msg = "'query' argument is missing, empty, or not a string."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
+
+                try:
+                    exec_res = self.action_set.execute_query(query, assign_to)
+                    used_table_ids = extract_tables_from_sql_regex(query)
+
+                    parent_nodes: list[ProvenanceNode] = []
+                    for used_table_id in used_table_ids:
+                        try:
+                            used_table_key = used_table_id.split(".")[-1].strip('"')
+                            used_table_doc = id_docs.get(used_table_key)
+                            if used_table_doc is None:
+                                continue
+                            parent_node = self.prov_graph.get_node_by_id(
+                                used_table_doc.last_node_id or ""
+                            )
+                            if parent_node is not None:
+                                parent_nodes.append(parent_node)
+                        except Exception as e:
+                            self.__log(
+                                f"Warning: Failed to resolve provenance for used table ID {used_table_id}: {e}"
+                            )
+                            continue
+
+                    query_nl_summary = (
+                        f"Executes a SQL query to produce a new table named {assign_to} "
+                        f"from the following tables: {', '.join(f'`{tid}`' for tid in used_table_ids)}."
+                    )
+                    new_node = ProvenanceNode(
+                        source_retriever=RetrieverType.MATERIALIZER,
+                        python_code=self.action_set.append_comment_to_existing_code(
+                            query, f"Result: {assign_to}"
+                        ),
+                        description=query_nl_summary,
+                    )
+                    self.prov_graph.add_node(new_node, True)
+                    for parent_node in parent_nodes:
+                        if parent_node is None:
+                            continue
+                        try:
+                            self.prov_graph.connect(parent_node, new_node)
+                        except Exception:
+                            fallback = self.prov_graph.get_node_by_id(parent_node.id)
+                            if fallback is not None:
+                                try:
+                                    self.prov_graph.connect(fallback, new_node)
+                                except Exception:
+                                    continue
+
+                    self.state.add_intermediate_table(
+                        Table(
+                            doc_id=assign_to,
+                            retriever_type=RetrieverType.MATERIALIZER,
+                            content=exec_res,
+                            metadata={},
+                            last_node_id=new_node.id,
+                        )
+                    )
+                    success_msg = f"Successfully executed the SQL query, resulting in a table named {assign_to}"
+                    self.__log(f"==> {success_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=success_msg,
+                        )
+                    )
+                except Exception as exception:
+                    error_msg = (
+                        f"Exception occured during SQL query execution: {exception}."
+                    )
+                    self.__log(error_msg)
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+            case ActionNames.CONTEXT_EXTRACTION.value:
+                if not self.config.ENABLE_CONTEXT_EXTRACTION:
+                    error_msg = f"{ActionNames.CONTEXT_EXTRACTION.value} is not enabled in the configuration."
+                    self.__log(f"==> {error_msg}")
+                    self.llm_messages.append(
+                        LLMMessage(
+                            role=Role.USER.value,
+                            content=error_msg,
+                        )
+                    )
+                    return
                 try:
                     python_code: str = parse_code(action_args.get("code", ""))
-                    exec_res = self.action_set.execute_code(id_dfs, python_code)
+                    exec_res = self.action_set.execute_code(
+                        python_code, "materializer_assumption_check"
+                    )
                     success_msg = f"Assumption check result: {exec_res}"
                     self.__log(f"==> {success_msg}")
                     self.llm_messages.append(
@@ -1095,6 +1411,22 @@ class Materializer:
                             content=success_msg,
                         )
                     )
+                    # Assumption checks may materialize either a *table* or a *view*.
+                    # In DuckDB, attempting to DROP the wrong object type throws.
+                    # Cleanup must be best-effort and must not turn a successful
+                    # assumption_check into a failure.
+                    for cleanup_stmt in (
+                        "DROP VIEW IF EXISTS materializer_assumption_check;",
+                        "DROP TABLE IF EXISTS materializer_assumption_check;",
+                    ):
+                        try:
+                            self.db_api.execute_query(
+                                self.user_id, self.chat_id, cleanup_stmt
+                            )
+                        except Exception as cleanup_exc:
+                            self.__log(
+                                f"Assumption check cleanup warning ({cleanup_stmt}): {cleanup_exc}"
+                            )
                 except Exception as exception:
                     error_msg = f"Error during assumption checking: {exception}"
                     self.__log(error_msg)
@@ -1160,22 +1492,18 @@ class Materializer:
         ids_complete = all_T_ids <= materialized_table_ids
         is_complete = ids_complete
 
+        warning_messages: list[str] = []
         if not ids_complete:
             warning_msg = f"You have not materialized these tables: {all_T_ids - materialized_table_ids}"
             self.__log(f"=> {warning_msg}")
-            self.llm_messages.append(
-                LLMMessage(
-                    role=Role.USER.value,
-                    content=warning_msg,
-                )
-            )
+            warning_messages.append(warning_msg)
 
-        column_issues: list[str] = ["Fix the following column issues:"]
+        column_issues: list[str] = []
         if ids_complete:
             for target_table_id in all_T_ids:
                 df = id_dfs.get(target_table_id)
                 if df is None or not isinstance(df, DataFrame):
-                    issue_msg = f"- For table `{target_table_id}`: no valid DataFrame was materialized."
+                    issue_msg = f"- For table `{target_table_id}`: no valid table was materialized."
                     self.__log(issue_msg)
                     column_issues.append(issue_msg)
                     is_complete = False
@@ -1191,23 +1519,33 @@ class Materializer:
                 missing_cols = target_cols - materialized_cols
                 extra_cols = materialized_cols - target_cols
 
-                if missing_cols or extra_cols:
+                # Treat the target schema as a *required subset* of the materialized schema.
+                # Extra columns are allowed and should not trigger a "repair" projection that
+                # could drop useful data (e.g., wide sample columns like s001..s153).
+                if missing_cols:
                     is_complete = False
-                    issue_msg = f"- For table `{target_table_id}`: "
-                    if missing_cols:
-                        issue_msg += f"missing columns {sorted(missing_cols)}. "
-                    if extra_cols:
-                        issue_msg += f"unexpected columns {sorted(extra_cols)}. "
-                    column_issues.append(issue_msg.strip())
+                    issue_msg = (
+                        f"- For table `{target_table_id}`: missing columns {sorted(missing_cols)}."
+                    )
+                    column_issues.append(issue_msg)
+
+                if extra_cols:
+                    self.__log(
+                        f"==> Note: `{target_table_id}` has extra columns (allowed): {sorted(extra_cols)}"
+                    )
 
         if ids_complete and not is_complete:
+            warning_msg = f"There are issues with the columns of materialized tables: {'\n'.join(column_issues)}"
+            self.__log(f"=> {warning_msg}")
+            warning_messages.append(warning_msg)
+
+        if warning_messages:
             self.llm_messages.append(
                 LLMMessage(
                     role=Role.USER.value,
-                    content="\n".join(column_issues),
+                    content="\n".join(warning_messages),
                 )
             )
-
         self.__log(
             f"Completion check: {is_complete} ({len(materialized_table_ids)}/{len(all_T_ids)} tables materialized)"
         )
@@ -1218,50 +1556,24 @@ class Materializer:
         self.__log("Resetting materializer...")
         self.state.reset()
         self.prov_graph.reset_materialization_nodes()
-        self.__clear_csv_files()
         self.actions = []
         self.llm_messages = []
         self.join_paths = None
-        self.__log("Materializer reset complete.")
 
-    def __clear_csv_files(self):
-        """Delete all .csv files in the module directory."""
-        pattern = os.path.join(self._get_intermediate_table_dir_path(), "*.csv")
-        for csv_file in glob.glob(pattern):
+        for doc_id in self.last_intermediate_table_ids:
             try:
-                os.remove(csv_file)
-            except Exception:
+                self.db_api.execute_query(
+                    self.user_id,
+                    self.chat_id,
+                    f'DROP TABLE IF EXISTS "{doc_id}";',
+                )
+            except Exception as e:
+                self.__log(
+                    f"Warning: failed to delete intermediate table {doc_id} from the database: {e}"
+                )
                 continue
+        self.last_intermediate_table_ids = set()
+        self.__log("Materializer reset complete.")
 
     def __log(self, text: str):
         formatted_log(self.logger, "MATERIALIZER", text)
-
-    def __save_new_or_updated_intermediate_table(self, table_id: str):
-        """Save a new or updated intermediate table to a CSV file."""
-        intermediate_table_dir_path = self._get_intermediate_table_dir_path()
-        csv_path = os.path.join(intermediate_table_dir_path, f"{table_id}.csv")
-        intermediate_table: DataFrame | None = None
-        for table_doc in self.state.intermediate_tables:
-            if table_doc.doc_id == table_id:
-                intermediate_table = table_doc.content
-                break
-
-        if isinstance(intermediate_table, DataFrame):
-            intermediate_table.to_csv(csv_path, index=False)
-
-    def _get_intermediate_table_dir_path(self):
-        """Get the directory path for storing intermediate table CSV files."""
-        intermediate_table_dir_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "..",
-            "..",
-            "..",
-            "..",
-            "data_src",
-            "intermediate_data",
-            self.user_id,
-            self.chat_id,
-        )
-        os.makedirs(intermediate_table_dir_path, exist_ok=True)
-        return intermediate_table_dir_path

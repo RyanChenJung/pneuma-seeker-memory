@@ -40,7 +40,7 @@ class DBAPI:
         - only reads file once for ingestion (fast path)
         """
         self.pneuma_db.ingest_dataset(dataset_name, dataset_path)
-    
+
     def get_table_description(self, dataset_name: str, table_name: str) -> str:
         """Returns the description of a table in the dataset."""
         return self.pneuma_db.get_table_description(dataset_name, table_name)
@@ -71,6 +71,24 @@ class DBAPI:
     # ------------------------------------------------------------------
     # Chat Session Persistence
     # ------------------------------------------------------------------
+    def register_temporary_df(self, user_id: str, chat_id: str, df: DataFrame, table_name: str):
+        """Registers a temporary DataFrame in the workspace DB connection."""
+        self.pneuma_db.register_temporary_df(user_id, chat_id, df, table_name)
+
+    def persist_df(
+        self,
+        user_id: str,
+        chat_id: str,
+        df: DataFrame,
+        table_name: str,
+        overwrite_content: bool,
+    ):
+        """
+        Persists a DataFrame as a table in the workspace DB connection.
+        If the table already exists, it will be replaced.
+        """
+        self.pneuma_db.persist_df(user_id, chat_id, df, table_name, overwrite_content)
+
     def persist_session(
         self,
         user_id: str,

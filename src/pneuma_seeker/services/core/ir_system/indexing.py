@@ -10,7 +10,9 @@ sys.path.append(
 
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.ir_system.main import IRSystem
+from pneuma_seeker.services.core.ir_system.retriever.impl.pneuma_retriever import (
+    PneumaRetriever,
+)
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.logger import setup_logger
 from pneuma_seeker.shared.schemas.core.ir_system import (
@@ -18,18 +20,20 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
     RetrieverType,
     Table,
     TableContext,
+    Text,
 )
 
+# KramaBench
 INDEXING_ARCHEOLOGY = False
+INDEXING_ASTRONOMY = False
 INDEXING_BIOMEDICAL = False
 INDEXING_ENVIRONMENT = False
-INDEXING_TAG = False
+INDEXING_LEGAL = False
+INDEXING_WILDFIRE = False
+
+# Internal datasets
 INDEXING_BUYSITE = False
 INDEXING_FEDERAL_STUDENT_LOAN = False
-INDEXING_CSAIL_STATA_NEUTRON = False
-INDEXING_DW = False
-INDEXING_GEOQUERY = False
-INDEXING_ATIS = False
 
 
 config = Config("../../../../../.env")
@@ -52,8 +56,48 @@ LARGE_BUYSITE_DATASET = [
 ]
 
 
-def index_dataset(dataset_name: str, metadata_available=False):
+def index_dataset(
+    dataset_name: str,
+    metadata_available=False,
+    schema_summaries: pd.DataFrame | None = None,
+):
     DATASET_DIR = f"../../../../../data_src/{dataset_name}/dataset"
+
+    schema_summary_docs: list[Text] = []
+    if schema_summaries is not None:
+        required_cols = {"table_name", "summary"}
+        missing = required_cols - set(schema_summaries.columns)
+        if missing:
+            raise ValueError(
+                f"schema_summaries is missing required columns: {sorted(missing)}"
+            )
+
+        # Align with PneumaRetriever: one schema-summary document per table,
+        # concatenating all per-column narrations using " | ".
+        group_cols = ["table_name"]
+        if "column_name" in schema_summaries.columns:
+            schema_summaries = schema_summaries.sort_values(
+                by=["table_name", "column_name"], kind="stable"
+            )
+        else:
+            schema_summaries = schema_summaries.sort_values(
+                by=["table_name"], kind="stable"
+            )
+
+        grouped = schema_summaries.groupby(group_cols, sort=False)
+        for table_name, group in tqdm(grouped, desc="Loading schema summaries..."):
+            combined_summary = " | ".join(group["summary"].astype(str).tolist())
+            schema_summary_docs.append(
+                Text(
+                    doc_id=f"{DATASET_DIR}/{table_name}_schema_summary",
+                    retriever_type=RetrieverType.PNEUMA_RETRIEVER,
+                    content=combined_summary,
+                    metadata={
+                        "table_name": f"{DATASET_DIR}/{table_name}",
+                    },
+                )
+            )
+
     documents: list[AbstractDocument] = []
     dataset = os.listdir(DATASET_DIR)
     for table_name in tqdm(dataset, desc="Loading dataset..."):
@@ -96,41 +140,44 @@ def index_dataset(dataset_name: str, metadata_available=False):
                 )
             )
 
-    ir_sys = IRSystem(
-        config, logger, DBAPI(config, logger), LanguageModelAPI(config, logger)
+    ir_sys = PneumaRetriever(
+        "user_id",
+        "chat_id",
+        config,
+        DBAPI(config, logger),
+        LanguageModelAPI(config, logger),
     )
-    ir_sys.index_documents(RetrieverType.PNEUMA_RETRIEVER, documents)
+
+    if schema_summaries is not None:
+        print(
+            f"Indexing {len(documents)} documents with {len(schema_summary_docs)} existing schema summaries..."
+        )
+        ir_sys.index_with_existing_schema_summaries(
+            documents,
+            existing_schema_summaries=(
+                schema_summary_docs if schema_summaries is not None else None
+            ),
+        )
+    else:
+        print(
+            f"Indexing {len(documents)} documents without existing schema summaries..."
+        )
+        ir_sys.index(documents)
 
 
 if INDEXING_ARCHEOLOGY:
     index_dataset("archeology", True)
+if INDEXING_ASTRONOMY:
+    index_dataset("astronomy", False)
 if INDEXING_BIOMEDICAL:
     index_dataset("biomedical", True)
 if INDEXING_ENVIRONMENT:
     index_dataset("environment", True)
-if INDEXING_TAG:
-    index_dataset("tag", False)
 if INDEXING_BUYSITE:
     index_dataset("buysite", True)
 if INDEXING_FEDERAL_STUDENT_LOAN:
     index_dataset("federal_student_loan", True)
-if INDEXING_CSAIL_STATA_NEUTRON:
-    index_dataset("csail_stata_neutron", False)
-if INDEXING_DW:
-    index_dataset("dw", False)
-if INDEXING_GEOQUERY:
-    index_dataset("geoquery", False)
-if INDEXING_ATIS:
-    index_dataset("atis", False)
-
-
-# Extra: Processing for TAG data
-# for topic in os.listdir(DATASET_DIR):
-#     topic_path = f"dataset/{topic}"
-#     if os.path.isdir(topic_path):
-#         for table_fname in os.listdir(topic_path):
-#             original_table_path = f"{topic_path}/{table_fname}"
-#             appended_table_path = f"{topic_path}/{topic}_{table_fname}"
-#             print(f"=> {original_table_path} => {appended_table_path}")
-#             os.rename(original_table_path, appended_table_path)
-# Future-TODO: don't forget to move the tables outside (manually for now)
+if INDEXING_LEGAL:
+    index_dataset("legal", False)
+if INDEXING_WILDFIRE:
+    index_dataset("wildfire", False)
