@@ -282,9 +282,29 @@ class ActionSet:
                 raise ValueError(f"Unknown action: {action_name}")
     
     def __get_materializer_action_description(self):
+        semantic_ops = []
+
+        if self.config.ENABLE_SEMANTIC_JOIN:
+            semantic_ops.append(
+                f"- **{ActionNames.SEMANTIC_JOIN.value}**: Joins two tables by computing semantic similarity between specified columns."
+            )
+
+        if self.config.ENABLE_SEMANTIC_COL_GEN:
+            semantic_ops.append(
+                f"- **{ActionNames.SEMANTIC_COLUMN_GENERATION.value}**: Adds a new column to a table using an LLM."
+            )
+
+        semantic_section = ""
+        if semantic_ops:
+            semantic_section = (
+                f"\n  Aside from relational operations, {ActionNames.MATERIALIZER.value} "
+                f"also supports the following semantic operations:\n"
+                + "\n".join(f"  {op}" for op in semantic_ops)
+            )
+
         return f"""**{ActionNames.MATERIALIZER.value}**:
-  Populate tables in T with rows based on data integration and processing.
-  - **Args**: {{"note": "<additional note or empty string>"}}"""
+    Populate tables in T with rows derived from data integration and processing.{semantic_section}
+    - **Args**: {{"note": "<additional note or empty string>"}}"""
 
     def retrieve_documents(
         self,
