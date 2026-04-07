@@ -2,6 +2,8 @@
 
 # Pneuma-Seeker
 
+[![arXiv](https://img.shields.io/badge/arXiv-2603.10747-b31b1b?logo=arxiv)](https://arxiv.org/abs/2603.10747)
+
 **Pneuma-Seeker** is a system that reifies an *active information need* over tabular data as a relational data model $(\mathcal{T}, S)$, where:
 
 - $\mathcal{T}$ is a set of views derived from the underlying dataset (table collection)
