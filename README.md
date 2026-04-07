@@ -9,7 +9,7 @@
 - $\mathcal{T}$ is a set of views derived from the underlying dataset (table collection)
 - $S$ is a Python script defined over $\mathcal{T}$
 
-The system fulfills the information need by executing $S$.
+This system, which we first introduced as part of our vision for [the Pneuma project](https://www.cidrdb.org/cidr2026/papers/p31-balaka.pdf), fulfills information needs by executing $S$ over $\mathcal{T}$.
 
 ---
 
@@ -89,4 +89,29 @@ pneuma_seeker/
 ├── .env                      # Sample environment configuration
 ├── requirements.txt          # Python dependencies
 └── README.md                 # Project documentation
+```
+
+# Citation
+
+If you would like to cite the paper on `Pneuma-Seeker`, please use the following BibTeX entry:
+```
+@misc{PneumaSeeker2026,
+      title={Pneuma-Seeker: A Relational Reification Mechanism to Align AI Agents with Human Work over Relational Data}, 
+      author={Muhammad Imam Luthfi Balaka and John Hillesland and Kemal Badur and Raul Castro Fernandez},
+      year={2026},
+      eprint={2603.10747},
+      archivePrefix={arXiv},
+      primaryClass={cs.DB},
+      url={https://arxiv.org/abs/2603.10747}, 
+}
+
+```
+If you would like to cite the paper on the Pneuma project, please use the following BibTex entry:
+```
+@inproceedings{PneumaProjectCIDR2026,
+  author    = {Muhammad Imam Luthfi Balaka and Raul Castro Fernandez},
+  title     = {The Pneuma Project: Reifying Information Needs as Relational Schemas to Automate Discovery, Guide Preparation, and Align Data with Intent},
+  booktitle = {Proceedings of the 16th Annual Conference on Innovative Data Systems Research (CIDR '26)},
+  year      = {2026},
+}
 ```
