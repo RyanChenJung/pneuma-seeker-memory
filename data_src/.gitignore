@@ -5,3 +5,5 @@ intermediate_data
 *.db
 dw
 procurement_data*
+buysite
+marketo
