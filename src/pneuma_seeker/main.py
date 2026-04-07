@@ -243,8 +243,12 @@ async def chat(request: Request):
     body: dict[str, Any] = await request.json()
     user_id: str = body.get("user_id", "default_user")
     chat_id: str = body.get("chat_id", "default_chat")
+    data_source: str | None = body.get("data_source")
     messages = body.get("messages", [])
     files = body.get("files", [])
+
+    if data_source:
+        config.DATA_SOURCES = [data_source]
 
     is_title_generation_task = len(messages) > 0 and messages[0].get(
         "content"

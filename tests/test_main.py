@@ -2,13 +2,10 @@
 import io
 import json
 import os
-import shutil
 import sys
-import tempfile
 import types
 import unittest
 import zipfile
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from fastapi.responses import HTMLResponse
@@ -384,6 +381,26 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(captured, [["f1"]])
         finally:
             main.session_manager.get_chat_session = original_get
+
+    def test_chat_data_source_overrides_config_data_sources(self):
+        mock_chat = self._make_mock_chat_interface(stream_messages=["DONE"])
+        original_get = main.session_manager.get_chat_session
+        original_data_sources = list(main.config.DATA_SOURCES)
+        main.session_manager.get_chat_session = lambda user_id, chat_id: mock_chat
+
+        try:
+            payload = {
+                "user_id": "u1",
+                "chat_id": "c1",
+                "messages": [{"role": "user", "content": "hi"}],
+                "data_source": "astronomy",
+            }
+            r = self.client.post("/chat", json=payload)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(main.config.DATA_SOURCES, ["astronomy"])
+        finally:
+            main.session_manager.get_chat_session = original_get
+            main.config.DATA_SOURCES = original_data_sources
 
     def test_chat_exception_still_calls_persist_session(self):
         def raise_on_call(messages, files):
