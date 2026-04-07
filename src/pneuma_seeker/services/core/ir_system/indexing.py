@@ -34,6 +34,7 @@ INDEXING_WILDFIRE = False
 # Internal datasets
 INDEXING_BUYSITE = False
 INDEXING_FEDERAL_STUDENT_LOAN = False
+INDEXING_MARKETO = False
 
 
 config = Config("../../../../../.env")
@@ -181,3 +182,5 @@ if INDEXING_LEGAL:
     index_dataset("legal", False)
 if INDEXING_WILDFIRE:
     index_dataset("wildfire", False)
+if INDEXING_MARKETO:
+    index_dataset("marketo", False)
