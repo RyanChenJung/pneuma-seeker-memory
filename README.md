@@ -22,17 +22,6 @@ cp .env.example .env
 ```
 Then update values as needed. See [the configuration file](./src/pneuma_seeker/shared/config.py) for all available options.
 
-Clone and install the UI:
-```bash
-git clone https://github.com/luthfibalaka/pneuma-seeker-ui.git
-cd pneuma-seeker-ui
-git checkout stable-0.6.22
-pip install .
-cd ..
-```
-
-## Run Backend & Frontend
-
 Start the backend server:
 ```bash
 cd src/pneuma_seeker
@@ -44,6 +33,15 @@ fastapi dev main.py > main.out 2>&1
 Otherwise:
 ```bash
 nohup fastapi dev main.py --host 0.0.0.0 --port 8000 >> main.out &
+```
+
+Clone and install the UI:
+```bash
+git clone https://github.com/luthfibalaka/pneuma-seeker-ui.git
+cd pneuma-seeker-ui
+git checkout stable-0.6.22
+pip install .
+cd ..
 ```
 
 Start the UI (OpenWebUI):
