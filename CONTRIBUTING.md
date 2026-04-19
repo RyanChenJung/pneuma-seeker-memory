@@ -15,4 +15,8 @@
 ## Before Submitting
 
 - Code must be formatted with [Black Formatter](https://pypi.org/project/black/).
-- All tests must pass.
+- All unit tests must pass.
+```bash
+cd ./tests/pneuma_seeker
+python -m unittest discover
+```

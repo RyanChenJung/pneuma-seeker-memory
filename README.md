@@ -1,110 +1,75 @@
-![The Architecture of Pneuma-Seeker](etc/pneuma_seeker.png)
-
 # Pneuma-Seeker
 
 [![arXiv](https://img.shields.io/badge/arXiv-2603.10747-b31b1b?logo=arxiv)](https://arxiv.org/abs/2603.10747)
+[![Demo](https://img.shields.io/badge/YouTube-Demo%20Video-red?logo=youtube)](https://youtu.be/ZNAhTE6n0yI)
 
-**Pneuma-Seeker** is a system that reifies an *active information need* over tabular data as a relational data model $(\mathcal{T}, S)$, where:
+`Pneuma-Seeker` is an LLM-powered system for answering questions over tabular data. Given a question, it automatically finds relevant tables, combines them, and runs the necessary computations to produce an answer.
 
-- $\mathcal{T}$ is a set of views derived from the underlying dataset (table collection)
-- $S$ is a Python script defined over $\mathcal{T}$
+# Installation
 
-This system, part of our broader vision in [the Pneuma project](https://www.cidrdb.org/cidr2026/papers/p31-balaka.pdf), fulfills information needs by executing $S$ over $\mathcal{T}$.
+To install and run `Pneuma-Seeker`, you need to set up both the backend and frontend.
 
----
-
-# Getting Started
-
-You can follow our [quick start guide](./quick_start.ipynb) to install the system and build an initial mental model of how it works through a simple example. Alternatively, you can follow the steps below:
-
-## Installation
-
-To ensure smooth installation and usage, we **strongly recommend** installing `Miniconda` (see [installation guide](https://www.anaconda.com/docs/getting-started/miniconda/install/overview)). Then, create a new environment using:
+We **recommend** installing `Miniconda` (see [installation guide](https://www.anaconda.com/docs/getting-started/miniconda/install/overview)). Then, create a new environment using:
 ```bash
 conda create --name pneuma_seeker python=3.12.12 -y
 conda activate pneuma_seeker
 pip install -r requirements.txt
 ```
 
-### Configuration
-
-Copy [`.env.example`](./.env.example) to `.env` and update the values as needed. See [the configuration file](./src/pneuma_seeker/shared/config.py) for all available options.
-
-## Run Backend
-
-Start the backend server with:
+Copy environment configuration:
 ```bash
-cd src/pneuma_seeker
-nohup fastapi dev main.py --host 0.0.0.0 --port 8000 >> main.out &
+cp .env.example .env
 ```
-On macOS, use:
+Then update values as needed. See [the configuration file](./src/pneuma_seeker/shared/config.py) for all available options.
+
+Clone and install the UI:
 ```bash
-fastapi dev main.py > main.out 2>&1
-```
-
-## Index Dataset
-
-To be documented soon.
-
-## Run Frontend
-
-Clone the UI repository and run OpenWebUI:
-```bash
-cd ..
 git clone https://github.com/luthfibalaka/pneuma-seeker-ui.git
 cd pneuma-seeker-ui
 git checkout stable-0.6.22
 pip install .
+cd ..
+```
+
+## Run Backend & Frontend
+
+Start the backend server:
+```bash
+cd src/pneuma_seeker
+```
+On MacOS:
+```bash
+fastapi dev main.py > main.out 2>&1
+```
+Otherwise:
+```bash
+nohup fastapi dev main.py --host 0.0.0.0 --port 8000 >> main.out &
+```
+
+Start the UI (OpenWebUI):
+```bash
+cd pneuma-seeker-ui
 nohup open-webui serve >> output.out &
 ```
 
-After launching the frontend, import all functions (`.json`) in `/openwebui_functions` into the OpenWebUI interface so the frontend can communicate with the Pneuma-Seeker backend.
+In the OpenWebUI interface, import all functions (`.json` files) in `/openwebui_functions` so that the UI can communicate with the Pneuma-Seeker backend.
 
-![Import functions to OpenWebUI](etc/openwebui_import.png)
+![Import functions to OpenWebUI](docs/figures/openwebui_import.png)
 
-## Run Unit Tests
+# Next Steps
+Before asking questions on a dataset, you need to index it using the `/index` endpoint in the backend (see [main.py](src/pneuma_seeker/main.py)).
 
-```bash
-cd ./tests/pneuma_seeker
-python -m unittest discover
-```
+For a complete walkthrough of the system, including dataset indexing and query execution, refer to [quick_start.ipynb](./quick_start.ipynb), which demonstrates how to configure Pneuma-Seeker on a sample dataset.
 
-# Code Structure
+For a deeper understanding of the system, refer to the documentation in `/docs`, including the [architecture overview](/docs/architecture.md) of `Pneuma-Seeker`.
 
-```
-pneuma_seeker/
-├── data_src/                 # Datasets used in experiments
-├── baselines/                # Baselines used in experiments
-├── openwebui_functions/      # OpenWebUI functions that call the Pneuma-Seeker backend
-│
-├── src/pneuma_seeker/
-│   ├── provenance/           # ProvenanceGraph implementation
-│   │
-│   ├── services/
-│   │   ├── core/             # Core system components (Conductor, Materializer, Retriever)
-│   │   ├── db/               # DBService: interface to datasets and workspace databases
-│   │   └── language_model/   # LMService: interface to LLMs and embedding models
-│   │
-│   ├── shared/               # Shared schemas, utilities, and common functionality
-│   ├── templates/            # (T,S) HTML templates used by the frontend
-│   │
-│   ├── chat_session.py       # Chat session instantiated for each (user, chat) pair
-│   ├── session_manager.py    # Manages chat sessions for main.py
-│   └── main.py               # FastAPI endpoints (backend entry points)
-│
-├── tests/                    # Unit tests
-├── .env                      # Sample environment configuration
-├── requirements.txt          # Python dependencies
-└── README.md                 # Project documentation
-```
+# Contributing
 
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute, report issues, and submit pull requests.
+We welcome contributions. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute, report issues, and submit pull requests.
 
 # Citation
 
-If you would like to cite the [Pneuma-Seeker paper](https://arxiv.org/abs/2603.10747), please use:
+## [Pneuma-Seeker paper](https://arxiv.org/abs/2603.10747)
 ```
 @misc{PneumaSeeker2026,
       title={Pneuma-Seeker: A Relational Reification Mechanism to Align AI Agents with Human Work over Relational Data}, 
@@ -116,7 +81,8 @@ If you would like to cite the [Pneuma-Seeker paper](https://arxiv.org/abs/2603.1
       url={https://arxiv.org/abs/2603.10747}, 
 }
 ```
-If you would like to cite the [Pneuma-Seeker demo paper](https://arxiv.org/abs/2604.14422), please use (recently accepted to the CAIS 2026 demo track; this will be updated soon):
+
+## [Pneuma-Seeker demo paper](https://arxiv.org/abs/2604.14422)
 ```
 @misc{balaka2026demonstrationpneumaseekeragenticreifying,
       title={Demonstration of Pneuma-Seeker: Agentic System for Reifying and Fulfilling Information Needs on Tabular Data}, 
@@ -128,7 +94,7 @@ If you would like to cite the [Pneuma-Seeker demo paper](https://arxiv.org/abs/2
       url={https://arxiv.org/abs/2604.14422}, 
 }
 ```
-If you would like to cite the [Pneuma project paper](https://www.cidrdb.org/cidr2026/papers/p31-balaka.pdf), please use:
+## [The Pneuma project paper](https://www.cidrdb.org/cidr2026/papers/p31-balaka.pdf)
 ```
 @inproceedings{PneumaProjectCIDR2026,
   author    = {Muhammad Imam Luthfi Balaka and Raul Castro Fernandez},
