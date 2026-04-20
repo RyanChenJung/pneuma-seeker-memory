@@ -79,6 +79,69 @@ class TestPostgreSQLConnector(unittest.TestCase):
         select_sql = [sql for sql in executed_sql if sql.strip().startswith("SELECT")][0]
         self.assertIn("LIMIT 100", select_sql)
 
+    @patch("pneuma_seeker.services.indexing.connectors.postgresql_connector.duckdb.connect")
+    def test_check_connection_failure_handles_exception(self, mock_connect):
+        # con.execute will raise when ATTACH is attempted
+        mock_con = MagicMock()
+        def raise_on_attach(sql, *args, **kwargs):
+            if "ATTACH" in sql:
+                raise Exception("attach failed")
+            return mock_con
+
+        mock_con.execute.side_effect = raise_on_attach
+        mock_connect.return_value = mock_con
+
+        connector = PostgreSQLConnector(self.config)
+        self.assertFalse(connector.check_connection())
+        self.assertTrue(mock_con.close.called)
+
+    @patch("pneuma_seeker.services.indexing.connectors.postgresql_connector.duckdb.connect")
+    def test_read_uses_default_schema_when_no_dot(self, mock_connect):
+        mock_con = MagicMock()
+        mock_con.execute.return_value = mock_con
+        mock_con.fetchdf.return_value = pd.DataFrame([{"id": 1}])
+        mock_connect.return_value = mock_con
+
+        # set connector schema to 'myschema' and call read with bare table name
+        cfg = dict(self.config)
+        cfg["schema"] = "myschema"
+        connector = PostgreSQLConnector(cfg)
+        rows = list(connector.read("mytable"))
+        self.assertEqual(len(rows), 1)
+
+        executed_sql = [call.args[0] for call in mock_con.execute.call_args_list]
+        select_sql = [sql for sql in executed_sql if sql.strip().startswith("SELECT")][0]
+        # quoted schema and table should be present
+        self.assertIn('"myschema"."mytable"', select_sql)
+
+    @patch("pneuma_seeker.services.indexing.connectors.postgresql_connector.duckdb.connect")
+    def test_row_limit_edge_cases(self, mock_connect):
+        mock_con = MagicMock()
+        mock_con.execute.return_value = mock_con
+        mock_con.fetchdf.return_value = pd.DataFrame([])
+        mock_connect.return_value = mock_con
+
+        # row_limit None -> no LIMIT
+        cfg_none = dict(self.config)
+        cfg_none.pop("row_limit", None)
+        connector_none = PostgreSQLConnector(cfg_none)
+        list(connector_none.read("public.users"))
+        executed_sql = [call.args[0] for call in mock_con.execute.call_args_list]
+        select_sqls = [sql for sql in executed_sql if sql.strip().startswith("SELECT")]
+        self.assertTrue(select_sqls)
+        self.assertNotIn("LIMIT", select_sqls[-1])
+
+        # row_limit 0 -> treated as no limit
+        mock_con.execute.reset_mock()
+        cfg_zero = dict(self.config)
+        cfg_zero["row_limit"] = 0
+        connector_zero = PostgreSQLConnector(cfg_zero)
+        list(connector_zero.read("public.users"))
+        executed_sql = [call.args[0] for call in mock_con.execute.call_args_list]
+        select_sqls = [sql for sql in executed_sql if sql.strip().startswith("SELECT")]
+        self.assertTrue(select_sqls)
+        self.assertNotIn("LIMIT", select_sqls[-1])
+
     def test_init_missing_required_config_raises(self):
         with self.assertRaises(ValueError):
             PostgreSQLConnector({"type": "postgres", "host": "localhost"})
