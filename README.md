@@ -50,7 +50,7 @@ cd pneuma-seeker-ui
 nohup open-webui serve >> output.out &
 ```
 
-In the OpenWebUI interface, create and log into an admin account. Then, import all functions (`.json` files) in `/openwebui_functions` so that the UI can communicate with the Pneuma-Seeker backend. Enable all imported functions and select `Pneuma` as the model for chat.
+In the OpenWebUI interface, create and log into an admin account. Then, import all functions (`.json` files) in `/openwebui_functions` so that the UI can communicate with the Pneuma-Seeker backend. Enable all imported functions and select `PneumaSeeker` as the model for chat.
 
 ![Import functions to OpenWebUI](docs/figures/openwebui_import.png)
 ![Enable functions in OpenWebUI](docs/figures/openwebui_function_list.png)
