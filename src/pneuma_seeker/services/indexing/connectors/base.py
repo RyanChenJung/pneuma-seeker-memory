@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Any, Iterator
+from typing import Any, Generator, Hashable, Iterator
 
 
 class SourceConnector(ABC):
@@ -13,7 +11,7 @@ class SourceConnector(ABC):
 	@property
 	@abstractmethod
 	def source_type(self) -> str:
-		"""Returns connector type identifier (e.g., 'csv', 'postgres')."""
+		"""Returns connector type identifier."""
 
 	@abstractmethod
 	def check_connection(self) -> bool:
@@ -24,5 +22,5 @@ class SourceConnector(ABC):
 		"""Discovers available streams/tables and associated metadata."""
 
 	@abstractmethod
-	def read(self, stream: str) -> Iterator[dict[str, Any]]:
+	def read(self, stream: str) -> Generator[dict[Hashable, Any], None, None]:
 		"""Yields records from the given stream/table."""
