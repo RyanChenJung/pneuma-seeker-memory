@@ -8,6 +8,8 @@ from pneuma_seeker.services.language_model.impl.azure_openai_llm import AzureOpe
 from pneuma_seeker.services.language_model.impl.embed_model import EmbeddingModel
 from pneuma_seeker.services.language_model.impl.mock_embed_model import MockEmbedModel
 from pneuma_seeker.services.language_model.impl.mock_llm import MockLLM
+from pneuma_seeker.services.language_model.impl.ollama_embed_model import OllamaEmbedModel
+from pneuma_seeker.services.language_model.impl.ollama_llm import OllamaLLM
 from pneuma_seeker.services.language_model.impl.openai_embed_model import (
     OpenAIEmbedModel,
 )
@@ -28,6 +30,8 @@ def get_llm(config: Config) -> Type[AbstractModel]:
         return OpenAILLM
     elif "mock" in normalized_model_path:
         return MockLLM
+    elif "ollama" in normalized_model_path:
+        return OllamaLLM
     else:
         raise ValueError(
             f"No interface implementation for this model path: {config.LLM_PATH}"
@@ -43,4 +47,6 @@ def get_embed_model(config: Config) -> Type[AbstractModel]:
         return OpenAIEmbedModel
     elif "mock" in normalized_model_path:
         return MockEmbedModel
+    elif "ollama" in normalized_model_path:
+        return OllamaEmbedModel
     return EmbeddingModel

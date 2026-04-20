@@ -127,7 +127,7 @@ class TestIndexingService(unittest.TestCase):
             def discover(self):
                 return []
 
-            def read(self, stream): # type: ignore
+            def read(self, stream):  # type: ignore
                 return iter([])
 
         service.register_connector("fake", FakeConnector)
@@ -149,18 +149,21 @@ class TestIndexingService(unittest.TestCase):
 
             # run should be recorded and succeeded
             self.assertIsNotNone(run_id)
-            self.assertIsNotNone(cast(DummyMetadataStore, service.metadata_store).succeeded)
+            self.assertIsNotNone(
+                cast(DummyMetadataStore, service.metadata_store).succeeded
+            )
 
             # retriever should have been called
             retriever = cast(DummyRetriever, service.retriever)
             self.assertTrue(
-                retriever.index_called or retriever.index_with_existing_schema_summaries_called
+                retriever.index_called
+                or retriever.index_with_existing_schema_summaries_called
             )
 
             # ingest_dataset should have been called on the dummy DBAPI
             dbapi = cast(DummyDBAPI, service.db_api)
             self.assertIsNotNone(dbapi.ingested)
-            self.assertEqual(dbapi.ingested[0], "mydataset") # type: ignore
+            self.assertEqual(dbapi.ingested[0], "mydataset")  # type: ignore
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
