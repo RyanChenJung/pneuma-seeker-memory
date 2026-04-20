@@ -80,17 +80,45 @@ class IndexingService:
         dataset_name: str,
         connector_config: dict[str, Any],
         schema_summaries: DataFrame | None = None,
+        overwrite: bool = True,
     ) -> str:
-        """Indexes a dataset using the specified connector configuration and returns the indexing run ID."""
+        """Synchronous indexing helper that starts and executes an indexing run."""
+        run_id = self.start_indexing_run(dataset_name, connector_config)
+        self.run_indexing_job(
+            dataset_name=dataset_name,
+            connector_config=connector_config,
+            run_id=run_id,
+            schema_summaries=schema_summaries,
+            overwrite=overwrite,
+        )
+        return run_id
+
+    def start_indexing_run(
+        self,
+        dataset_name: str,
+        connector_config: dict[str, Any],
+    ) -> str:
+        """Creates a new indexing run record and returns its run ID."""
         connector = self.instantiate_connector(connector_config)
         snapshot_id = self.__build_snapshot_id(connector_config)
 
-        run_id = self.metadata_store.record_run_started(
+        return self.metadata_store.record_run_started(
             dataset_name=dataset_name,
             source_type=connector.source_type,
             source_config=connector_config,
             snapshot_id=snapshot_id,
         )
+
+    def run_indexing_job(
+        self,
+        dataset_name: str,
+        connector_config: dict[str, Any],
+        run_id: str,
+        schema_summaries: DataFrame | None = None,
+        overwrite: bool = True,
+    ) -> None:
+        """Executes an indexing run and updates run status metadata."""
+        connector = self.instantiate_connector(connector_config)
 
         try:
             if not connector.check_connection():
@@ -115,22 +143,24 @@ class IndexingService:
                     schema_summaries=schema_summaries,
                 )
 
-            self.__register_dataset_for_querying(dataset_name, connector, table_docs)
+            self.__register_dataset_for_querying(
+                dataset_name, connector, table_docs, overwrite
+            )
 
             if schema_summary_docs is not None:
                 self.retriever.index_with_existing_schema_summaries(
                     documents,
                     existing_schema_summaries=schema_summary_docs,
+                    overwrite=overwrite,
                 )
             else:
-                self.retriever.index(documents)
+                self.retriever.index(documents, overwrite)
 
             self.metadata_store.mark_run_succeeded(
                 run_id=run_id,
                 indexed_stream_count=len(streams),
                 indexed_table_count=len(table_docs),
             )
-            return run_id
         except Exception as exception:
             self.metadata_store.mark_run_failed(run_id, str(exception))
             raise
@@ -254,6 +284,7 @@ class IndexingService:
         dataset_name: str,
         connector: SourceConnector,
         table_docs: list[Table],
+        overwrite: bool,
     ):
         """Registers the dataset with the DBAPI to enable querying, either by providing a connection string for direct access or by ingesting CSVs for PneumaRetriever."""
         if connector.source_type == "postgres":
@@ -272,4 +303,6 @@ class IndexingService:
                 csv_path = tmpdir_path / f"{table_name}.csv"
                 table_doc.content.to_csv(csv_path, index=False)
 
-            self.db_api.ingest_dataset(dataset_name, tmpdir)
+            self.db_api.ingest_dataset(
+                dataset_name, tmpdir, connector.config.get("metadata_path"), overwrite
+            )

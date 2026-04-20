@@ -67,6 +67,10 @@ For a deeper understanding of the system, refer to the documentation in `/docs`,
 
 We welcome contributions. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute, report issues, and submit pull requests.
 
+# Contact
+
+For questions about `Pneuma-Seeker`, please email: pneuma-team@googlegroups.com
+
 # Citation
 
 ## [Pneuma-Seeker paper](https://arxiv.org/abs/2603.10747)

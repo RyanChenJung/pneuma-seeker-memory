@@ -26,8 +26,8 @@ class DummyDBAPI:
     def register_postgres_dataset(self, dataset_name, connection_string):
         self.registered = (dataset_name, connection_string)
 
-    def ingest_dataset(self, dataset_name, tmpdir):
-        self.ingested = (dataset_name, tmpdir)
+    def ingest_dataset(self, dataset_name, tmpdir, metadata_path, overwrite):
+        self.ingested = (dataset_name, tmpdir, metadata_path, overwrite)
 
 
 class DummyLM:
@@ -44,7 +44,7 @@ class DummyRetriever:
         self.indexed_docs = None
         self.existing_schema_summaries = None
 
-    def index(self, documents):
+    def index(self, documents, overwrite):
         self.index_called = True
         self.indexed_docs = documents
 

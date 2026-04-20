@@ -23,10 +23,6 @@ class TestIndexingMetadataStore(unittest.TestCase):
         self.store = IndexingMetadataStore(db_path=str(self.db_path))
 
     def tearDown(self):
-        try:
-            self.store.close()
-        except Exception:
-            pass
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_record_run_started_and_get_run(self):

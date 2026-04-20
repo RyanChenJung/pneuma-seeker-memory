@@ -91,13 +91,48 @@ class PneumaDB:
         con = duckdb.connect(database=dataset_db_file.as_posix(), read_only=read_only)
         return con
 
-    def ingest_dataset(self, dataset_name: str, dataset_path: str):
+    def ingest_dataset(
+        self,
+        dataset_name: str,
+        dataset_path: str,
+        metadata_path: str | None = None,
+        overwrite: bool = True,
+    ) -> None:
         """
         Stores CSV files inside the dataset's own DuckDB file.
         - table name = cleaned(Path(csv_file).stem)
         - cleans column names
         - only reads file once for ingestion (fast path)
         """
+        if (
+            os.path.exists(self.dataset_db_path / dataset_name / f"{dataset_name}.db")
+            and not overwrite
+        ):
+            self.logger.warning(
+                f"Dataset DB already exists for '{dataset_name}' at {self.dataset_db_path / dataset_name / f'{dataset_name}.db'}. Skipping ingestion. Set overwrite=True to force re-ingestion."
+            )
+            return
+
+        if metadata_path is not None and os.path.exists(metadata_path):
+            try:
+                metadata = read_csv(metadata_path)
+                if (
+                    "table_name" in metadata.columns
+                    and "description" in metadata.columns
+                ):
+                    metadata["table_name"] = metadata["table_name"].apply(
+                        clean_column_table_name
+                    )
+                    dest_metadata_path = (
+                        self.dataset_db_path / dataset_name / "metadata.csv"
+                    )
+                    os.makedirs(dest_metadata_path.parent, exist_ok=True)
+                    metadata.to_csv(dest_metadata_path, index=False)
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to process metadata CSV at {metadata_path}: {e}"
+                )
+
         dataset_con = self.get_dataset_connection(dataset_name, read_only=False)
         try:
             dataset_con.begin()
@@ -356,7 +391,9 @@ class PneumaDB:
     # ------------------------------------------------------------------
     # PostgreSQL Dataset Registry
     # ------------------------------------------------------------------
-    def register_postgres_dataset(self, dataset_name: str, connection_string: str) -> None:
+    def register_postgres_dataset(
+        self, dataset_name: str, connection_string: str
+    ) -> None:
         """Registers a PostgreSQL-backed dataset by storing its libpq connection string.
 
         When link_dataset_tables is called for this dataset_name, DuckDB will ATTACH
@@ -1008,9 +1045,7 @@ class PneumaDB:
                     retriever_type == RetrieverType.MATERIALIZER
                     or retriever_type == RetrieverType.CONDUCTOR
                 ):
-                    select_query = (
-                        f"""SELECT * FROM "{doc_row['doc_id']}";"""
-                    )
+                    select_query = f"""SELECT * FROM "{doc_row['doc_id']}";"""
                 else:
                     select_query = (
                         f"""SELECT * FROM "{dataset_name}"."{doc_row['doc_id']}";"""

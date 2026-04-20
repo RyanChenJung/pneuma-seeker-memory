@@ -1,4 +1,5 @@
 import gc
+import json
 import math
 import os
 import re
@@ -20,13 +21,10 @@ from scipy.spatial.distance import cosine
 from tiktoken import encoding_for_model
 from torch import cuda
 from tqdm import tqdm
-import json
 
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.ir_system.retriever.interface import (
-    AbstractRetriever,
-)
+from pneuma_seeker.services.core.ir_system.retriever.interface import AbstractRetriever
 from pneuma_seeker.services.language_model.abstract_model import AbstractModel
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.parser import parse_json
@@ -208,7 +206,11 @@ class PneumaRetriever(AbstractRetriever):
                                                     AND (table_schema = ? OR table_catalog = ?)
                         ORDER BY ordinal_position
                         """.strip(),
-                                                (table_name, self.config.DATA_SOURCES[0], self.config.DATA_SOURCES[0]),
+                        (
+                            table_name,
+                            self.config.DATA_SOURCES[0],
+                            self.config.DATA_SOURCES[0],
+                        ),
                     )
                     duckdb_col_types = {
                         clean_column_table_name(str(col)): str(dtype)
@@ -288,7 +290,11 @@ class PneumaRetriever(AbstractRetriever):
                                                             AND (table_schema = ? OR table_catalog = ?)
                             ORDER BY ordinal_position
                             """.strip(),
-                                                        (table_id, self.config.DATA_SOURCES[0], self.config.DATA_SOURCES[0]),
+                            (
+                                table_id,
+                                self.config.DATA_SOURCES[0],
+                                self.config.DATA_SOURCES[0],
+                            ),
                         )
                         duckdb_col_types = {
                             clean_column_table_name(str(col)): str(dtype)
@@ -536,13 +542,21 @@ Your task is to analyze a natural-language query and extract **explicitly mentio
 
         return rf"(?i)(^|[^A-Za-z0-9_-]){core}($|[^A-Za-z0-9_-])"
 
-    def index(self, documents: list[AbstractDocument]):
+    def index(self, documents: list[AbstractDocument], overwrite: bool = False):
         """
         Indexes a list of documents to the retriever. Assume the documents are
         from a certain dataset only.
         """
         if len(documents) > 0:
             dataset = documents[0].metadata["dataset_name"]
+
+            if (
+                Path(os.path.join(self.index_path, f"vector-index-{dataset}")).exists()
+                and not overwrite
+            ):
+                print(f"Index for dataset {dataset} already exists. Skipping indexing.")
+                return
+
             table_context = [i for i in documents if isinstance(i, TableContext)]
             tables = [i for i in documents if isinstance(i, Table)]
 
@@ -581,6 +595,7 @@ Your task is to analyze a natural-language query and extract **explicitly mentio
         self,
         documents: list[AbstractDocument],
         existing_schema_summaries: list[Text] | None = None,
+        overwrite: bool = False,
     ):
         """
         Indexes a list of documents to the retriever. Assume the documents are
@@ -588,6 +603,14 @@ Your task is to analyze a natural-language query and extract **explicitly mentio
         """
         if len(documents) > 0:
             dataset = documents[0].metadata["dataset_name"]
+
+            if (
+                Path(os.path.join(self.index_path, f"vector-index-{dataset}")).exists()
+                and not overwrite
+            ):
+                print(f"Index for dataset {dataset} already exists. Skipping indexing.")
+                return
+
             table_context = [i for i in documents if isinstance(i, TableContext)]
             tables = [i for i in documents if isinstance(i, Table)]
 
@@ -912,14 +935,25 @@ Your task is to analyze a natural-language query and extract **explicitly mentio
         return optimal_batch_size
 
     def __parse_tables(self, tables: list[Table], table_context: list[TableContext]):
+        print(
+            f"Parsing tables to create column descriptions with LLM. Number of tables: {len(tables)}"
+        )
         conversations: list[list[LLMMessage]] = []
         conv_tables: list[str] = []
         conv_cols: list[str] = []
 
+        self.db_api.link_dataset_tables(
+            self.user_id, self.chat_id, self.config.DATA_SOURCES[0]
+        )
+
         table_names = [i.metadata["table_name"] for i in tables]
         for table in tqdm(table_names):
             try:
-                df = pd.read_csv(table, nrows=0)
+                df = self.db_api.execute_query(
+                    self.user_id,
+                    self.chat_id,
+                    f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{table}" LIMIT 0',
+                )
             except pd.errors.EmptyDataError:
                 continue
 
@@ -967,10 +1001,15 @@ Describe very briefly what the ```{column}``` column represents. Consider the ta
 
     def __get_sample_rows(self, tables: list[Table]) -> list[Text]:
         sample_rows: list[Text] = []
+        self.db_api.link_dataset_tables(
+            self.user_id, self.chat_id, self.config.DATA_SOURCES[0]
+        )
         for table_idx, table in enumerate(tqdm(tables)):
             try:
-                df = pd.read_csv(
-                    table.metadata["table_name"], on_bad_lines="skip", nrows=100
+                df = self.db_api.execute_query(
+                    self.user_id,
+                    self.chat_id,
+                    f'SELECT * FROM {self.config.DATA_SOURCES[0]}."{table.metadata["table_name"]}" LIMIT 100',
                 )
             except pd.errors.EmptyDataError:
                 continue

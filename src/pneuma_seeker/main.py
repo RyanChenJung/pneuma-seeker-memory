@@ -10,7 +10,7 @@ from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from anyio import to_thread
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -412,17 +412,16 @@ def download_materializer_code(user_id: str, chat_id: str):
 @app.post("/index", response_model=IndexDatasetResponse, tags=[EndpointTag.INDEXING])
 def index_dataset(
     payload: IndexDatasetRequest,
+    background_tasks: BackgroundTasks,
 ) -> IndexDatasetResponse:
     schema_summaries_df: DataFrame | None = None
     if payload.schema_summaries is not None:
         schema_summaries_df = DataFrame(payload.schema_summaries)
 
     try:
-        run_id = indexing_service.index_dataset(
+        run_id = indexing_service.start_indexing_run(
             dataset_name=payload.dataset_name,
             connector_config=payload.connector_config,
-            metadata_available=payload.metadata_available,
-            schema_summaries=schema_summaries_df,
         )
     except ValueError as exception:
         raise HTTPException(status_code=400, detail=str(exception)) from exception
@@ -430,9 +429,17 @@ def index_dataset(
         raise HTTPException(status_code=502, detail=str(exception)) from exception
     except Exception as exception:
         raise HTTPException(
-            status_code=500,
-            detail=f"Indexing failed: {exception}",
+            status_code=500, detail=f"Failed to start indexing: {exception}"
         ) from exception
+
+    background_tasks.add_task(
+        indexing_service.run_indexing_job,
+        dataset_name=payload.dataset_name,
+        connector_config=payload.connector_config,
+        run_id=run_id,
+        schema_summaries=schema_summaries_df,
+        overwrite=payload.overwrite,
+    )
 
     return IndexDatasetResponse(
         run_id=run_id,

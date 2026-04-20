@@ -12,7 +12,7 @@ class EndpointTag(Enum):
 class IndexDatasetRequest(BaseModel):
     dataset_name: str = Field(min_length=1)
     connector_config: dict[str, Any]
-    metadata_available: bool = False
+    overwrite: bool
     schema_summaries: list[dict[str, Any]] | None = None
 
 

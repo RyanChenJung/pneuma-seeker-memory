@@ -32,14 +32,22 @@ class DBAPI:
     # ------------------------------------------------------------------
     # Dataset Management (one .db per dataset)
     # ------------------------------------------------------------------
-    def ingest_dataset(self, dataset_name: str, dataset_path: str):
+    def ingest_dataset(
+        self,
+        dataset_name: str,
+        dataset_path: str,
+        metadata_path: str | None = None,
+        overwrite: bool = True,
+    ):
         """
         Stores CSV files inside the dataset's own DuckDB file.
         - table name = cleaned(Path(csv_file).stem)
         - cleans column names
         - only reads file once for ingestion (fast path)
         """
-        self.pneuma_db.ingest_dataset(dataset_name, dataset_path)
+        self.pneuma_db.ingest_dataset(
+            dataset_name, dataset_path, metadata_path, overwrite
+        )
 
     def get_table_description(self, dataset_name: str, table_name: str) -> str:
         """Returns the description of a table in the dataset."""
@@ -75,7 +83,9 @@ class DBAPI:
     # ------------------------------------------------------------------
     # Chat Session Persistence
     # ------------------------------------------------------------------
-    def register_temporary_df(self, user_id: str, chat_id: str, df: DataFrame, table_name: str):
+    def register_temporary_df(
+        self, user_id: str, chat_id: str, df: DataFrame, table_name: str
+    ):
         """Registers a temporary DataFrame in the workspace DB connection."""
         self.pneuma_db.register_temporary_df(user_id, chat_id, df, table_name)
 
