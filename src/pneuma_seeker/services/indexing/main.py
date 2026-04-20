@@ -1,20 +1,30 @@
+import tempfile
 from datetime import UTC, datetime
 from logging import Logger
 from pathlib import Path
-import tempfile
 from typing import Any
 
 from pandas import DataFrame
 
 from pneuma_seeker.services.core.api.db import DBAPI
 from pneuma_seeker.services.core.api.language_model import LanguageModelAPI
-from pneuma_seeker.services.core.ir_system.retriever.impl.pneuma_retriever import PneumaRetriever
+from pneuma_seeker.services.core.ir_system.retriever.impl.pneuma_retriever import (
+    PneumaRetriever,
+)
 from pneuma_seeker.services.indexing.connectors.base import SourceConnector
 from pneuma_seeker.services.indexing.connectors.csv_connector import CSVConnector
-from pneuma_seeker.services.indexing.connectors.postgresql_connector import PostgreSQLConnector
+from pneuma_seeker.services.indexing.connectors.postgresql_connector import (
+    PostgreSQLConnector,
+)
 from pneuma_seeker.services.indexing.metadata_store import IndexingMetadataStore
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument, RetrieverType, Table, TableContext, Text
+from pneuma_seeker.shared.schemas.core.ir_system import (
+    AbstractDocument,
+    RetrieverType,
+    Table,
+    TableContext,
+    Text,
+)
 from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 
@@ -43,15 +53,18 @@ class IndexingService:
         self._connector_registry: dict[str, type[SourceConnector]] = {
             "csv": CSVConnector,
             "postgres": PostgreSQLConnector,
-            "postgresql": PostgreSQLConnector,
         }
 
     def register_connector(
         self, source_type: str, connector_cls: type[SourceConnector]
     ):
+        """Registers a new connector class for a given source type."""
         self._connector_registry[source_type.lower()] = connector_cls
 
-    def create_connector(self, connector_config: dict[str, Any]) -> SourceConnector:
+    def instantiate_connector(
+        self, connector_config: dict[str, Any]
+    ) -> SourceConnector:
+        """Instantiates a connector based on the provided configuration."""
         source_type = str(connector_config.get("type", "")).lower()
         if not source_type:
             raise ValueError("Connector configuration requires 'type'.")
@@ -66,11 +79,11 @@ class IndexingService:
         self,
         dataset_name: str,
         connector_config: dict[str, Any],
-        metadata_available: bool = False,
         schema_summaries: DataFrame | None = None,
     ) -> str:
-        connector = self.create_connector(connector_config)
-        snapshot_id = self._build_snapshot_id(connector_config)
+        """Indexes a dataset using the specified connector configuration and returns the indexing run ID."""
+        connector = self.instantiate_connector(connector_config)
+        snapshot_id = self.__build_snapshot_id(connector_config)
 
         run_id = self.metadata_store.record_run_started(
             dataset_name=dataset_name,
@@ -87,23 +100,22 @@ class IndexingService:
             if not streams:
                 raise ValueError("No streams discovered from the source.")
 
-            documents = self._build_documents(
+            documents = self.__build_documents(
                 dataset_name=dataset_name,
                 connector=connector,
                 streams=streams,
-                metadata_available=metadata_available,
             )
 
             table_docs = [doc for doc in documents if isinstance(doc, Table)]
 
             schema_summary_docs: list[Text] | None = None
             if schema_summaries is not None:
-                schema_summary_docs = self._schema_summaries_to_docs(
+                schema_summary_docs = self.__schema_summaries_to_docs(
                     dataset_name=dataset_name,
                     schema_summaries=schema_summaries,
                 )
 
-            self._register_dataset_for_querying(dataset_name, connector, table_docs)
+            self.__register_dataset_for_querying(dataset_name, connector, table_docs)
 
             if schema_summary_docs is not None:
                 self.retriever.index_with_existing_schema_summaries(
@@ -129,44 +141,41 @@ class IndexingService:
     def close(self):
         self.metadata_store.close()
 
-    def _build_snapshot_id(self, connector_config: dict[str, Any]) -> str:
+    def __build_snapshot_id(self, connector_config: dict[str, Any]) -> str:
+        """Determines the snapshot ID for the dataset being indexed."""
         explicit_snapshot_id = connector_config.get("snapshot_id")
         if explicit_snapshot_id:
             return str(explicit_snapshot_id)
 
         return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
-    def _stream_name(self, stream_info: dict[str, Any]) -> str:
-        raw = (
-            stream_info.get("table_name")
-            or stream_info.get("stream")
-            or stream_info.get("name")
-        )
-        if raw is None:
-            raise ValueError("Each discovered stream must include a stream name.")
-        return clean_column_table_name(str(raw).replace(".", "_"))
-
-    def _build_documents(
+    def __build_documents(
         self,
         dataset_name: str,
         connector: SourceConnector,
         streams: list[dict[str, Any]],
-        metadata_available: bool,
     ) -> list[AbstractDocument]:
+        """Reads data from the connector and constructs a list of documents for indexing."""
         documents: list[AbstractDocument] = []
 
         for stream_info in streams:
-            source_stream = str(
-                stream_info.get("stream")
-                or stream_info.get("source_table_name")
-                or stream_info.get("table_name")
-            )
-            table_name = self._stream_name(stream_info)
+            source_stream = stream_info.get("stream")
+            table_name = stream_info.get("table_name")
+
+            if not source_stream:
+                raise ValueError(
+                    "Each discovered stream must include a 'stream' identifier."
+                )
+            if not table_name:
+                raise ValueError(
+                    "Each discovered stream must include a 'table_name' for document ID construction."
+                )
+
+            source_stream = str(source_stream)
+            table_name = str(clean_column_table_name(str(table_name)))
 
             rows = list(connector.read(source_stream))
             table_df = DataFrame(rows)
-
-            # Preserve schema shape for empty streams when columns are known.
             if table_df.empty and isinstance(stream_info.get("columns"), list):
                 table_df = DataFrame(columns=stream_info["columns"])
 
@@ -184,7 +193,7 @@ class IndexingService:
             )
 
             description = stream_info.get("description")
-            if metadata_available and description:
+            if description:
                 documents.append(
                     TableContext(
                         doc_id=f"context_{dataset_name}/{table_name}",
@@ -200,11 +209,12 @@ class IndexingService:
 
         return documents
 
-    def _schema_summaries_to_docs(
+    def __schema_summaries_to_docs(
         self,
         dataset_name: str,
         schema_summaries: DataFrame,
     ) -> list[Text]:
+        """Converts schema summaries from a DataFrame into a list of Text documents for indexing."""
         required_cols = {"table_name", "summary"}
         missing = required_cols - set(schema_summaries.columns)
         if missing:
@@ -239,12 +249,13 @@ class IndexingService:
 
         return docs
 
-    def _register_dataset_for_querying(
+    def __register_dataset_for_querying(
         self,
         dataset_name: str,
         connector: SourceConnector,
         table_docs: list[Table],
     ):
+        """Registers the dataset with the DBAPI to enable querying, either by providing a connection string for direct access or by ingesting CSVs for PneumaRetriever."""
         if connector.source_type == "postgres":
             connection_string = getattr(connector, "connection_string", None)
             if not connection_string:

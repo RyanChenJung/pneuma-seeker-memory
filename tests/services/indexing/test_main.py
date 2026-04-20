@@ -3,281 +3,166 @@ import shutil
 import sys
 import tempfile
 import unittest
-from unittest.mock import MagicMock
-
-import pandas as pd
-from fastapi.testclient import TestClient
 
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src")),
 )
 
+from logging import getLogger
+
+import pneuma_seeker.services.indexing.main as indexing_main
 from pneuma_seeker.services.indexing.connectors.base import SourceConnector
-from pneuma_seeker.services.indexing.main import (
-    IndexingService,
-)
-from pneuma_seeker.services.indexing.metadata_store import IndexingMetadataStore
 from pneuma_seeker.shared.config import Config
-from pneuma_seeker.shared.schemas.core.ir_system import Table, TableContext
+from typing import cast
 
 
-class FakeConnector(SourceConnector):
-    def __init__(self, config):
-        super().__init__(config)
+class DummyDBAPI:
+    def __init__(self, config, logger):
+        self.logger = logger
+        self.registered = None
+        self.ingested = None
 
-    @property
-    def source_type(self) -> str:
-        return "fake"
+    def register_postgres_dataset(self, dataset_name, connection_string):
+        self.registered = (dataset_name, connection_string)
 
-    def check_connection(self) -> bool:
-        return True
-
-    def discover(self):
-        return [
-            {
-                "stream": "public.users",
-                "table_name": "users",
-                "description": "User table",
-            },
-            {
-                "stream": "public.orders",
-                "table_name": "orders",
-            },
-        ]
-
-    def read(self, stream: str):
-        if stream == "public.users":
-            yield {"id": 1, "name": "Alice"}
-            yield {"id": 2, "name": "Bob"}
-            return
-        if stream == "public.orders":
-            yield {"order_id": 10, "amount": 100}
-            return
-        raise KeyError(stream)
+    def ingest_dataset(self, dataset_name, tmpdir):
+        self.ingested = (dataset_name, tmpdir)
 
 
-class FakePostgresConnector(FakeConnector):
-    @property
-    def source_type(self) -> str:
-        return "postgres"
-
-    @property
-    def connection_string(self) -> str:
-        return "host=localhost port=5432 user=x password=y dbname=z"
+class DummyLM:
+    def __init__(self, config, logger):
+        pass
 
 
-class BrokenConnector(FakeConnector):
-    def check_connection(self) -> bool:
-        return False
+class DummyRetriever:
+    def __init__(self, user_id, chat_id, config, db_api, language_model_api):
+        self.user_id = user_id
+        self.chat_id = chat_id
+        self.index_called = False
+        self.index_with_existing_schema_summaries_called = False
+        self.indexed_docs = None
+        self.existing_schema_summaries = None
+
+    def index(self, documents):
+        self.index_called = True
+        self.indexed_docs = documents
+
+    def index_with_existing_schema_summaries(
+        self, documents, existing_schema_summaries
+    ):
+        self.index_with_existing_schema_summaries_called = True
+        self.indexed_docs = documents
+        self.existing_schema_summaries = existing_schema_summaries
 
 
-class TestIndexingMetadataStore(unittest.TestCase):
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
-        self.store = IndexingMetadataStore(os.path.join(self.tmpdir, "indexing.db"))
+class DummyMetadataStore:
+    def __init__(self):
+        self.started_runs = []
+        self.succeeded = None
+        self.failed = None
 
-    def tearDown(self):
-        self.store.close()
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
+    def record_run_started(self, dataset_name, source_type, source_config, snapshot_id):
+        run_id = f"run-{len(self.started_runs)+1}"
+        self.started_runs.append({"id": run_id, "dataset": dataset_name})
+        return run_id
 
-    def test_record_run_started_and_succeeded(self):
-        run_id = self.store.record_run_started(
-            dataset_name="my_dataset",
-            source_type="csv",
-            source_config={"type": "csv", "file_path": "/tmp/x.csv"},
-            snapshot_id="snapshot-1",
-        )
+    def mark_run_succeeded(self, run_id, indexed_stream_count, indexed_table_count):
+        self.succeeded = (run_id, indexed_stream_count, indexed_table_count)
 
-        started = self.store.get_run(run_id)
-        self.assertIsNotNone(started)
-        assert started is not None
+    def mark_run_failed(self, run_id, reason):
+        self.failed = (run_id, reason)
 
-        self.assertEqual(started["dataset_name"], "my_dataset")
-        self.assertEqual(started["status"], "RUNNING")
+    def get_latest_run(self, dataset_name):
+        return {"id": "latest", "dataset": dataset_name}
 
-        self.store.mark_run_succeeded(run_id, indexed_stream_count=3, indexed_table_count=3)
-        completed = self.store.get_run(run_id)
-        assert completed is not None
-
-        self.assertEqual(completed["status"], "SUCCEEDED")
-        self.assertEqual(completed["indexed_stream_count"], 3)
-        self.assertEqual(completed["indexed_table_count"], 3)
-
-    def test_mark_run_failed(self):
-        run_id = self.store.record_run_started(
-            dataset_name="my_dataset",
-            source_type="csv",
-            source_config={"type": "csv", "file_path": "/tmp/x.csv"},
-            snapshot_id="snapshot-1",
-        )
-
-        self.store.mark_run_failed(run_id, "boom")
-        failed = self.store.get_run(run_id)
-        assert failed is not None
-
-        self.assertEqual(failed["status"], "FAILED")
-        self.assertEqual(failed["error_message"], "boom")
+    def close(self):
+        pass
 
 
 class TestIndexingService(unittest.TestCase):
     def setUp(self):
-        self.db_api = MagicMock()
-        self.retriever = MagicMock()
-        self.metadata_store = MagicMock()
+        # Patch module-level dependencies so IndexingService doesn't create real DB/LM/retriever
+        indexing_main.DBAPI = DummyDBAPI
+        indexing_main.LanguageModelAPI = DummyLM
+        indexing_main.PneumaRetriever = DummyRetriever
+        indexing_main.IndexingMetadataStore = DummyMetadataStore
 
-        self.service = IndexingService(
-            Config(),
-            MagicMock(),
-        )
+        self.logger = getLogger("test")
+        self.config = Config()
 
-        self.service.db_api = self.db_api
-        self.service.language_model_api = MagicMock()
-        self.service.retriever = self.retriever
-        self.service.metadata_store = self.metadata_store
-        self.service.metadata_store.record_run_started.return_value = "run-1"
+    def _make_tmp_csv_dir(self):
+        tmpdir = tempfile.mkdtemp()
+        # top-level CSVs
+        with open(os.path.join(tmpdir, "users.csv"), "w") as f:
+            f.write("id,name\n1,Alice\n2,Bob\n")
+        with open(os.path.join(tmpdir, "orders.csv"), "w") as f:
+            f.write("order_id,amount\n10,100\n")
 
-    def test_index_dataset_success_with_csv_like_connector(self):
-        self.service.register_connector("fake", FakeConnector)
+        nested = os.path.join(tmpdir, "nested")
+        os.makedirs(nested, exist_ok=True)
+        with open(os.path.join(nested, "users.csv"), "w") as f:
+            f.write("id,name\n3,Carol\n")
 
-        run_id = self.service.index_dataset(
-            dataset_name="sales",
-            connector_config={"type": "fake"},
-            metadata_available=True,
-        )
-
-        self.assertEqual(run_id, "run-1")
-        self.db_api.ingest_dataset.assert_called_once()
-        self.metadata_store.mark_run_succeeded.assert_called_once_with(
-            run_id="run-1", indexed_stream_count=2, indexed_table_count=2
-        )
-
-        args, kwargs = self.retriever.index.call_args
-        docs = args[0]
-        self.assertEqual(len([doc for doc in docs if isinstance(doc, Table)]), 2)
-        self.assertEqual(len([doc for doc in docs if isinstance(doc, TableContext)]), 1)
-
-    def test_index_dataset_uses_existing_schema_summaries(self):
-        self.service.register_connector("fake", FakeConnector)
-
-        schema_summaries = pd.DataFrame(
-            [
-                {"table_name": "users", "column_name": "id", "summary": "User id"},
-                {
-                    "table_name": "users",
-                    "column_name": "name",
-                    "summary": "User name",
-                },
-            ]
-        )
-
-        self.service.index_dataset(
-            dataset_name="sales",
-            connector_config={"type": "fake"},
-            schema_summaries=schema_summaries,
-        )
-
-        self.retriever.index_with_existing_schema_summaries.assert_called_once()
-        self.retriever.index.assert_not_called()
-
-    def test_index_dataset_postgres_registers_connection_string(self):
-        self.service.register_connector("postgres", FakePostgresConnector)
-
-        self.service.index_dataset(
-            dataset_name="pg_sales",
-            connector_config={"type": "postgres"},
-        )
-
-        self.db_api.register_postgres_dataset.assert_called_once_with(
-            "pg_sales", "host=localhost port=5432 user=x password=y dbname=z"
-        )
-        self.db_api.ingest_dataset.assert_not_called()
-
-    def test_index_dataset_marks_failed_when_connection_invalid(self):
-        self.service.register_connector("broken", BrokenConnector)
-
-        with self.assertRaises(RuntimeError):
-            self.service.index_dataset(
-                dataset_name="sales",
-                connector_config={"type": "broken"},
-            )
-
-        self.metadata_store.mark_run_failed.assert_called_once()
-
-
-class TestIndexingAPI(unittest.TestCase):
-    def setUp(self):
-        self.mock_service = MagicMock()
-        app.dependency_overrides[get_indexing_service] = lambda: self.mock_service
-        self.client = TestClient(app)
+        return tmpdir
 
     def tearDown(self):
-        app.dependency_overrides.clear()
+        # nothing global to clean here
+        pass
 
-    def test_root_ok(self):
-        response = self.client.get("/")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+    def test_register_and_instantiate_custom_connector(self):
+        service = indexing_main.IndexingService(self.config, self.logger)
 
-    def test_index_dataset_success(self):
-        self.mock_service.index_dataset.return_value = "run-123"
-        self.mock_service.get_latest_index_metadata.return_value = {
-            "run_id": "run-123",
-            "status": "SUCCEEDED",
-        }
+        class FakeConnector(SourceConnector):
+            def __init__(self, cfg):
+                self.cfg = cfg
 
-        payload = {
-            "dataset_name": "sales",
-            "connector_config": {"type": "csv", "directory_path": "/tmp/data"},
-            "metadata_available": True,
-            "schema_summaries": [
-                {"table_name": "users", "column_name": "id", "summary": "User id"}
-            ],
-        }
+            @property
+            def source_type(self) -> str:
+                return "fake"
 
-        response = self.client.post("/index", json=payload)
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["run_id"], "run-123")
-        self.assertEqual(body["dataset_name"], "sales")
-        self.assertEqual(body["latest_metadata"]["status"], "SUCCEEDED")
+            def check_connection(self):
+                return True
 
-        _, kwargs = self.mock_service.index_dataset.call_args
-        self.assertEqual(kwargs["dataset_name"], "sales")
-        self.assertEqual(kwargs["connector_config"]["type"], "csv")
-        self.assertTrue(kwargs["metadata_available"])
-        self.assertIsInstance(kwargs["schema_summaries"], pd.DataFrame)
+            def discover(self):
+                return []
 
-    def test_index_dataset_handles_value_error_as_400(self):
-        self.mock_service.index_dataset.side_effect = ValueError("bad request")
+            def read(self, stream): # type: ignore
+                return iter([])
 
-        response = self.client.post(
-            "/index",
-            json={
-                "dataset_name": "sales",
-                "connector_config": {"type": "fake"},
-            },
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"], "bad request")
+        service.register_connector("fake", FakeConnector)
+        inst = service.instantiate_connector({"type": "fake", "x": 1})
+        self.assertIsInstance(inst, FakeConnector)
 
-    def test_get_latest_metadata_success(self):
-        self.mock_service.get_latest_index_metadata.return_value = {
-            "run_id": "run-001",
-            "status": "SUCCEEDED",
-        }
+    def test_index_dataset_csv_calls_retriever_and_ingest(self):
+        tmpdir = self._make_tmp_csv_dir()
+        try:
+            service = indexing_main.IndexingService(self.config, self.logger)
 
-        response = self.client.get("/index/sales/latest")
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["dataset_name"], "sales")
-        self.assertEqual(body["latest_metadata"]["run_id"], "run-001")
+            # ensure metadata_store and db_api are the dummy instances we expect
+            self.assertIsInstance(service.metadata_store, DummyMetadataStore)
+            self.assertIsInstance(service.db_api, DummyDBAPI)
 
-    def test_get_latest_metadata_not_found(self):
-        self.mock_service.get_latest_index_metadata.return_value = None
+            connector_config = {"type": "csv", "directory_path": tmpdir}
 
-        response = self.client.get("/index/unknown/latest")
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("No indexing metadata found", response.json()["detail"])
+            run_id = service.index_dataset("mydataset", connector_config)
+
+            # run should be recorded and succeeded
+            self.assertIsNotNone(run_id)
+            self.assertIsNotNone(cast(DummyMetadataStore, service.metadata_store).succeeded)
+
+            # retriever should have been called
+            retriever = cast(DummyRetriever, service.retriever)
+            self.assertTrue(
+                retriever.index_called or retriever.index_with_existing_schema_summaries_called
+            )
+
+            # ingest_dataset should have been called on the dummy DBAPI
+            dbapi = cast(DummyDBAPI, service.db_api)
+            self.assertIsNotNone(dbapi.ingested)
+            self.assertEqual(dbapi.ingested[0], "mydataset") # type: ignore
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

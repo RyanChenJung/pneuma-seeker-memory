@@ -39,6 +39,24 @@ class TestCSVConnector(unittest.TestCase):
         connector = CSVConnector({"type": "csv", "directory_path": self.tmpdir})
         self.assertTrue(connector.check_connection())
 
+    def test_discover_includes_description_when_metadata_provided(self):
+        # create a metadata CSV mapping table names to descriptions
+        metadata_path = os.path.join(self.tmpdir, "metadata.csv")
+        with open(metadata_path, "w", newline="") as f:
+            f.write("table_name,description\n")
+            f.write("users,User information CSV\n")
+            f.write("orders,Order transactions CSV\n")
+
+        connector = CSVConnector(
+            {"type": "csv", "directory_path": self.tmpdir, "metadata_path": metadata_path}
+        )
+        streams = connector.discover()
+        desc_map = {item["stream"]: item.get("description") for item in streams}
+
+        # descriptions should be present for known tables
+        self.assertEqual(desc_map.get("users"), "User information CSV")
+        self.assertEqual(desc_map.get("orders"), "Order transactions CSV")
+
     def test_discover_streams(self):
         connector = CSVConnector({"type": "csv", "directory_path": self.tmpdir})
         streams = connector.discover()

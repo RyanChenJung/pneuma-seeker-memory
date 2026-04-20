@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generator, Hashable, Iterator
+from typing import Any, Generator, Hashable
 
 
 class SourceConnector(ABC):

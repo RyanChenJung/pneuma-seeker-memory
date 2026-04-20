@@ -26,6 +26,19 @@ class CSVConnector(SourceConnector):
         if not self.directory_path.is_dir():
             raise ValueError(f"Not a directory: {self.directory_path}")
 
+        self._description_map: dict[str, str] = {}
+        if "metadata_path" in config:
+            metadata = read_csv(config["metadata_path"])
+            if "table_name" not in metadata.columns:
+                raise ValueError("Metadata CSV must contain 'table_name' column.")
+            if "description" not in metadata.columns:
+                raise ValueError("Metadata CSV must contain 'description' column.")
+            if metadata["table_name"].duplicated().any():
+                raise ValueError("Duplicate table_name entries in metadata.")
+            self._description_map = dict(
+                zip(metadata["table_name"], metadata["description"])
+            )
+
     @property
     def source_type(self) -> str:
         """Returns connector type identifier."""
@@ -42,13 +55,14 @@ class CSVConnector(SourceConnector):
             return False
 
     def discover(self) -> list[dict[str, Any]]:
-        """Discovers available streams/tables and associated metadata."""
+        """Discovers available tables along with descriptions if metadata is provided."""
         stream_map = self.__resolve_stream_map()
         return [
             {
                 "stream": stream,
                 "table_name": stream,
                 "path": path.as_posix(),
+                "description": self._description_map.get(stream),
             }
             for stream, path in stream_map.items()
         ]
