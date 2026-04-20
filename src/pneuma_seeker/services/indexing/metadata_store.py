@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from enum import Enum
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -7,10 +6,17 @@ from uuid import uuid4
 import duckdb
 
 
+class IndexingStatus(Enum):
+	RUNNING = "RUNNING"
+	SUCCEEDED = "SUCCEEDED"
+	FAILED = "FAILED"
+
+
 class IndexingMetadataStore:
 	"""Persists indexing run metadata in DuckDB."""
 
 	def __init__(self, db_path: str | None = None):
+		"""Initializes the metadata store, creating necessary tables if they don't exist."""
 		if db_path:
 			self.db_path = Path(db_path)
 		else:
@@ -18,9 +24,10 @@ class IndexingMetadataStore:
 
 		self.db_path.parent.mkdir(parents=True, exist_ok=True)
 		self._con = duckdb.connect(self.db_path.as_posix(), read_only=False)
-		self._define_tables()
+		self.__define_tables()
 
-	def _define_tables(self):
+	def __define_tables(self):
+		"""Defines the necessary tables for storing indexing run metadata."""
 		self._con.execute(
 			"""
 			CREATE TABLE IF NOT EXISTS indexing_runs (
@@ -47,6 +54,7 @@ class IndexingMetadataStore:
 		source_config: dict,
 		snapshot_id: str,
 	) -> str:
+		"""Records the start of an indexing run and returns the generated run ID."""
 		run_id = str(uuid4())
 		self._con.execute(
 			"""
@@ -57,7 +65,7 @@ class IndexingMetadataStore:
 				source_config_json,
 				snapshot_id,
 				status
-			) VALUES (?, ?, ?, ?, ?, 'RUNNING')
+			) VALUES (?, ?, ?, ?, ?, ?)
 			""",
 			[
 				run_id,
@@ -65,6 +73,7 @@ class IndexingMetadataStore:
 				source_type,
 				json.dumps(source_config, sort_keys=True),
 				snapshot_id,
+				IndexingStatus.RUNNING.value,
 			],
 		)
 		return run_id
@@ -75,33 +84,36 @@ class IndexingMetadataStore:
 		indexed_stream_count: int,
 		indexed_table_count: int,
 	) -> None:
+		"""Marks the specified run as succeeded, recording the counts of indexed streams and tables."""
 		self._con.execute(
 			"""
 			UPDATE indexing_runs
-			SET status = 'SUCCEEDED',
+			SET status = ?,
 				indexed_stream_count = ?,
 				indexed_table_count = ?,
 				updated_at = now(),
 				completed_at = now()
 			WHERE run_id = ?
 			""",
-			[indexed_stream_count, indexed_table_count, run_id],
+			[IndexingStatus.SUCCEEDED.value, indexed_stream_count, indexed_table_count, run_id],
 		)
 
 	def mark_run_failed(self, run_id: str, error_message: str) -> None:
+		"""Marks the specified run as failed, recording the provided error message."""
 		self._con.execute(
 			"""
 			UPDATE indexing_runs
-			SET status = 'FAILED',
+			SET status = ?,
 				error_message = ?,
 				updated_at = now(),
 				completed_at = now()
 			WHERE run_id = ?
 			""",
-			[error_message, run_id],
+			[IndexingStatus.FAILED.value, error_message, run_id],
 		)
 
 	def get_run(self, run_id: str) -> dict | None:
+		"""Retrieves the metadata for the specified run ID, or None if no such run exists."""
 		row = self._con.execute(
 			"""
 			SELECT
@@ -142,6 +154,7 @@ class IndexingMetadataStore:
 		}
 
 	def get_latest_run(self, dataset_name: str) -> dict | None:
+		"""Retrieves the metadata for the most recent run for the specified dataset, or None if no such run exists."""
 		row = self._con.execute(
 			"""
 			SELECT
@@ -184,4 +197,5 @@ class IndexingMetadataStore:
 		}
 
 	def close(self):
+		"""Closes the database connection."""
 		self._con.close()
