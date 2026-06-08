@@ -1,0 +1,7 @@
+table_name,description
+admissions.csv,Patient hospital admission records including admission date and status
+diagnoses.csv,Clinical diagnosis information and diagnostic codes for patients
+lab_results.csv,Laboratory test results and clinical measurements
+medications.csv,Medication orders and prescription records
+patients.csv,Patient demographic information and personal details
+physicians.csv,Physician information and credentials

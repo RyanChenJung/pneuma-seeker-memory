@@ -1,0 +1,701 @@
+medication_id,patient_id,drug_name,dosage,frequency,start_date,end_date,prescribing_physician_id
+1,71,aspirin,81mg,once daily,2021-11-28,,25
+2,16,lisinopril,10mg,once daily,2023-02-23,,9
+3,126,aspirin,81mg,once daily,2021-12-31,,30
+4,166,omeprazole,20mg,once daily,2024-06-03,,16
+5,111,insulin glargine,20 units,once daily,2021-10-22,,7
+6,184,vancomycin,1250mg,IV every 12 hours,2024-08-10,2025-11-12,9
+7,187,insulin glargine,20 units,once daily,2021-03-13,2024-06-02,9
+8,39,spironolactone,25mg,once daily,2021-02-08,,21
+9,69,metformin,500mg,twice daily,2026-03-26,2026-04-14,5
+10,1,levothyroxine,50mcg,once daily,2026-01-27,,17
+11,187,sertraline,50mg,once daily,2023-09-07,,25
+12,177,atorvastatin,40mg,once daily at bedtime,2024-01-12,2025-02-15,27
+13,92,sertraline,50mg,once daily,2021-09-06,,11
+14,94,gabapentin,300mg,three times daily,2023-04-01,2023-10-10,18
+15,195,levothyroxine,50mcg,once daily,2021-06-14,,25
+16,11,gabapentin,300mg,three times daily,2024-08-19,2026-03-16,13
+17,28,omeprazole,20mg,once daily,2022-09-05,,21
+18,113,albuterol,2.5mg,as needed,2023-09-24,2025-07-09,24
+19,185,omeprazole,20mg,once daily,2021-10-14,2021-12-11,19
+20,139,warfarin,5mg,once daily,2023-09-29,,21
+21,116,gabapentin,300mg,three times daily,2023-10-21,,1
+22,104,lisinopril,10mg,once daily,2022-11-26,2023-02-28,4
+23,134,omeprazole,20mg,once daily,2025-07-11,,15
+24,60,pantoprazole,40mg,once daily,2021-11-02,,30
+25,126,atorvastatin,40mg,once daily at bedtime,2021-03-17,,21
+26,159,metformin,500mg,twice daily,2023-08-24,,2
+27,4,warfarin,5mg,once daily,2024-12-07,,6
+28,25,lisinopril,10mg,once daily,2026-01-27,,15
+29,17,vancomycin,1250mg,IV every 12 hours,2021-12-16,,27
+30,158,insulin glargine,20 units,once daily,2021-08-22,,8
+31,189,atorvastatin,40mg,once daily at bedtime,2025-07-06,2026-01-01,22
+32,140,prednisone,10mg,once daily,2022-10-27,2026-01-25,5
+33,55,levothyroxine,50mcg,once daily,2025-09-10,,25
+34,31,lisinopril,10mg,once daily,2024-04-29,2024-07-09,9
+35,179,furosemide,40mg,twice daily,2025-04-01,,12
+36,149,pantoprazole,40mg,once daily,2021-12-04,,2
+37,162,furosemide,40mg,twice daily,2021-07-24,,20
+38,21,prednisone,10mg,once daily,2025-05-12,2026-01-23,1
+39,181,metformin,500mg,twice daily,2022-01-03,,21
+40,198,ondansetron,4mg,as needed,2025-12-22,2026-03-27,16
+41,134,furosemide,40mg,twice daily,2022-02-27,2023-09-11,15
+42,157,carvedilol,12.5mg,twice daily,2022-05-05,,23
+43,157,lisinopril,10mg,once daily,2024-05-06,2025-10-06,3
+44,143,gabapentin,300mg,three times daily,2022-12-14,,8
+45,25,omeprazole,20mg,once daily,2021-08-29,,20
+46,139,albuterol,2.5mg,as needed,2025-11-02,,17
+47,169,warfarin,5mg,once daily,2023-08-09,,7
+48,39,aspirin,81mg,once daily,2021-04-19,2025-10-13,22
+49,12,sertraline,50mg,once daily,2023-10-16,2025-09-08,2
+50,86,albuterol,2.5mg,as needed,2022-08-07,2024-01-10,20
+51,138,spironolactone,25mg,once daily,2021-03-30,2021-07-22,6
+52,30,amlodipine,5mg,once daily,2025-05-28,2026-02-22,3
+53,149,warfarin,5mg,once daily,2025-01-17,,11
+54,84,carvedilol,12.5mg,twice daily,2022-02-12,,8
+55,189,insulin glargine,20 units,once daily,2022-10-30,2024-03-05,14
+56,19,omeprazole,20mg,once daily,2023-02-09,,16
+57,38,ondansetron,4mg,as needed,2023-09-20,2024-12-16,7
+58,35,vancomycin,1250mg,IV every 12 hours,2023-07-21,2024-08-13,15
+59,70,omeprazole,20mg,once daily,2024-07-18,,7
+60,16,levothyroxine,50mcg,once daily,2021-09-18,2024-12-02,9
+61,118,furosemide,40mg,twice daily,2021-08-16,,14
+62,76,amlodipine,5mg,once daily,2025-04-07,,20
+63,157,amlodipine,5mg,once daily,2025-06-05,,29
+64,59,amlodipine,5mg,once daily,2024-03-29,,3
+65,56,carvedilol,12.5mg,twice daily,2025-10-22,,19
+66,4,sertraline,50mg,once daily,2025-09-11,,24
+67,64,carvedilol,12.5mg,twice daily,2025-02-16,,11
+68,39,carvedilol,12.5mg,twice daily,2024-04-01,2025-12-04,30
+69,11,ondansetron,4mg,as needed,2026-01-14,2026-01-26,16
+70,101,clopidogrel,75mg,once daily,2021-03-10,,16
+71,22,insulin glargine,20 units,once daily,2023-07-16,,18
+72,56,metformin,500mg,twice daily,2024-11-20,,5
+73,5,albuterol,2.5mg,as needed,2022-08-29,2023-03-09,16
+74,147,gabapentin,300mg,three times daily,2021-11-28,,24
+75,119,ondansetron,4mg,as needed,2021-02-19,,25
+76,48,furosemide,40mg,twice daily,2025-11-26,,26
+77,163,albuterol,2.5mg,as needed,2024-07-07,,1
+78,86,atorvastatin,40mg,once daily at bedtime,2023-02-28,,17
+79,70,lisinopril,10mg,once daily,2022-08-31,,23
+80,54,vancomycin,1250mg,IV every 12 hours,2024-01-16,,26
+81,189,atorvastatin,40mg,once daily at bedtime,2024-06-24,,30
+82,173,lisinopril,10mg,once daily,2023-11-21,,12
+83,120,lisinopril,10mg,once daily,2021-08-16,,20
+84,166,lisinopril,10mg,once daily,2023-01-19,,18
+85,53,atorvastatin,40mg,once daily at bedtime,2024-02-23,,5
+86,167,levothyroxine,50mcg,once daily,2022-05-04,,16
+87,54,ondansetron,4mg,as needed,2025-11-20,,25
+88,69,warfarin,5mg,once daily,2022-10-19,,17
+89,89,carvedilol,12.5mg,twice daily,2022-07-22,2024-08-30,15
+90,32,sertraline,50mg,once daily,2023-10-24,,16
+91,75,pantoprazole,40mg,once daily,2024-10-21,,15
+92,178,vancomycin,1250mg,IV every 12 hours,2023-01-24,,26
+93,118,atorvastatin,40mg,once daily at bedtime,2022-01-21,,3
+94,74,atorvastatin,40mg,once daily at bedtime,2023-03-12,,3
+95,38,insulin glargine,20 units,once daily,2021-12-04,2025-11-07,16
+96,76,furosemide,40mg,twice daily,2025-11-27,2025-12-09,14
+97,108,pantoprazole,40mg,once daily,2026-03-24,2026-04-11,15
+98,60,metformin,500mg,twice daily,2022-08-21,2022-10-12,27
+99,149,clopidogrel,75mg,once daily,2024-08-13,,11
+100,179,levothyroxine,50mcg,once daily,2023-09-23,,17
+101,146,pantoprazole,40mg,once daily,2023-07-01,,5
+102,59,gabapentin,300mg,three times daily,2021-12-18,,16
+103,13,albuterol,2.5mg,as needed,2022-08-14,,5
+104,43,albuterol,2.5mg,as needed,2022-08-06,,20
+105,47,amlodipine,5mg,once daily,2024-12-28,,6
+106,82,furosemide,40mg,twice daily,2021-11-27,2022-02-26,19
+107,53,furosemide,40mg,twice daily,2023-06-22,2024-07-10,18
+108,89,lisinopril,10mg,once daily,2024-09-25,,5
+109,42,albuterol,2.5mg,as needed,2023-07-08,,18
+110,104,gabapentin,300mg,three times daily,2021-09-06,,30
+111,82,sertraline,50mg,once daily,2025-04-23,2025-12-20,5
+112,130,metformin,500mg,twice daily,2025-02-21,,11
+113,194,gabapentin,300mg,three times daily,2023-08-29,,19
+114,114,furosemide,40mg,twice daily,2025-06-26,,11
+115,11,insulin glargine,20 units,once daily,2025-02-07,,5
+116,103,pantoprazole,40mg,once daily,2021-08-28,,20
+117,84,warfarin,5mg,once daily,2023-07-03,,2
+118,57,vancomycin,1250mg,IV every 12 hours,2024-08-06,2026-02-03,26
+119,115,aspirin,81mg,once daily,2022-02-05,2025-02-18,22
+120,126,atorvastatin,40mg,once daily at bedtime,2023-11-15,,11
+121,15,vancomycin,1250mg,IV every 12 hours,2024-05-24,,30
+122,95,albuterol,2.5mg,as needed,2023-03-26,2025-08-24,13
+123,79,albuterol,2.5mg,as needed,2021-01-25,2023-01-21,15
+124,190,pantoprazole,40mg,once daily,2021-06-29,2024-01-01,14
+125,187,spironolactone,25mg,once daily,2022-08-15,2025-01-06,29
+126,154,carvedilol,12.5mg,twice daily,2021-10-13,,3
+127,135,furosemide,40mg,twice daily,2022-03-02,,11
+128,194,atorvastatin,40mg,once daily at bedtime,2026-03-27,,13
+129,70,atorvastatin,40mg,once daily at bedtime,2021-01-14,,14
+130,146,amlodipine,5mg,once daily,2024-02-13,,25
+131,75,furosemide,40mg,twice daily,2022-02-13,2024-04-11,18
+132,78,sertraline,50mg,once daily,2021-03-28,,27
+133,190,ondansetron,4mg,as needed,2022-09-15,,15
+134,40,warfarin,5mg,once daily,2021-02-24,,9
+135,121,gabapentin,300mg,three times daily,2024-08-04,,4
+136,8,gabapentin,300mg,three times daily,2023-05-05,2024-09-24,4
+137,18,aspirin,81mg,once daily,2023-10-07,,20
+138,112,albuterol,2.5mg,as needed,2024-04-05,,28
+139,178,aspirin,81mg,once daily,2024-07-10,,27
+140,148,insulin glargine,20 units,once daily,2023-02-04,,1
+141,38,aspirin,81mg,once daily,2021-11-30,,11
+142,92,spironolactone,25mg,once daily,2025-12-04,,6
+143,163,lisinopril,10mg,once daily,2022-07-13,,30
+144,164,albuterol,2.5mg,as needed,2021-04-10,2024-04-05,30
+145,47,atorvastatin,40mg,once daily at bedtime,2023-11-19,2025-08-30,25
+146,140,insulin glargine,20 units,once daily,2024-05-11,,11
+147,78,levothyroxine,50mcg,once daily,2025-08-21,,9
+148,91,albuterol,2.5mg,as needed,2021-07-16,,27
+149,96,furosemide,40mg,twice daily,2021-01-27,2022-09-02,25
+150,42,sertraline,50mg,once daily,2023-04-24,,4
+151,49,omeprazole,20mg,once daily,2021-11-13,,26
+152,135,pantoprazole,40mg,once daily,2024-06-10,,28
+153,194,pantoprazole,40mg,once daily,2024-12-30,,26
+154,20,insulin glargine,20 units,once daily,2023-05-05,,4
+155,80,furosemide,40mg,twice daily,2026-03-07,2026-04-05,23
+156,153,albuterol,2.5mg,as needed,2021-10-12,,17
+157,8,levothyroxine,50mcg,once daily,2021-12-19,,24
+158,37,insulin glargine,20 units,once daily,2022-04-01,2026-02-27,23
+159,21,warfarin,5mg,once daily,2022-09-22,2023-06-22,14
+160,194,insulin glargine,20 units,once daily,2021-06-09,2024-03-03,14
+161,132,lisinopril,10mg,once daily,2022-02-07,2025-10-27,19
+162,12,lisinopril,10mg,once daily,2023-08-19,2024-05-11,3
+163,32,gabapentin,300mg,three times daily,2024-09-29,2025-01-12,30
+164,52,vancomycin,1250mg,IV every 12 hours,2022-02-25,,6
+165,192,albuterol,2.5mg,as needed,2021-03-01,2025-12-04,9
+166,129,ondansetron,4mg,as needed,2022-12-14,,25
+167,18,vancomycin,1250mg,IV every 12 hours,2022-05-11,,4
+168,184,ondansetron,4mg,as needed,2025-04-13,2025-08-09,7
+169,138,gabapentin,300mg,three times daily,2021-12-18,,1
+170,182,insulin glargine,20 units,once daily,2026-03-08,2026-04-16,16
+171,113,albuterol,2.5mg,as needed,2024-11-30,,22
+172,98,insulin glargine,20 units,once daily,2022-01-06,,14
+173,195,omeprazole,20mg,once daily,2023-11-20,2024-03-21,11
+174,127,insulin glargine,20 units,once daily,2023-08-13,2024-01-06,25
+175,11,albuterol,2.5mg,as needed,2024-12-14,2025-12-25,3
+176,117,levothyroxine,50mcg,once daily,2023-10-09,2024-08-01,20
+177,114,gabapentin,300mg,three times daily,2024-11-08,,8
+178,49,pantoprazole,40mg,once daily,2023-04-15,2025-09-14,28
+179,122,atorvastatin,40mg,once daily at bedtime,2026-01-07,,22
+180,126,albuterol,2.5mg,as needed,2022-01-03,2025-10-21,22
+181,169,insulin glargine,20 units,once daily,2023-03-23,,22
+182,178,atorvastatin,40mg,once daily at bedtime,2021-09-02,2023-12-08,19
+183,44,insulin glargine,20 units,once daily,2025-02-27,,3
+184,153,albuterol,2.5mg,as needed,2022-02-12,,28
+185,186,prednisone,10mg,once daily,2021-09-09,2024-02-02,16
+186,149,aspirin,81mg,once daily,2025-04-16,,19
+187,165,aspirin,81mg,once daily,2025-03-29,,13
+188,104,albuterol,2.5mg,as needed,2023-09-02,,16
+189,28,clopidogrel,75mg,once daily,2022-07-26,2025-02-18,4
+190,161,aspirin,81mg,once daily,2023-09-30,,5
+191,18,metformin,500mg,twice daily,2021-07-23,,16
+192,174,metformin,500mg,twice daily,2022-01-02,,11
+193,25,furosemide,40mg,twice daily,2022-09-13,,25
+194,197,atorvastatin,40mg,once daily at bedtime,2024-09-15,,16
+195,126,spironolactone,25mg,once daily,2022-02-18,2024-12-10,17
+196,139,aspirin,81mg,once daily,2024-01-16,,18
+197,31,metformin,500mg,twice daily,2025-04-14,2025-11-27,13
+198,114,spironolactone,25mg,once daily,2022-10-07,,15
+199,200,lisinopril,10mg,once daily,2021-03-09,2024-11-25,10
+200,80,amlodipine,5mg,once daily,2023-10-04,,23
+201,146,prednisone,10mg,once daily,2023-09-26,,22
+202,139,sertraline,50mg,once daily,2024-09-13,,19
+203,41,sertraline,50mg,once daily,2023-09-02,,17
+204,158,lisinopril,10mg,once daily,2023-03-13,2025-05-01,22
+205,83,albuterol,2.5mg,as needed,2025-04-19,,2
+206,90,metformin,500mg,twice daily,2024-04-24,2025-05-11,26
+207,161,ondansetron,4mg,as needed,2021-02-25,,11
+208,92,prednisone,10mg,once daily,2021-07-19,,14
+209,64,albuterol,2.5mg,as needed,2021-04-26,,8
+210,17,gabapentin,300mg,three times daily,2024-04-28,2026-04-09,28
+211,6,gabapentin,300mg,three times daily,2021-08-23,,18
+212,109,levothyroxine,50mcg,once daily,2021-03-18,,19
+213,6,clopidogrel,75mg,once daily,2026-01-21,,23
+214,97,sertraline,50mg,once daily,2024-04-19,2025-03-16,19
+215,126,prednisone,10mg,once daily,2022-10-23,,4
+216,196,omeprazole,20mg,once daily,2022-11-20,,22
+217,94,levothyroxine,50mcg,once daily,2021-12-08,,14
+218,20,omeprazole,20mg,once daily,2023-10-15,,27
+219,77,pantoprazole,40mg,once daily,2022-03-15,2022-06-27,19
+220,184,prednisone,10mg,once daily,2025-07-06,2025-08-29,28
+221,70,ondansetron,4mg,as needed,2021-07-14,,3
+222,110,ondansetron,4mg,as needed,2025-06-29,,7
+223,130,albuterol,2.5mg,as needed,2025-06-18,2025-11-26,26
+224,81,gabapentin,300mg,three times daily,2023-06-06,,7
+225,117,carvedilol,12.5mg,twice daily,2023-04-04,2026-03-01,22
+226,161,pantoprazole,40mg,once daily,2022-01-05,,23
+227,55,clopidogrel,75mg,once daily,2025-11-02,2026-03-16,22
+228,137,spironolactone,25mg,once daily,2022-07-03,,26
+229,112,vancomycin,1250mg,IV every 12 hours,2025-10-13,,30
+230,134,ondansetron,4mg,as needed,2025-01-28,,7
+231,192,albuterol,2.5mg,as needed,2023-08-06,2024-01-14,22
+232,82,gabapentin,300mg,three times daily,2025-09-25,,28
+233,69,atorvastatin,40mg,once daily at bedtime,2024-07-22,2025-09-24,27
+234,104,gabapentin,300mg,three times daily,2024-08-16,2025-04-21,8
+235,80,insulin glargine,20 units,once daily,2021-11-04,2023-03-28,15
+236,109,sertraline,50mg,once daily,2024-02-21,,21
+237,8,lisinopril,10mg,once daily,2022-02-18,2022-12-01,9
+238,165,aspirin,81mg,once daily,2024-09-10,,28
+239,6,lisinopril,10mg,once daily,2025-01-19,,2
+240,17,atorvastatin,40mg,once daily at bedtime,2022-10-05,,29
+241,169,carvedilol,12.5mg,twice daily,2026-01-11,,29
+242,186,atorvastatin,40mg,once daily at bedtime,2023-03-24,,27
+243,31,furosemide,40mg,twice daily,2022-04-29,2025-02-23,17
+244,65,ondansetron,4mg,as needed,2025-05-07,,16
+245,198,atorvastatin,40mg,once daily at bedtime,2022-05-03,,26
+246,189,levothyroxine,50mcg,once daily,2022-11-06,,13
+247,45,warfarin,5mg,once daily,2023-05-17,2023-12-28,7
+248,151,aspirin,81mg,once daily,2023-06-20,,2
+249,29,sertraline,50mg,once daily,2023-12-29,,11
+250,64,pantoprazole,40mg,once daily,2023-05-18,,9
+251,95,furosemide,40mg,twice daily,2023-01-14,,27
+252,156,gabapentin,300mg,three times daily,2021-02-13,,2
+253,172,lisinopril,10mg,once daily,2024-11-15,,8
+254,164,aspirin,81mg,once daily,2024-02-06,,23
+255,32,albuterol,2.5mg,as needed,2026-01-24,,18
+256,3,warfarin,5mg,once daily,2025-10-23,,30
+257,66,prednisone,10mg,once daily,2026-03-15,,10
+258,77,atorvastatin,40mg,once daily at bedtime,2025-08-12,,7
+259,82,amlodipine,5mg,once daily,2026-02-19,,29
+260,200,carvedilol,12.5mg,twice daily,2025-06-05,2025-07-23,16
+261,86,sertraline,50mg,once daily,2025-02-18,,23
+262,26,carvedilol,12.5mg,twice daily,2025-12-01,,27
+263,91,amlodipine,5mg,once daily,2024-12-01,2025-01-10,14
+264,189,vancomycin,1250mg,IV every 12 hours,2025-02-02,,11
+265,165,spironolactone,25mg,once daily,2024-11-24,2025-01-23,21
+266,165,amlodipine,5mg,once daily,2024-07-14,,5
+267,81,metformin,500mg,twice daily,2023-04-01,2024-12-23,19
+268,183,atorvastatin,40mg,once daily at bedtime,2021-08-15,2024-07-14,25
+269,106,furosemide,40mg,twice daily,2025-10-01,,26
+270,189,levothyroxine,50mcg,once daily,2023-07-14,,5
+271,84,aspirin,81mg,once daily,2021-12-22,,26
+272,47,gabapentin,300mg,three times daily,2022-02-11,2024-03-11,13
+273,58,prednisone,10mg,once daily,2025-09-06,,1
+274,157,metformin,500mg,twice daily,2026-03-06,,21
+275,51,warfarin,5mg,once daily,2026-02-01,2026-04-08,9
+276,110,amlodipine,5mg,once daily,2021-04-12,,20
+277,44,aspirin,81mg,once daily,2021-11-02,2023-12-02,19
+278,112,insulin glargine,20 units,once daily,2021-01-29,,25
+279,31,spironolactone,25mg,once daily,2025-08-22,,8
+280,69,omeprazole,20mg,once daily,2022-01-26,,10
+281,154,sertraline,50mg,once daily,2023-02-22,2024-04-27,7
+282,108,gabapentin,300mg,three times daily,2025-01-28,,6
+283,68,carvedilol,12.5mg,twice daily,2025-06-11,2025-11-13,8
+284,95,vancomycin,1250mg,IV every 12 hours,2023-07-13,,19
+285,83,spironolactone,25mg,once daily,2021-06-25,2022-03-31,23
+286,182,prednisone,10mg,once daily,2024-11-07,2025-12-11,14
+287,16,vancomycin,1250mg,IV every 12 hours,2022-06-09,2025-07-30,2
+288,91,levothyroxine,50mcg,once daily,2026-03-22,2026-04-27,20
+289,12,vancomycin,1250mg,IV every 12 hours,2024-12-24,,1
+290,78,aspirin,81mg,once daily,2023-10-31,,13
+291,144,albuterol,2.5mg,as needed,2021-09-28,,2
+292,127,ondansetron,4mg,as needed,2022-01-03,2024-11-06,30
+293,23,levothyroxine,50mcg,once daily,2025-12-03,,11
+294,81,clopidogrel,75mg,once daily,2023-06-06,2024-02-07,2
+295,72,furosemide,40mg,twice daily,2023-10-20,,24
+296,68,albuterol,2.5mg,as needed,2026-03-12,,20
+297,43,aspirin,81mg,once daily,2023-11-25,,11
+298,143,sertraline,50mg,once daily,2025-04-14,,28
+299,59,spironolactone,25mg,once daily,2021-04-19,2021-08-15,6
+300,120,lisinopril,10mg,once daily,2023-08-22,2025-08-20,14
+301,11,insulin glargine,20 units,once daily,2026-01-08,,15
+302,118,albuterol,2.5mg,as needed,2024-12-23,,16
+303,38,insulin glargine,20 units,once daily,2025-09-29,,4
+304,47,albuterol,2.5mg,as needed,2021-07-11,2023-02-19,27
+305,70,amlodipine,5mg,once daily,2025-03-16,,19
+306,2,ondansetron,4mg,as needed,2022-03-11,,17
+307,20,ondansetron,4mg,as needed,2022-01-05,,8
+308,7,sertraline,50mg,once daily,2024-10-18,2025-09-26,10
+309,28,insulin glargine,20 units,once daily,2023-03-19,,27
+310,182,levothyroxine,50mcg,once daily,2021-11-11,2024-06-17,22
+311,69,sertraline,50mg,once daily,2023-07-19,,20
+312,168,metformin,500mg,twice daily,2022-11-06,,20
+313,188,spironolactone,25mg,once daily,2022-10-28,,30
+314,165,ondansetron,4mg,as needed,2021-09-22,2022-01-06,10
+315,141,levothyroxine,50mcg,once daily,2025-06-23,2025-08-05,20
+316,46,prednisone,10mg,once daily,2021-07-09,,8
+317,42,prednisone,10mg,once daily,2021-07-02,2022-09-08,13
+318,168,prednisone,10mg,once daily,2022-08-07,,5
+319,111,insulin glargine,20 units,once daily,2022-09-04,,24
+320,34,gabapentin,300mg,three times daily,2026-01-25,,12
+321,52,insulin glargine,20 units,once daily,2025-09-01,,16
+322,69,spironolactone,25mg,once daily,2025-12-19,,19
+323,95,vancomycin,1250mg,IV every 12 hours,2023-05-17,2025-10-05,20
+324,24,amlodipine,5mg,once daily,2023-06-09,,2
+325,174,clopidogrel,75mg,once daily,2022-12-01,,8
+326,162,furosemide,40mg,twice daily,2026-03-22,,21
+327,21,clopidogrel,75mg,once daily,2021-06-21,2023-12-10,30
+328,176,sertraline,50mg,once daily,2022-09-08,2023-06-03,29
+329,76,gabapentin,300mg,three times daily,2025-09-20,2026-01-14,19
+330,132,lisinopril,10mg,once daily,2024-02-03,2024-03-27,4
+331,119,clopidogrel,75mg,once daily,2023-05-21,,22
+332,150,ondansetron,4mg,as needed,2025-07-23,2025-12-07,3
+333,119,clopidogrel,75mg,once daily,2021-02-03,2024-10-26,6
+334,22,amlodipine,5mg,once daily,2025-09-23,,14
+335,117,gabapentin,300mg,three times daily,2022-10-05,,25
+336,88,spironolactone,25mg,once daily,2024-07-01,,30
+337,67,amlodipine,5mg,once daily,2022-03-09,2025-08-04,28
+338,2,insulin glargine,20 units,once daily,2023-06-08,,13
+339,118,insulin glargine,20 units,once daily,2021-01-28,2023-10-09,23
+340,191,prednisone,10mg,once daily,2025-11-15,,20
+341,158,sertraline,50mg,once daily,2022-09-13,,12
+342,33,prednisone,10mg,once daily,2025-07-06,,5
+343,179,metformin,500mg,twice daily,2022-01-26,2022-03-06,7
+344,38,metformin,500mg,twice daily,2022-03-05,,21
+345,138,warfarin,5mg,once daily,2023-06-12,,7
+346,38,atorvastatin,40mg,once daily at bedtime,2022-09-09,,16
+347,40,carvedilol,12.5mg,twice daily,2021-02-14,2026-03-15,24
+348,116,spironolactone,25mg,once daily,2023-09-21,,19
+349,14,warfarin,5mg,once daily,2022-02-17,2024-05-06,11
+350,183,metformin,500mg,twice daily,2021-07-30,,14
+351,149,carvedilol,12.5mg,twice daily,2025-10-04,,20
+352,125,pantoprazole,40mg,once daily,2022-08-19,2024-11-21,17
+353,174,ondansetron,4mg,as needed,2025-01-24,,29
+354,136,sertraline,50mg,once daily,2022-04-20,,1
+355,17,carvedilol,12.5mg,twice daily,2024-03-26,,9
+356,127,carvedilol,12.5mg,twice daily,2025-12-26,,20
+357,6,albuterol,2.5mg,as needed,2023-07-08,,6
+358,113,gabapentin,300mg,three times daily,2025-01-27,2025-07-29,8
+359,176,clopidogrel,75mg,once daily,2022-03-26,,11
+360,169,vancomycin,1250mg,IV every 12 hours,2025-10-14,,15
+361,107,furosemide,40mg,twice daily,2025-12-14,2026-03-30,27
+362,42,albuterol,2.5mg,as needed,2025-06-19,,20
+363,23,omeprazole,20mg,once daily,2022-08-02,,22
+364,156,sertraline,50mg,once daily,2021-09-22,2022-08-15,16
+365,127,insulin glargine,20 units,once daily,2025-06-14,,10
+366,5,warfarin,5mg,once daily,2022-03-05,,12
+367,45,aspirin,81mg,once daily,2023-01-02,,27
+368,87,clopidogrel,75mg,once daily,2021-03-07,,14
+369,58,insulin glargine,20 units,once daily,2024-06-18,2026-01-21,16
+370,197,aspirin,81mg,once daily,2022-11-28,,2
+371,177,pantoprazole,40mg,once daily,2022-07-02,,28
+372,181,clopidogrel,75mg,once daily,2024-05-22,,2
+373,194,spironolactone,25mg,once daily,2025-06-25,,4
+374,27,insulin glargine,20 units,once daily,2025-05-20,,27
+375,43,pantoprazole,40mg,once daily,2021-03-27,,21
+376,41,insulin glargine,20 units,once daily,2025-11-19,2026-02-26,24
+377,130,gabapentin,300mg,three times daily,2024-12-21,,16
+378,86,insulin glargine,20 units,once daily,2021-11-12,,27
+379,113,furosemide,40mg,twice daily,2021-09-09,,14
+380,122,metformin,500mg,twice daily,2022-05-18,,11
+381,96,gabapentin,300mg,three times daily,2023-11-01,2024-08-06,23
+382,63,carvedilol,12.5mg,twice daily,2023-01-09,,5
+383,36,clopidogrel,75mg,once daily,2023-05-14,,26
+384,118,carvedilol,12.5mg,twice daily,2023-04-27,,28
+385,8,clopidogrel,75mg,once daily,2025-06-16,,15
+386,18,furosemide,40mg,twice daily,2025-04-27,2026-01-23,3
+387,198,levothyroxine,50mcg,once daily,2022-10-07,,6
+388,10,carvedilol,12.5mg,twice daily,2021-05-06,,22
+389,162,furosemide,40mg,twice daily,2026-01-23,,23
+390,175,clopidogrel,75mg,once daily,2022-08-29,,23
+391,191,pantoprazole,40mg,once daily,2025-11-25,,11
+392,136,albuterol,2.5mg,as needed,2021-01-17,,20
+393,165,furosemide,40mg,twice daily,2024-12-05,,7
+394,167,pantoprazole,40mg,once daily,2024-07-02,,15
+395,167,albuterol,2.5mg,as needed,2025-12-23,,13
+396,10,omeprazole,20mg,once daily,2025-12-10,,18
+397,190,levothyroxine,50mcg,once daily,2023-03-10,,29
+398,73,furosemide,40mg,twice daily,2023-12-02,,7
+399,134,atorvastatin,40mg,once daily at bedtime,2023-11-14,,11
+400,139,amlodipine,5mg,once daily,2021-02-17,2025-08-13,19
+401,78,aspirin,81mg,once daily,2022-05-10,,24
+402,96,carvedilol,12.5mg,twice daily,2023-11-01,2024-01-08,9
+403,115,clopidogrel,75mg,once daily,2022-12-27,2023-09-15,10
+404,61,ondansetron,4mg,as needed,2025-02-18,2025-08-17,26
+405,161,ondansetron,4mg,as needed,2024-03-04,,22
+406,90,pantoprazole,40mg,once daily,2025-09-26,,10
+407,184,gabapentin,300mg,three times daily,2024-09-27,,19
+408,189,furosemide,40mg,twice daily,2025-01-02,,8
+409,50,insulin glargine,20 units,once daily,2022-11-03,,27
+410,109,albuterol,2.5mg,as needed,2023-07-20,2025-07-24,27
+411,34,carvedilol,12.5mg,twice daily,2021-06-17,2023-11-11,16
+412,135,omeprazole,20mg,once daily,2023-07-03,2025-06-02,13
+413,102,ondansetron,4mg,as needed,2024-02-19,,28
+414,109,aspirin,81mg,once daily,2024-04-11,,15
+415,42,sertraline,50mg,once daily,2025-02-07,,5
+416,118,clopidogrel,75mg,once daily,2021-09-18,,5
+417,178,clopidogrel,75mg,once daily,2025-11-03,,7
+418,144,spironolactone,25mg,once daily,2023-08-28,2024-02-11,12
+419,29,insulin glargine,20 units,once daily,2024-05-17,,4
+420,40,albuterol,2.5mg,as needed,2024-03-16,2025-09-09,4
+421,78,albuterol,2.5mg,as needed,2022-09-17,,10
+422,37,sertraline,50mg,once daily,2021-02-27,,26
+423,73,ondansetron,4mg,as needed,2023-05-14,2025-02-03,7
+424,1,amlodipine,5mg,once daily,2025-08-05,,4
+425,107,pantoprazole,40mg,once daily,2022-12-16,2023-03-24,16
+426,87,ondansetron,4mg,as needed,2022-09-27,,26
+427,156,prednisone,10mg,once daily,2023-09-01,,5
+428,195,furosemide,40mg,twice daily,2023-10-31,,15
+429,84,spironolactone,25mg,once daily,2021-11-02,,3
+430,100,vancomycin,1250mg,IV every 12 hours,2024-09-22,,8
+431,172,prednisone,10mg,once daily,2022-11-26,,29
+432,43,spironolactone,25mg,once daily,2025-02-16,2025-04-09,23
+433,198,metformin,500mg,twice daily,2024-03-17,,23
+434,165,gabapentin,300mg,three times daily,2024-02-24,,18
+435,139,atorvastatin,40mg,once daily at bedtime,2022-01-30,,19
+436,193,lisinopril,10mg,once daily,2024-03-13,,16
+437,137,clopidogrel,75mg,once daily,2026-01-11,2026-04-12,6
+438,63,metformin,500mg,twice daily,2022-07-18,,27
+439,103,ondansetron,4mg,as needed,2023-06-29,2025-04-22,19
+440,6,lisinopril,10mg,once daily,2023-10-04,,11
+441,136,carvedilol,12.5mg,twice daily,2022-01-05,,11
+442,139,prednisone,10mg,once daily,2022-06-11,2023-01-07,6
+443,23,gabapentin,300mg,three times daily,2021-10-22,2026-02-18,5
+444,16,gabapentin,300mg,three times daily,2023-04-15,,20
+445,77,levothyroxine,50mcg,once daily,2022-01-07,2022-05-13,13
+446,67,insulin glargine,20 units,once daily,2022-10-18,2024-08-18,13
+447,153,insulin glargine,20 units,once daily,2021-04-17,2025-07-12,19
+448,130,warfarin,5mg,once daily,2023-10-07,,13
+449,142,insulin glargine,20 units,once daily,2022-07-06,2025-02-18,14
+450,60,atorvastatin,40mg,once daily at bedtime,2023-09-19,2025-07-05,30
+451,151,metformin,500mg,twice daily,2022-07-06,,22
+452,167,insulin glargine,20 units,once daily,2022-05-20,,26
+453,115,furosemide,40mg,twice daily,2022-09-16,,3
+454,37,clopidogrel,75mg,once daily,2022-02-21,,12
+455,138,pantoprazole,40mg,once daily,2021-12-11,,14
+456,119,pantoprazole,40mg,once daily,2023-07-15,2025-10-31,27
+457,43,vancomycin,1250mg,IV every 12 hours,2022-08-16,,1
+458,70,lisinopril,10mg,once daily,2026-03-27,,20
+459,90,aspirin,81mg,once daily,2025-09-16,,27
+460,73,omeprazole,20mg,once daily,2024-04-13,,2
+461,18,amlodipine,5mg,once daily,2025-02-22,,10
+462,36,atorvastatin,40mg,once daily at bedtime,2023-03-21,,24
+463,54,pantoprazole,40mg,once daily,2022-07-27,,20
+464,175,clopidogrel,75mg,once daily,2025-07-01,,11
+465,70,aspirin,81mg,once daily,2025-03-22,,8
+466,85,levothyroxine,50mcg,once daily,2022-12-01,2026-04-18,1
+467,156,furosemide,40mg,twice daily,2024-08-16,,16
+468,106,metformin,500mg,twice daily,2026-01-21,2026-02-19,18
+469,21,sertraline,50mg,once daily,2025-04-11,,26
+470,114,atorvastatin,40mg,once daily at bedtime,2024-01-09,2025-12-03,22
+471,97,insulin glargine,20 units,once daily,2022-12-24,,27
+472,197,vancomycin,1250mg,IV every 12 hours,2023-01-04,,26
+473,50,metformin,500mg,twice daily,2021-09-13,,15
+474,195,metformin,500mg,twice daily,2022-03-30,,9
+475,161,albuterol,2.5mg,as needed,2022-01-28,2025-07-14,10
+476,93,warfarin,5mg,once daily,2022-04-25,,2
+477,181,aspirin,81mg,once daily,2023-10-07,,20
+478,164,omeprazole,20mg,once daily,2021-01-15,2025-08-30,13
+479,127,insulin glargine,20 units,once daily,2025-11-17,2026-04-01,6
+480,145,pantoprazole,40mg,once daily,2022-02-01,,22
+481,33,vancomycin,1250mg,IV every 12 hours,2024-03-03,2025-11-02,24
+482,59,atorvastatin,40mg,once daily at bedtime,2021-09-18,2024-12-05,29
+483,50,clopidogrel,75mg,once daily,2025-02-01,,28
+484,158,metformin,500mg,twice daily,2024-11-20,,9
+485,110,pantoprazole,40mg,once daily,2025-12-14,,21
+486,111,lisinopril,10mg,once daily,2025-10-15,,28
+487,120,carvedilol,12.5mg,twice daily,2022-07-16,2025-06-18,16
+488,185,albuterol,2.5mg,as needed,2023-11-26,,8
+489,137,lisinopril,10mg,once daily,2022-07-24,,15
+490,86,levothyroxine,50mcg,once daily,2021-01-11,,3
+491,177,ondansetron,4mg,as needed,2025-07-13,2025-11-12,14
+492,85,atorvastatin,40mg,once daily at bedtime,2026-02-22,2026-03-11,10
+493,8,atorvastatin,40mg,once daily at bedtime,2024-07-06,,16
+494,65,carvedilol,12.5mg,twice daily,2025-07-13,2026-01-07,8
+495,14,insulin glargine,20 units,once daily,2023-08-28,2024-08-17,27
+496,19,levothyroxine,50mcg,once daily,2023-12-01,,25
+497,25,vancomycin,1250mg,IV every 12 hours,2024-06-22,,21
+498,9,spironolactone,25mg,once daily,2024-03-31,2024-06-08,13
+499,17,levothyroxine,50mcg,once daily,2025-12-28,,26
+500,114,furosemide,40mg,twice daily,2021-05-07,,2
+501,17,gabapentin,300mg,three times daily,2024-06-04,,4
+502,103,lisinopril,10mg,once daily,2024-02-20,2025-03-23,4
+503,154,vancomycin,1250mg,IV every 12 hours,2025-03-21,,26
+504,119,vancomycin,1250mg,IV every 12 hours,2021-01-22,,26
+505,26,carvedilol,12.5mg,twice daily,2025-12-08,,11
+506,151,metformin,500mg,twice daily,2023-07-19,,7
+507,18,insulin glargine,20 units,once daily,2021-07-30,2025-08-05,19
+508,164,omeprazole,20mg,once daily,2026-01-27,,17
+509,186,aspirin,81mg,once daily,2022-12-29,,20
+510,16,spironolactone,25mg,once daily,2022-01-16,2022-04-23,5
+511,167,gabapentin,300mg,three times daily,2024-04-12,,25
+512,139,albuterol,2.5mg,as needed,2022-09-30,,25
+513,155,furosemide,40mg,twice daily,2021-10-29,,11
+514,133,gabapentin,300mg,three times daily,2023-01-26,,19
+515,144,furosemide,40mg,twice daily,2021-04-28,2025-12-07,28
+516,52,lisinopril,10mg,once daily,2023-05-15,,21
+517,171,omeprazole,20mg,once daily,2025-05-28,2025-09-08,16
+518,149,spironolactone,25mg,once daily,2024-05-13,,19
+519,42,levothyroxine,50mcg,once daily,2024-06-15,2025-05-24,4
+520,11,spironolactone,25mg,once daily,2025-11-30,,16
+521,178,warfarin,5mg,once daily,2026-02-28,2026-03-21,8
+522,189,spironolactone,25mg,once daily,2024-07-01,2025-11-12,25
+523,53,levothyroxine,50mcg,once daily,2025-07-12,,13
+524,93,amlodipine,5mg,once daily,2025-08-19,,1
+525,37,atorvastatin,40mg,once daily at bedtime,2023-01-03,2023-09-02,10
+526,196,spironolactone,25mg,once daily,2022-02-03,,12
+527,45,lisinopril,10mg,once daily,2021-03-02,2022-10-11,8
+528,142,aspirin,81mg,once daily,2025-01-12,2026-03-28,8
+529,26,amlodipine,5mg,once daily,2022-02-06,2023-08-03,1
+530,29,furosemide,40mg,twice daily,2023-02-16,,11
+531,95,omeprazole,20mg,once daily,2022-09-17,,26
+532,160,albuterol,2.5mg,as needed,2024-09-15,2026-03-15,29
+533,31,carvedilol,12.5mg,twice daily,2025-12-04,,5
+534,97,furosemide,40mg,twice daily,2025-06-16,2026-03-22,23
+535,163,albuterol,2.5mg,as needed,2022-10-14,,8
+536,49,lisinopril,10mg,once daily,2025-04-12,,28
+537,84,pantoprazole,40mg,once daily,2022-08-26,,8
+538,33,lisinopril,10mg,once daily,2024-07-13,,28
+539,54,clopidogrel,75mg,once daily,2024-04-11,,24
+540,170,atorvastatin,40mg,once daily at bedtime,2025-05-26,,20
+541,193,atorvastatin,40mg,once daily at bedtime,2021-12-09,,29
+542,119,clopidogrel,75mg,once daily,2023-02-06,,6
+543,178,levothyroxine,50mcg,once daily,2024-12-30,,16
+544,164,sertraline,50mg,once daily,2023-08-29,2024-10-19,30
+545,52,ondansetron,4mg,as needed,2024-08-23,2025-04-11,15
+546,97,warfarin,5mg,once daily,2023-03-22,2025-08-15,19
+547,141,amlodipine,5mg,once daily,2025-09-22,,3
+548,133,furosemide,40mg,twice daily,2025-03-20,2025-11-09,12
+549,160,warfarin,5mg,once daily,2024-04-10,2025-09-23,11
+550,105,carvedilol,12.5mg,twice daily,2023-07-13,,12
+551,46,sertraline,50mg,once daily,2022-10-12,2022-12-08,15
+552,92,warfarin,5mg,once daily,2022-06-28,,29
+553,132,atorvastatin,40mg,once daily at bedtime,2022-08-27,,18
+554,26,atorvastatin,40mg,once daily at bedtime,2025-05-29,2025-09-29,4
+555,86,atorvastatin,40mg,once daily at bedtime,2023-01-08,2024-02-29,7
+556,197,levothyroxine,50mcg,once daily,2022-05-28,,22
+557,36,aspirin,81mg,once daily,2022-01-26,,28
+558,73,pantoprazole,40mg,once daily,2026-02-12,2026-03-29,27
+559,104,albuterol,2.5mg,as needed,2025-05-23,,27
+560,121,ondansetron,4mg,as needed,2025-04-01,,21
+561,102,clopidogrel,75mg,once daily,2025-04-08,,8
+562,122,warfarin,5mg,once daily,2025-01-21,,8
+563,194,clopidogrel,75mg,once daily,2024-04-17,,15
+564,81,spironolactone,25mg,once daily,2022-11-29,,28
+565,179,omeprazole,20mg,once daily,2023-05-29,,14
+566,143,omeprazole,20mg,once daily,2023-06-18,,1
+567,33,albuterol,2.5mg,as needed,2021-10-12,,10
+568,91,metformin,500mg,twice daily,2023-10-21,,11
+569,193,warfarin,5mg,once daily,2023-05-09,,13
+570,6,pantoprazole,40mg,once daily,2022-09-06,,19
+571,146,lisinopril,10mg,once daily,2026-03-04,2026-04-01,21
+572,101,vancomycin,1250mg,IV every 12 hours,2026-02-15,,13
+573,49,omeprazole,20mg,once daily,2023-03-12,2025-05-18,16
+574,116,insulin glargine,20 units,once daily,2022-11-05,,21
+575,142,gabapentin,300mg,three times daily,2021-07-10,2025-04-29,6
+576,126,lisinopril,10mg,once daily,2025-08-20,,1
+577,73,amlodipine,5mg,once daily,2022-02-12,2024-04-19,7
+578,18,warfarin,5mg,once daily,2022-08-20,,15
+579,44,lisinopril,10mg,once daily,2023-01-25,,11
+580,34,carvedilol,12.5mg,twice daily,2023-03-12,2023-10-31,18
+581,100,carvedilol,12.5mg,twice daily,2023-09-07,,29
+582,80,omeprazole,20mg,once daily,2021-09-24,,14
+583,80,sertraline,50mg,once daily,2021-11-22,,19
+584,118,omeprazole,20mg,once daily,2023-10-27,,9
+585,115,omeprazole,20mg,once daily,2021-01-16,,3
+586,135,prednisone,10mg,once daily,2024-05-23,,11
+587,119,ondansetron,4mg,as needed,2025-12-06,,19
+588,117,lisinopril,10mg,once daily,2025-02-18,2026-01-21,12
+589,45,gabapentin,300mg,three times daily,2023-03-12,,14
+590,188,warfarin,5mg,once daily,2022-01-03,,14
+591,47,spironolactone,25mg,once daily,2023-02-27,,23
+592,12,ondansetron,4mg,as needed,2021-07-15,,8
+593,138,amlodipine,5mg,once daily,2022-07-15,,10
+594,56,atorvastatin,40mg,once daily at bedtime,2024-11-30,,30
+595,142,sertraline,50mg,once daily,2023-04-23,,4
+596,130,albuterol,2.5mg,as needed,2021-06-06,,25
+597,65,levothyroxine,50mcg,once daily,2023-04-20,,7
+598,19,clopidogrel,75mg,once daily,2021-04-02,,21
+599,103,spironolactone,25mg,once daily,2023-02-20,,28
+600,30,omeprazole,20mg,once daily,2023-03-24,2024-08-25,23
+601,119,furosemide,40mg,twice daily,2022-11-01,,16
+602,63,spironolactone,25mg,once daily,2021-05-20,2025-01-31,23
+603,72,spironolactone,25mg,once daily,2021-10-15,,27
+604,156,amlodipine,5mg,once daily,2021-12-16,,4
+605,44,amlodipine,5mg,once daily,2022-08-26,2024-11-10,3
+606,92,metformin,500mg,twice daily,2024-10-19,2026-01-20,6
+607,137,omeprazole,20mg,once daily,2025-01-03,2025-12-21,7
+608,134,spironolactone,25mg,once daily,2024-11-27,2025-10-25,21
+609,114,insulin glargine,20 units,once daily,2023-03-11,,2
+610,197,vancomycin,1250mg,IV every 12 hours,2021-01-10,2023-02-28,7
+611,52,warfarin,5mg,once daily,2023-02-07,,3
+612,87,metformin,500mg,twice daily,2023-05-14,2023-06-19,27
+613,57,omeprazole,20mg,once daily,2024-10-24,,29
+614,171,insulin glargine,20 units,once daily,2025-06-21,,6
+615,28,amlodipine,5mg,once daily,2021-04-01,,27
+616,49,levothyroxine,50mcg,once daily,2022-10-23,,20
+617,110,omeprazole,20mg,once daily,2024-01-15,,4
+618,45,warfarin,5mg,once daily,2022-03-14,2024-01-12,1
+619,100,prednisone,10mg,once daily,2024-09-01,,7
+620,167,spironolactone,25mg,once daily,2022-03-27,2023-10-25,20
+621,106,albuterol,2.5mg,as needed,2021-03-31,2022-06-28,10
+622,27,vancomycin,1250mg,IV every 12 hours,2023-10-21,,23
+623,146,pantoprazole,40mg,once daily,2025-06-09,,6
+624,162,aspirin,81mg,once daily,2021-07-14,,23
+625,198,prednisone,10mg,once daily,2024-10-20,,23
+626,171,furosemide,40mg,twice daily,2022-11-12,2024-08-31,16
+627,115,atorvastatin,40mg,once daily at bedtime,2022-11-18,2026-03-07,13
+628,129,clopidogrel,75mg,once daily,2024-08-04,,19
+629,80,metformin,500mg,twice daily,2022-04-22,2023-01-08,8
+630,16,carvedilol,12.5mg,twice daily,2025-03-31,2025-05-17,5
+631,97,albuterol,2.5mg,as needed,2023-10-19,2024-03-29,7
+632,154,lisinopril,10mg,once daily,2022-05-03,,15
+633,195,levothyroxine,50mcg,once daily,2021-10-02,2025-05-19,2
+634,166,clopidogrel,75mg,once daily,2025-06-10,,27
+635,85,gabapentin,300mg,three times daily,2025-03-18,2026-04-04,11
+636,171,warfarin,5mg,once daily,2022-02-26,,8
+637,134,warfarin,5mg,once daily,2024-05-30,,11
+638,17,amlodipine,5mg,once daily,2023-06-25,,28
+639,14,sertraline,50mg,once daily,2021-05-24,,21
+640,152,furosemide,40mg,twice daily,2022-02-23,2023-02-20,18
+641,110,omeprazole,20mg,once daily,2022-04-29,,24
+642,63,spironolactone,25mg,once daily,2022-09-30,2023-11-15,14
+643,148,amlodipine,5mg,once daily,2024-05-25,2025-03-20,15
+644,124,omeprazole,20mg,once daily,2022-07-11,,3
+645,121,albuterol,2.5mg,as needed,2023-03-27,,15
+646,111,carvedilol,12.5mg,twice daily,2023-11-01,,25
+647,124,furosemide,40mg,twice daily,2025-08-06,,1
+648,195,prednisone,10mg,once daily,2023-05-26,,30
+649,142,gabapentin,300mg,three times daily,2024-05-03,,24
+650,79,amlodipine,5mg,once daily,2022-06-11,,15
+651,124,gabapentin,300mg,three times daily,2023-02-08,,3
+652,51,levothyroxine,50mcg,once daily,2021-10-07,,5
+653,187,omeprazole,20mg,once daily,2021-01-09,2023-11-07,24
+654,107,albuterol,2.5mg,as needed,2023-10-04,,13
+655,165,albuterol,2.5mg,as needed,2023-02-26,,19
+656,32,atorvastatin,40mg,once daily at bedtime,2023-04-18,,13
+657,66,ondansetron,4mg,as needed,2021-11-29,2024-05-17,25
+658,163,albuterol,2.5mg,as needed,2023-11-10,,23
+659,109,albuterol,2.5mg,as needed,2024-11-27,2025-06-19,24
+660,93,warfarin,5mg,once daily,2022-05-12,,21
+661,38,metformin,500mg,twice daily,2024-11-29,,9
+662,38,vancomycin,1250mg,IV every 12 hours,2023-07-22,,9
+663,170,warfarin,5mg,once daily,2024-05-18,,27
+664,165,amlodipine,5mg,once daily,2021-01-26,2021-08-10,23
+665,21,prednisone,10mg,once daily,2023-03-26,,17
+666,110,omeprazole,20mg,once daily,2025-11-30,,9
+667,169,gabapentin,300mg,three times daily,2023-10-23,,29
+668,106,prednisone,10mg,once daily,2024-04-15,,25
+669,199,atorvastatin,40mg,once daily at bedtime,2021-08-12,,26
+670,192,albuterol,2.5mg,as needed,2025-07-26,2025-11-17,13
+671,126,gabapentin,300mg,three times daily,2021-01-14,,1
+672,107,insulin glargine,20 units,once daily,2021-05-24,,17
+673,44,carvedilol,12.5mg,twice daily,2024-09-02,2025-11-24,6
+674,51,albuterol,2.5mg,as needed,2022-01-17,,16
+675,116,amlodipine,5mg,once daily,2023-10-27,,19
+676,47,omeprazole,20mg,once daily,2022-01-16,2026-04-07,26
+677,105,omeprazole,20mg,once daily,2022-06-16,,15
+678,43,vancomycin,1250mg,IV every 12 hours,2021-08-12,,3
+679,71,gabapentin,300mg,three times daily,2021-06-25,,3
+680,123,levothyroxine,50mcg,once daily,2021-03-02,,16
+681,2,insulin glargine,20 units,once daily,2021-01-20,2025-04-15,22
+682,25,ondansetron,4mg,as needed,2025-06-05,,7
+683,134,clopidogrel,75mg,once daily,2025-06-10,2026-04-21,25
+684,194,aspirin,81mg,once daily,2026-03-24,,11
+685,175,vancomycin,1250mg,IV every 12 hours,2023-05-30,,29
+686,93,levothyroxine,50mcg,once daily,2022-10-08,,22
+687,92,prednisone,10mg,once daily,2023-02-15,,28
+688,179,levothyroxine,50mcg,once daily,2025-07-10,2026-03-07,13
+689,136,furosemide,40mg,twice daily,2021-02-22,,9
+690,176,warfarin,5mg,once daily,2023-01-25,,22
+691,49,sertraline,50mg,once daily,2023-11-21,,1
+692,12,levothyroxine,50mcg,once daily,2021-02-04,,26
+693,156,levothyroxine,50mcg,once daily,2024-10-20,,16
+694,21,prednisone,10mg,once daily,2025-02-22,,12
+695,122,carvedilol,12.5mg,twice daily,2026-03-23,,22
+696,156,insulin glargine,20 units,once daily,2025-02-12,,7
+697,147,furosemide,40mg,twice daily,2025-11-17,,26
+698,23,clopidogrel,75mg,once daily,2021-03-07,2025-08-31,10
+699,115,pantoprazole,40mg,once daily,2025-11-27,,4
+700,63,sertraline,50mg,once daily,2024-09-19,,7

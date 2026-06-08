@@ -1,0 +1,601 @@
+diagnosis_id,patient_id,admission_id,icd10_code,description,primary_flag,diagnosed_date
+1,140,275,G35,Multiple sclerosis,1,2021-01-11
+2,90,114,I50.9,"Heart failure, unspecified",1,2023-09-21
+3,85,185,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2022-06-13
+4,193,317,F32.1,"Major depressive disorder, single episode, moderate",1,2025-04-29
+5,144,422,E11.9,Type 2 diabetes mellitus without complications,1,2021-04-14
+6,172,178,Z87.891,Personal history of nicotine dependence,1,2022-09-11
+7,165,315,I25.10,Atherosclerotic heart disease of native coronary artery,1,2020-06-12
+8,175,454,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-04-11
+9,30,198,J44.1,COPD with acute exacerbation,1,2026-01-21
+10,186,145,E11.9,Type 2 diabetes mellitus without complications,1,2025-10-18
+11,198,192,F32.1,"Major depressive disorder, single episode, moderate",1,2025-09-14
+12,115,250,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-04-29
+13,167,99,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-10-05
+14,22,486,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-11-16
+15,198,276,B97.29,Other coronavirus as the cause of diseases,1,2020-01-31
+16,161,34,I50.9,"Heart failure, unspecified",1,2022-05-23
+17,176,218,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-04-22
+18,138,425,M79.3,Panniculitis,1,2020-10-22
+19,192,352,N18.5,"Chronic kidney disease, stage 5",1,2020-04-07
+20,118,368,K70.30,Alcoholic cirrhosis of liver without ascites,1,2020-06-04
+21,23,38,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-12-30
+22,65,286,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-07-21
+23,67,209,G35,Multiple sclerosis,1,2025-01-21
+24,162,208,M79.3,Panniculitis,1,2023-07-19
+25,5,200,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-12-30
+26,2,329,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2020-07-05
+27,180,435,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2024-01-05
+28,129,55,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-05-19
+29,156,45,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-11-27
+30,98,203,E11.9,Type 2 diabetes mellitus without complications,1,2025-04-25
+31,41,274,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-07-12
+32,192,201,B97.29,Other coronavirus as the cause of diseases,1,2023-04-23
+33,163,74,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-03-08
+34,3,284,B97.29,Other coronavirus as the cause of diseases,1,2021-08-02
+35,32,22,E11.9,Type 2 diabetes mellitus without complications,1,2024-06-02
+36,138,281,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-06-02
+37,54,384,A41.9,"Sepsis, unspecified organism",1,2022-05-17
+38,106,464,F32.1,"Major depressive disorder, single episode, moderate",1,2021-08-06
+39,42,95,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-11-01
+40,50,59,I10,Essential (primary) hypertension,1,2020-08-10
+41,193,478,B97.29,Other coronavirus as the cause of diseases,1,2025-03-04
+42,166,282,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-04-05
+43,172,35,J44.1,COPD with acute exacerbation,1,2021-02-06
+44,51,372,E78.5,"Hyperlipidemia, unspecified",1,2023-09-17
+45,92,66,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-02-13
+46,73,318,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-03-03
+47,82,249,Z87.891,Personal history of nicotine dependence,1,2023-09-06
+48,158,338,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2021-09-16
+49,145,291,A41.9,"Sepsis, unspecified organism",1,2023-07-19
+50,110,87,E11.9,Type 2 diabetes mellitus without complications,1,2023-07-06
+51,64,403,I25.10,Atherosclerotic heart disease of native coronary artery,1,2024-11-21
+52,71,431,A41.9,"Sepsis, unspecified organism",1,2021-07-04
+53,174,376,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-05-19
+54,119,229,A41.9,"Sepsis, unspecified organism",1,2023-06-05
+55,125,283,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-12-20
+56,166,311,N18.3,"Chronic kidney disease, stage 3 (moderate)",0,2023-02-23
+57,36,457,B97.29,Other coronavirus as the cause of diseases,1,2022-03-15
+58,68,376,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2020-11-04
+59,5,435,F32.1,"Major depressive disorder, single episode, moderate",1,2020-05-07
+60,149,297,G35,Multiple sclerosis,1,2022-05-21
+61,10,283,J44.1,COPD with acute exacerbation,1,2026-02-04
+62,139,242,N18.5,"Chronic kidney disease, stage 5",1,2024-02-07
+63,101,115,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2021-07-02
+64,119,257,F32.1,"Major depressive disorder, single episode, moderate",1,2021-01-05
+65,102,187,F32.1,"Major depressive disorder, single episode, moderate",1,2020-02-13
+66,170,123,I10,Essential (primary) hypertension,1,2025-10-06
+67,36,229,I10,Essential (primary) hypertension,1,2022-01-03
+68,145,486,N18.5,"Chronic kidney disease, stage 5",1,2025-06-03
+69,92,21,I25.10,Atherosclerotic heart disease of native coronary artery,0,2025-06-20
+70,60,33,J44.1,COPD with acute exacerbation,1,2024-02-22
+71,60,22,I50.9,"Heart failure, unspecified",1,2025-10-22
+72,93,199,E78.5,"Hyperlipidemia, unspecified",1,2025-02-05
+73,12,21,K70.30,Alcoholic cirrhosis of liver without ascites,1,2021-02-26
+74,181,496,F32.1,"Major depressive disorder, single episode, moderate",1,2023-01-25
+75,190,135,B97.29,Other coronavirus as the cause of diseases,1,2021-12-13
+76,97,335,G35,Multiple sclerosis,1,2024-02-05
+77,151,335,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2025-10-17
+78,65,193,I25.10,Atherosclerotic heart disease of native coronary artery,1,2025-10-16
+79,104,181,A41.9,"Sepsis, unspecified organism",1,2025-06-17
+80,124,455,E11.9,Type 2 diabetes mellitus without complications,1,2025-08-17
+81,36,226,I10,Essential (primary) hypertension,0,2022-07-31
+82,20,264,J44.1,COPD with acute exacerbation,1,2022-05-16
+83,39,96,I10,Essential (primary) hypertension,1,2024-01-23
+84,155,368,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-08-01
+85,107,416,K70.30,Alcoholic cirrhosis of liver without ascites,1,2021-04-09
+86,124,346,E78.5,"Hyperlipidemia, unspecified",1,2025-05-16
+87,54,303,I10,Essential (primary) hypertension,1,2024-08-10
+88,6,125,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-06-07
+89,147,304,I10,Essential (primary) hypertension,1,2021-07-05
+90,162,263,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-08-24
+91,15,86,J44.1,COPD with acute exacerbation,1,2022-01-07
+92,133,491,G35,Multiple sclerosis,1,2026-04-27
+93,164,10,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-12-17
+94,56,230,E78.5,"Hyperlipidemia, unspecified",1,2025-05-26
+95,44,113,M79.3,Panniculitis,1,2021-08-07
+96,150,421,I10,Essential (primary) hypertension,1,2025-09-23
+97,68,86,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-01-31
+98,153,303,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-07-30
+99,97,198,N18.5,"Chronic kidney disease, stage 5",1,2021-03-20
+100,5,104,F32.1,"Major depressive disorder, single episode, moderate",0,2025-08-27
+101,176,215,N18.5,"Chronic kidney disease, stage 5",1,2021-01-29
+102,46,244,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2025-12-16
+103,129,386,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-01-16
+104,124,338,N18.5,"Chronic kidney disease, stage 5",1,2026-01-17
+105,1,460,M79.3,Panniculitis,1,2025-11-08
+106,108,190,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2025-12-10
+107,110,118,E78.5,"Hyperlipidemia, unspecified",1,2024-04-10
+108,90,302,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2024-10-08
+109,35,131,E78.5,"Hyperlipidemia, unspecified",1,2022-08-10
+110,22,146,B97.29,Other coronavirus as the cause of diseases,1,2024-07-31
+111,66,97,E11.9,Type 2 diabetes mellitus without complications,1,2020-01-30
+112,148,268,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-10-29
+113,2,193,I50.9,"Heart failure, unspecified",1,2023-07-17
+114,105,186,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-09-25
+115,110,334,J44.1,COPD with acute exacerbation,1,2022-12-06
+116,138,217,A41.9,"Sepsis, unspecified organism",1,2023-02-02
+117,175,204,I50.9,"Heart failure, unspecified",1,2024-08-19
+118,142,402,B97.29,Other coronavirus as the cause of diseases,1,2025-05-30
+119,46,190,B97.29,Other coronavirus as the cause of diseases,1,2026-03-22
+120,124,130,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-11-11
+121,199,362,G35,Multiple sclerosis,1,2021-07-19
+122,169,61,I25.10,Atherosclerotic heart disease of native coronary artery,1,2025-01-03
+123,180,487,I10,Essential (primary) hypertension,1,2021-02-14
+124,55,261,G35,Multiple sclerosis,1,2023-10-18
+125,141,315,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-10-20
+126,100,494,E11.9,Type 2 diabetes mellitus without complications,1,2021-01-08
+127,38,242,M79.3,Panniculitis,1,2020-12-27
+128,17,135,I25.10,Atherosclerotic heart disease of native coronary artery,1,2024-02-27
+129,21,312,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2024-04-23
+130,103,315,F32.1,"Major depressive disorder, single episode, moderate",1,2023-03-19
+131,183,494,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-12-18
+132,164,254,Z87.891,Personal history of nicotine dependence,1,2020-02-13
+133,52,436,F32.1,"Major depressive disorder, single episode, moderate",1,2023-03-17
+134,50,18,F32.1,"Major depressive disorder, single episode, moderate",1,2025-10-13
+135,179,119,I10,Essential (primary) hypertension,1,2020-05-27
+136,93,123,E11.9,Type 2 diabetes mellitus without complications,1,2021-10-06
+137,23,142,G35,Multiple sclerosis,1,2023-12-17
+138,172,203,G35,Multiple sclerosis,1,2022-03-31
+139,133,8,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2021-01-04
+140,141,146,B97.29,Other coronavirus as the cause of diseases,1,2023-11-26
+141,89,494,J44.1,COPD with acute exacerbation,1,2022-07-15
+142,156,494,I50.9,"Heart failure, unspecified",1,2025-02-05
+143,104,295,E11.9,Type 2 diabetes mellitus without complications,1,2022-12-05
+144,45,209,F32.1,"Major depressive disorder, single episode, moderate",1,2021-03-12
+145,144,38,F32.1,"Major depressive disorder, single episode, moderate",1,2023-04-20
+146,88,485,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-10-03
+147,66,449,B97.29,Other coronavirus as the cause of diseases,1,2022-10-21
+148,178,227,G35,Multiple sclerosis,1,2026-04-25
+149,124,395,I25.10,Atherosclerotic heart disease of native coronary artery,1,2023-10-23
+150,199,235,Z87.891,Personal history of nicotine dependence,1,2020-04-22
+151,124,60,J44.1,COPD with acute exacerbation,1,2020-10-03
+152,98,325,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-07-30
+153,81,212,A41.9,"Sepsis, unspecified organism",1,2025-10-16
+154,138,5,J44.1,COPD with acute exacerbation,1,2022-10-13
+155,74,48,G35,Multiple sclerosis,1,2023-11-01
+156,20,284,I10,Essential (primary) hypertension,1,2025-05-05
+157,81,182,I50.9,"Heart failure, unspecified",1,2023-01-07
+158,47,485,I50.9,"Heart failure, unspecified",1,2025-08-05
+159,189,103,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-09-18
+160,68,106,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-04-10
+161,64,429,A41.9,"Sepsis, unspecified organism",1,2021-09-30
+162,200,55,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2020-11-17
+163,174,490,E78.5,"Hyperlipidemia, unspecified",1,2020-01-28
+164,196,439,B97.29,Other coronavirus as the cause of diseases,1,2020-06-22
+165,124,191,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-07-09
+166,148,445,J44.1,COPD with acute exacerbation,1,2025-07-03
+167,47,392,F32.1,"Major depressive disorder, single episode, moderate",1,2023-02-21
+168,102,114,N18.5,"Chronic kidney disease, stage 5",1,2020-08-09
+169,135,410,M79.3,Panniculitis,1,2025-05-13
+170,139,17,F32.1,"Major depressive disorder, single episode, moderate",1,2023-11-23
+171,101,441,I10,Essential (primary) hypertension,1,2025-02-15
+172,31,358,F32.1,"Major depressive disorder, single episode, moderate",1,2025-02-27
+173,81,353,E11.9,Type 2 diabetes mellitus without complications,1,2020-02-18
+174,173,108,G35,Multiple sclerosis,1,2021-02-16
+175,84,186,J44.1,COPD with acute exacerbation,1,2022-02-05
+176,141,135,I25.10,Atherosclerotic heart disease of native coronary artery,1,2023-01-08
+177,121,491,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-02-07
+178,48,256,M79.3,Panniculitis,1,2022-05-12
+179,108,359,A41.9,"Sepsis, unspecified organism",1,2024-02-04
+180,103,144,Z87.891,Personal history of nicotine dependence,1,2022-01-06
+181,147,68,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-02-13
+182,185,139,I25.10,Atherosclerotic heart disease of native coronary artery,1,2026-03-24
+183,111,439,G35,Multiple sclerosis,1,2022-03-14
+184,38,410,N18.5,"Chronic kidney disease, stage 5",1,2025-04-21
+185,3,91,M79.3,Panniculitis,1,2025-08-08
+186,35,458,F32.1,"Major depressive disorder, single episode, moderate",1,2025-12-27
+187,185,162,E78.5,"Hyperlipidemia, unspecified",1,2023-05-13
+188,65,288,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2024-06-19
+189,26,354,I10,Essential (primary) hypertension,1,2020-09-02
+190,56,417,J44.1,COPD with acute exacerbation,1,2025-05-05
+191,162,50,Z87.891,Personal history of nicotine dependence,1,2023-10-02
+192,67,185,A41.9,"Sepsis, unspecified organism",1,2026-04-14
+193,143,478,J44.1,COPD with acute exacerbation,1,2023-11-10
+194,6,211,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2023-12-09
+195,174,494,I50.9,"Heart failure, unspecified",1,2026-01-14
+196,45,,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-12-25
+197,84,345,F32.1,"Major depressive disorder, single episode, moderate",1,2025-06-19
+198,199,378,Z87.891,Personal history of nicotine dependence,0,2020-11-17
+199,98,315,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2025-03-14
+200,162,490,N18.5,"Chronic kidney disease, stage 5",1,2021-11-17
+201,164,414,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-09-23
+202,162,314,G35,Multiple sclerosis,1,2020-10-19
+203,21,83,K70.30,Alcoholic cirrhosis of liver without ascites,1,2022-07-23
+204,81,163,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2022-12-31
+205,155,331,G35,Multiple sclerosis,1,2023-01-16
+206,114,400,A41.9,"Sepsis, unspecified organism",1,2025-11-03
+207,116,212,I10,Essential (primary) hypertension,1,2022-01-23
+208,6,65,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-10-27
+209,191,359,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-05-12
+210,43,204,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-01-26
+211,17,480,E78.5,"Hyperlipidemia, unspecified",1,2026-02-24
+212,14,14,G35,Multiple sclerosis,1,2025-11-16
+213,196,43,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-12-11
+214,159,80,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2024-05-15
+215,80,118,I25.10,Atherosclerotic heart disease of native coronary artery,1,2023-03-09
+216,114,321,N18.5,"Chronic kidney disease, stage 5",1,2021-06-21
+217,135,430,I10,Essential (primary) hypertension,1,2020-04-27
+218,9,340,A41.9,"Sepsis, unspecified organism",1,2023-08-25
+219,122,240,B97.29,Other coronavirus as the cause of diseases,1,2023-01-20
+220,141,228,N18.5,"Chronic kidney disease, stage 5",1,2026-01-17
+221,46,303,Z87.891,Personal history of nicotine dependence,1,2024-11-16
+222,135,328,B97.29,Other coronavirus as the cause of diseases,1,2023-06-22
+223,89,247,B97.29,Other coronavirus as the cause of diseases,1,2022-07-19
+224,23,227,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-02-07
+225,106,134,N18.5,"Chronic kidney disease, stage 5",1,2023-05-28
+226,3,1,F32.1,"Major depressive disorder, single episode, moderate",1,2021-07-12
+227,89,147,E78.5,"Hyperlipidemia, unspecified",1,2025-12-31
+228,3,353,E78.5,"Hyperlipidemia, unspecified",1,2025-05-08
+229,77,5,M79.3,Panniculitis,1,2023-04-14
+230,153,119,E11.9,Type 2 diabetes mellitus without complications,1,2026-02-23
+231,96,97,M79.3,Panniculitis,1,2026-04-15
+232,112,203,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-10-30
+233,184,378,G35,Multiple sclerosis,1,2024-03-29
+234,57,135,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2024-09-25
+235,161,123,F32.1,"Major depressive disorder, single episode, moderate",1,2023-01-18
+236,73,333,B97.29,Other coronavirus as the cause of diseases,1,2023-01-06
+237,106,97,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-01-17
+238,35,149,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-02-08
+239,159,232,J44.1,COPD with acute exacerbation,1,2025-07-08
+240,49,165,E11.9,Type 2 diabetes mellitus without complications,1,2021-09-15
+241,13,497,B97.29,Other coronavirus as the cause of diseases,1,2020-03-31
+242,48,498,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2023-03-01
+243,69,65,Z87.891,Personal history of nicotine dependence,1,2020-02-03
+244,60,47,N18.5,"Chronic kidney disease, stage 5",1,2020-03-01
+245,127,112,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-09-17
+246,80,403,E78.5,"Hyperlipidemia, unspecified",1,2024-03-01
+247,119,357,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-09-14
+248,21,432,N18.5,"Chronic kidney disease, stage 5",1,2020-08-17
+249,69,398,G35,Multiple sclerosis,1,2020-10-19
+250,140,241,I10,Essential (primary) hypertension,1,2022-02-26
+251,65,419,G35,Multiple sclerosis,1,2020-02-21
+252,32,499,I25.10,Atherosclerotic heart disease of native coronary artery,1,2024-04-25
+253,198,500,Z87.891,Personal history of nicotine dependence,1,2022-10-09
+254,189,18,I50.9,"Heart failure, unspecified",1,2025-03-02
+255,189,395,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-11-04
+256,171,107,E78.5,"Hyperlipidemia, unspecified",1,2024-05-12
+257,175,493,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-08-16
+258,41,323,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2026-03-01
+259,134,63,J44.1,COPD with acute exacerbation,1,2025-05-25
+260,164,153,I50.9,"Heart failure, unspecified",1,2024-01-16
+261,14,443,I50.9,"Heart failure, unspecified",1,2021-04-07
+262,61,325,M79.3,Panniculitis,1,2023-08-22
+263,4,86,J44.1,COPD with acute exacerbation,1,2021-05-05
+264,102,405,I25.10,Atherosclerotic heart disease of native coronary artery,1,2020-02-06
+265,11,298,E78.5,"Hyperlipidemia, unspecified",1,2021-09-26
+266,96,395,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2022-10-15
+267,41,256,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-10-18
+268,195,321,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2020-09-01
+269,92,331,N18.5,"Chronic kidney disease, stage 5",1,2026-01-05
+270,28,65,E78.5,"Hyperlipidemia, unspecified",1,2022-08-11
+271,82,286,A41.9,"Sepsis, unspecified organism",1,2024-12-01
+272,188,99,E11.9,Type 2 diabetes mellitus without complications,1,2024-03-27
+273,92,371,N18.5,"Chronic kidney disease, stage 5",0,2022-10-23
+274,11,249,Z87.891,Personal history of nicotine dependence,1,2026-04-08
+275,76,278,E78.5,"Hyperlipidemia, unspecified",1,2022-02-16
+276,146,96,B97.29,Other coronavirus as the cause of diseases,1,2023-11-25
+277,83,375,Z87.891,Personal history of nicotine dependence,1,2023-02-01
+278,154,469,B97.29,Other coronavirus as the cause of diseases,1,2021-10-18
+279,18,272,N18.5,"Chronic kidney disease, stage 5",1,2025-01-14
+280,76,420,J44.1,COPD with acute exacerbation,1,2026-01-27
+281,94,233,E11.9,Type 2 diabetes mellitus without complications,1,2025-09-03
+282,98,376,I10,Essential (primary) hypertension,1,2020-03-17
+283,159,439,A41.9,"Sepsis, unspecified organism",1,2022-09-05
+284,83,370,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2026-01-16
+285,100,98,F32.1,"Major depressive disorder, single episode, moderate",1,2025-07-30
+286,197,283,N18.5,"Chronic kidney disease, stage 5",1,2023-03-05
+287,83,210,K70.30,Alcoholic cirrhosis of liver without ascites,1,2021-03-28
+288,25,268,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2020-06-28
+289,34,92,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2022-04-07
+290,28,249,I50.9,"Heart failure, unspecified",1,2021-02-08
+291,9,293,G35,Multiple sclerosis,1,2025-06-29
+292,135,320,J44.1,COPD with acute exacerbation,1,2020-07-20
+293,94,114,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2020-02-23
+294,54,336,E78.5,"Hyperlipidemia, unspecified",1,2020-11-23
+295,120,411,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2024-01-18
+296,143,381,M79.3,Panniculitis,1,2024-02-20
+297,182,30,J44.1,COPD with acute exacerbation,1,2025-12-06
+298,11,376,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-05-29
+299,20,484,I50.9,"Heart failure, unspecified",1,2025-10-28
+300,25,52,I25.10,Atherosclerotic heart disease of native coronary artery,1,2025-12-17
+301,99,98,I50.9,"Heart failure, unspecified",1,2025-11-25
+302,169,128,I10,Essential (primary) hypertension,1,2026-04-06
+303,192,286,M79.3,Panniculitis,1,2021-03-08
+304,197,327,A41.9,"Sepsis, unspecified organism",1,2025-02-21
+305,180,341,M79.3,Panniculitis,1,2021-03-02
+306,43,406,I10,Essential (primary) hypertension,1,2026-03-02
+307,103,259,K70.30,Alcoholic cirrhosis of liver without ascites,1,2021-10-09
+308,137,308,Z87.891,Personal history of nicotine dependence,1,2023-12-14
+309,81,282,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-03-02
+310,106,392,M79.3,Panniculitis,1,2023-08-17
+311,156,124,B97.29,Other coronavirus as the cause of diseases,1,2022-05-26
+312,97,393,B97.29,Other coronavirus as the cause of diseases,1,2022-11-06
+313,93,493,Z87.891,Personal history of nicotine dependence,1,2025-01-06
+314,102,1,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-03-11
+315,153,9,F32.1,"Major depressive disorder, single episode, moderate",1,2021-07-07
+316,78,4,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2022-06-27
+317,55,439,K70.30,Alcoholic cirrhosis of liver without ascites,1,2020-03-29
+318,198,421,J44.1,COPD with acute exacerbation,1,2026-03-17
+319,131,285,N18.5,"Chronic kidney disease, stage 5",1,2021-01-21
+320,10,236,A41.9,"Sepsis, unspecified organism",1,2021-10-01
+321,36,136,A41.9,"Sepsis, unspecified organism",1,2022-10-20
+322,60,132,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2021-01-11
+323,147,205,I50.9,"Heart failure, unspecified",1,2020-11-12
+324,186,167,E78.5,"Hyperlipidemia, unspecified",1,2021-12-09
+325,125,423,N18.4,"Chronic kidney disease, stage 4 (severe)",0,2023-05-15
+326,10,375,G35,Multiple sclerosis,1,2020-11-17
+327,200,29,K70.30,Alcoholic cirrhosis of liver without ascites,1,2023-11-26
+328,112,214,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-07-17
+329,192,335,E11.9,Type 2 diabetes mellitus without complications,1,2024-04-15
+330,14,157,F32.1,"Major depressive disorder, single episode, moderate",1,2020-06-17
+331,82,277,N18.5,"Chronic kidney disease, stage 5",1,2023-08-31
+332,129,358,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-09-19
+333,13,345,G35,Multiple sclerosis,1,2024-12-30
+334,193,305,F32.1,"Major depressive disorder, single episode, moderate",0,2021-01-03
+335,57,222,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-06-03
+336,38,68,K70.30,Alcoholic cirrhosis of liver without ascites,1,2020-12-04
+337,122,293,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2026-02-23
+338,103,135,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2024-06-20
+339,129,223,N18.5,"Chronic kidney disease, stage 5",1,2021-07-06
+340,124,287,I50.9,"Heart failure, unspecified",1,2025-06-21
+341,102,334,I50.9,"Heart failure, unspecified",1,2026-04-17
+342,158,377,F32.1,"Major depressive disorder, single episode, moderate",1,2022-10-05
+343,63,37,J44.1,COPD with acute exacerbation,1,2024-10-27
+344,83,351,N18.3,"Chronic kidney disease, stage 3 (moderate)",0,2021-04-05
+345,172,212,M79.3,Panniculitis,1,2024-02-05
+346,90,98,K70.30,Alcoholic cirrhosis of liver without ascites,1,2023-11-12
+347,153,336,E11.9,Type 2 diabetes mellitus without complications,0,2023-06-02
+348,44,180,Z87.891,Personal history of nicotine dependence,1,2021-08-20
+349,113,23,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-03-28
+350,176,192,N18.5,"Chronic kidney disease, stage 5",0,2020-12-17
+351,29,379,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2022-09-22
+352,159,475,N18.5,"Chronic kidney disease, stage 5",1,2023-03-24
+353,4,176,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2023-06-03
+354,116,242,E11.9,Type 2 diabetes mellitus without complications,1,2023-09-21
+355,54,379,B97.29,Other coronavirus as the cause of diseases,1,2022-05-17
+356,53,280,F32.1,"Major depressive disorder, single episode, moderate",1,2022-11-25
+357,141,248,N18.5,"Chronic kidney disease, stage 5",0,2020-03-16
+358,97,299,F32.1,"Major depressive disorder, single episode, moderate",1,2020-06-27
+359,66,88,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-03-09
+360,52,405,J44.1,COPD with acute exacerbation,1,2020-08-05
+361,120,336,E11.9,Type 2 diabetes mellitus without complications,1,2020-09-29
+362,100,339,J44.1,COPD with acute exacerbation,1,2024-01-15
+363,28,10,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-05-02
+364,60,,G35,Multiple sclerosis,1,2025-09-13
+365,182,51,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-06-08
+366,153,273,N18.3,"Chronic kidney disease, stage 3 (moderate)",0,2022-02-02
+367,51,257,Z87.891,Personal history of nicotine dependence,1,2026-04-15
+368,183,12,E11.65,Type 2 diabetes mellitus with hyperglycemia,0,2022-10-10
+369,136,157,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-06-29
+370,101,382,I10,Essential (primary) hypertension,0,2020-03-16
+371,89,351,A41.9,"Sepsis, unspecified organism",1,2023-12-26
+372,161,155,I25.10,Atherosclerotic heart disease of native coronary artery,1,2025-08-15
+373,71,416,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2022-11-21
+374,100,456,E11.9,Type 2 diabetes mellitus without complications,0,2026-03-23
+375,72,116,N18.5,"Chronic kidney disease, stage 5",1,2023-10-31
+376,101,337,N18.5,"Chronic kidney disease, stage 5",1,2020-12-25
+377,187,196,F32.1,"Major depressive disorder, single episode, moderate",1,2022-07-20
+378,107,124,N18.5,"Chronic kidney disease, stage 5",1,2024-10-12
+379,80,466,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-01-13
+380,139,68,I50.9,"Heart failure, unspecified",1,2021-07-21
+381,149,278,I50.9,"Heart failure, unspecified",1,2021-07-19
+382,80,353,F32.1,"Major depressive disorder, single episode, moderate",1,2021-07-07
+383,111,466,N18.5,"Chronic kidney disease, stage 5",1,2021-10-09
+384,82,35,B97.29,Other coronavirus as the cause of diseases,1,2025-12-23
+385,185,61,I10,Essential (primary) hypertension,1,2023-07-24
+386,38,373,E11.9,Type 2 diabetes mellitus without complications,1,2023-07-29
+387,106,493,M79.3,Panniculitis,0,2023-05-27
+388,114,382,J44.1,COPD with acute exacerbation,1,2021-09-14
+389,200,97,N18.4,"Chronic kidney disease, stage 4 (severe)",0,2021-06-22
+390,48,14,J44.1,COPD with acute exacerbation,1,2022-08-03
+391,153,119,I25.10,Atherosclerotic heart disease of native coronary artery,1,2020-04-16
+392,92,41,E78.5,"Hyperlipidemia, unspecified",1,2021-07-03
+393,129,434,E78.5,"Hyperlipidemia, unspecified",1,2024-03-11
+394,48,437,G35,Multiple sclerosis,1,2025-07-05
+395,122,71,I10,Essential (primary) hypertension,1,2022-03-02
+396,58,17,M79.3,Panniculitis,1,2020-03-02
+397,70,487,M79.3,Panniculitis,1,2022-06-30
+398,191,344,I50.9,"Heart failure, unspecified",1,2022-04-17
+399,17,91,Z87.891,Personal history of nicotine dependence,1,2025-06-29
+400,177,167,Z87.891,Personal history of nicotine dependence,1,2022-10-07
+401,110,208,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2024-04-07
+402,185,161,G35,Multiple sclerosis,1,2026-01-05
+403,135,329,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2025-11-02
+404,28,232,Z87.891,Personal history of nicotine dependence,1,2020-06-22
+405,63,266,B97.29,Other coronavirus as the cause of diseases,1,2024-06-08
+406,189,21,B97.29,Other coronavirus as the cause of diseases,1,2024-05-05
+407,133,392,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2022-02-16
+408,75,226,G35,Multiple sclerosis,1,2023-06-01
+409,199,424,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2025-03-04
+410,43,217,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-08-11
+411,177,265,N18.5,"Chronic kidney disease, stage 5",1,2025-03-13
+412,166,232,N18.3,"Chronic kidney disease, stage 3 (moderate)",0,2025-08-12
+413,29,93,B97.29,Other coronavirus as the cause of diseases,1,2021-07-08
+414,101,212,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-01-20
+415,7,92,Z87.891,Personal history of nicotine dependence,1,2022-04-07
+416,117,47,J44.1,COPD with acute exacerbation,1,2023-08-20
+417,178,333,I10,Essential (primary) hypertension,1,2021-05-21
+418,24,59,Z87.891,Personal history of nicotine dependence,1,2024-01-26
+419,22,269,G35,Multiple sclerosis,1,2025-09-26
+420,157,487,I10,Essential (primary) hypertension,1,2024-03-31
+421,141,195,E11.65,Type 2 diabetes mellitus with hyperglycemia,0,2021-11-30
+422,86,290,N18.5,"Chronic kidney disease, stage 5",1,2021-10-26
+423,38,92,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2024-09-14
+424,79,159,Z87.891,Personal history of nicotine dependence,1,2023-03-28
+425,161,93,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-06-22
+426,52,2,J44.1,COPD with acute exacerbation,0,2020-02-20
+427,118,255,E78.5,"Hyperlipidemia, unspecified",1,2026-02-04
+428,2,312,E78.5,"Hyperlipidemia, unspecified",1,2022-09-01
+429,56,302,E78.5,"Hyperlipidemia, unspecified",0,2025-02-01
+430,105,227,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2020-01-27
+431,63,452,B97.29,Other coronavirus as the cause of diseases,0,2023-02-13
+432,159,322,B97.29,Other coronavirus as the cause of diseases,1,2022-04-30
+433,13,95,N18.5,"Chronic kidney disease, stage 5",1,2020-08-13
+434,168,179,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-08-18
+435,9,342,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-09-18
+436,23,26,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2024-09-03
+437,46,83,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2026-04-21
+438,46,495,Z87.891,Personal history of nicotine dependence,0,2024-01-15
+439,10,48,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-08-15
+440,95,460,G35,Multiple sclerosis,1,2020-10-04
+441,195,219,B97.29,Other coronavirus as the cause of diseases,1,2020-09-22
+442,75,242,N18.5,"Chronic kidney disease, stage 5",1,2021-05-14
+443,178,441,J44.1,COPD with acute exacerbation,1,2023-09-10
+444,135,212,F32.1,"Major depressive disorder, single episode, moderate",1,2022-05-09
+445,179,108,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-03-23
+446,147,374,F32.1,"Major depressive disorder, single episode, moderate",1,2020-12-25
+447,124,371,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",0,2024-10-15
+448,156,435,K70.30,Alcoholic cirrhosis of liver without ascites,1,2022-11-29
+449,135,295,A41.9,"Sepsis, unspecified organism",1,2021-06-15
+450,158,289,E78.5,"Hyperlipidemia, unspecified",1,2025-10-29
+451,187,324,E78.5,"Hyperlipidemia, unspecified",1,2025-07-10
+452,47,453,I25.10,Atherosclerotic heart disease of native coronary artery,1,2023-04-04
+453,50,1,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2020-04-08
+454,120,321,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-04-29
+455,158,213,M79.3,Panniculitis,1,2020-07-05
+456,86,180,B97.29,Other coronavirus as the cause of diseases,1,2022-05-19
+457,3,328,I50.9,"Heart failure, unspecified",1,2023-02-27
+458,66,405,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-06-14
+459,77,260,B97.29,Other coronavirus as the cause of diseases,1,2023-08-19
+460,197,4,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2023-09-27
+461,88,203,E11.9,Type 2 diabetes mellitus without complications,1,2021-12-20
+462,50,170,K70.30,Alcoholic cirrhosis of liver without ascites,1,2025-05-16
+463,122,409,E11.65,Type 2 diabetes mellitus with hyperglycemia,0,2021-07-10
+464,124,80,Z87.891,Personal history of nicotine dependence,1,2026-01-08
+465,86,237,M79.3,Panniculitis,1,2020-08-17
+466,134,154,K70.30,Alcoholic cirrhosis of liver without ascites,1,2026-03-24
+467,138,10,I50.9,"Heart failure, unspecified",1,2023-09-20
+468,91,34,N18.5,"Chronic kidney disease, stage 5",1,2023-02-22
+469,8,174,G35,Multiple sclerosis,1,2025-12-28
+470,43,293,G35,Multiple sclerosis,1,2022-02-06
+471,153,60,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-07-12
+472,182,17,J44.1,COPD with acute exacerbation,0,2024-08-22
+473,23,255,I25.10,Atherosclerotic heart disease of native coronary artery,1,2024-03-02
+474,116,425,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2022-06-04
+475,135,155,I10,Essential (primary) hypertension,0,2021-04-04
+476,96,402,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2022-04-07
+477,24,228,F32.1,"Major depressive disorder, single episode, moderate",1,2020-04-12
+478,124,464,F32.1,"Major depressive disorder, single episode, moderate",1,2021-09-23
+479,49,175,E78.5,"Hyperlipidemia, unspecified",1,2025-11-14
+480,80,398,K70.30,Alcoholic cirrhosis of liver without ascites,0,2021-08-09
+481,197,447,N18.4,"Chronic kidney disease, stage 4 (severe)",0,2025-10-15
+482,174,68,I50.9,"Heart failure, unspecified",0,2020-05-29
+483,118,199,F32.1,"Major depressive disorder, single episode, moderate",1,2021-04-19
+484,2,160,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2020-12-22
+485,86,240,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-02-26
+486,134,393,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-04-02
+487,148,389,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2022-05-09
+488,83,103,I50.9,"Heart failure, unspecified",1,2023-03-19
+489,71,273,K70.30,Alcoholic cirrhosis of liver without ascites,1,2024-12-11
+490,172,61,J44.1,COPD with acute exacerbation,0,2021-09-03
+491,41,141,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2020-03-03
+492,160,287,F32.1,"Major depressive disorder, single episode, moderate",1,2021-02-23
+493,53,278,A41.9,"Sepsis, unspecified organism",1,2026-02-28
+494,82,139,N18.5,"Chronic kidney disease, stage 5",0,2023-03-06
+495,147,126,I10,Essential (primary) hypertension,0,2020-10-18
+496,80,314,K70.30,Alcoholic cirrhosis of liver without ascites,0,2026-01-23
+497,114,26,N18.5,"Chronic kidney disease, stage 5",0,2020-04-28
+498,121,463,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-03-09
+499,99,28,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2024-10-12
+500,101,92,Z87.891,Personal history of nicotine dependence,1,2023-12-27
+501,80,171,I50.9,"Heart failure, unspecified",1,2025-12-25
+502,21,499,Z87.891,Personal history of nicotine dependence,1,2021-06-23
+503,24,417,Z87.891,Personal history of nicotine dependence,0,2021-02-02
+504,117,159,Z87.891,Personal history of nicotine dependence,1,2025-04-11
+505,60,486,I25.10,Atherosclerotic heart disease of native coronary artery,1,2021-08-11
+506,158,133,A41.9,"Sepsis, unspecified organism",1,2024-05-24
+507,47,359,K70.30,Alcoholic cirrhosis of liver without ascites,1,2023-08-23
+508,117,250,E11.9,Type 2 diabetes mellitus without complications,1,2020-09-24
+509,122,58,A41.9,"Sepsis, unspecified organism",1,2025-05-14
+510,119,434,I10,Essential (primary) hypertension,1,2023-03-02
+511,197,179,N18.5,"Chronic kidney disease, stage 5",0,2025-09-11
+512,27,208,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2023-08-27
+513,143,333,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2023-05-22
+514,137,237,G35,Multiple sclerosis,1,2024-08-20
+515,62,318,I25.10,Atherosclerotic heart disease of native coronary artery,1,2026-02-22
+516,41,499,E78.5,"Hyperlipidemia, unspecified",1,2024-04-21
+517,17,175,I50.9,"Heart failure, unspecified",1,2024-10-31
+518,112,291,K70.30,Alcoholic cirrhosis of liver without ascites,1,2026-02-08
+519,178,121,I10,Essential (primary) hypertension,0,2020-11-15
+520,190,477,E78.5,"Hyperlipidemia, unspecified",1,2021-04-13
+521,152,306,Z87.891,Personal history of nicotine dependence,1,2023-08-25
+522,143,50,Z87.891,Personal history of nicotine dependence,1,2021-12-22
+523,79,490,G35,Multiple sclerosis,1,2020-10-12
+524,154,56,G35,Multiple sclerosis,1,2023-09-03
+525,127,331,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2021-01-05
+526,56,419,N18.5,"Chronic kidney disease, stage 5",1,2020-01-01
+527,194,76,N18.5,"Chronic kidney disease, stage 5",1,2025-01-29
+528,137,150,G35,Multiple sclerosis,0,2025-01-05
+529,51,106,K70.30,Alcoholic cirrhosis of liver without ascites,1,2023-05-12
+530,146,407,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2024-11-15
+531,184,469,A41.9,"Sepsis, unspecified organism",1,2020-12-31
+532,150,5,F32.1,"Major depressive disorder, single episode, moderate",1,2024-07-13
+533,33,437,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-09-12
+534,95,462,B97.29,Other coronavirus as the cause of diseases,1,2020-08-05
+535,1,361,B97.29,Other coronavirus as the cause of diseases,1,2024-01-11
+536,29,441,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-05-07
+537,61,222,G35,Multiple sclerosis,1,2023-07-27
+538,183,196,G35,Multiple sclerosis,1,2024-04-11
+539,112,280,I50.9,"Heart failure, unspecified",1,2021-12-11
+540,122,72,I50.9,"Heart failure, unspecified",1,2026-03-25
+541,99,432,A41.9,"Sepsis, unspecified organism",1,2024-09-04
+542,40,148,N18.5,"Chronic kidney disease, stage 5",1,2021-07-04
+543,3,37,E11.9,Type 2 diabetes mellitus without complications,1,2021-08-12
+544,185,454,E78.5,"Hyperlipidemia, unspecified",0,2024-11-23
+545,35,44,N18.5,"Chronic kidney disease, stage 5",1,2024-08-30
+546,117,458,M79.3,Panniculitis,1,2022-01-06
+547,117,261,M79.3,Panniculitis,0,2026-03-11
+548,116,197,A41.9,"Sepsis, unspecified organism",1,2022-07-13
+549,48,218,E11.9,Type 2 diabetes mellitus without complications,1,2025-08-02
+550,188,122,F32.1,"Major depressive disorder, single episode, moderate",1,2023-01-07
+551,106,475,B97.29,Other coronavirus as the cause of diseases,1,2024-02-12
+552,9,,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2025-06-02
+553,181,189,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2025-05-26
+554,177,41,N18.5,"Chronic kidney disease, stage 5",0,2025-11-26
+555,193,399,J44.1,COPD with acute exacerbation,1,2025-03-19
+556,133,41,F32.1,"Major depressive disorder, single episode, moderate",1,2020-12-28
+557,63,242,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2026-01-17
+558,149,160,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-11-08
+559,137,399,E11.9,Type 2 diabetes mellitus without complications,1,2025-04-04
+560,117,263,E78.5,"Hyperlipidemia, unspecified",1,2023-09-19
+561,108,181,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2023-03-30
+562,43,19,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",0,2026-04-27
+563,67,32,E78.5,"Hyperlipidemia, unspecified",1,2021-11-23
+564,147,27,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",1,2020-04-21
+565,74,249,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2021-06-03
+566,130,40,J44.1,COPD with acute exacerbation,1,2022-10-29
+567,34,316,J44.1,COPD with acute exacerbation,1,2023-02-01
+568,66,8,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2021-12-16
+569,152,379,N18.5,"Chronic kidney disease, stage 5",1,2025-01-03
+570,95,414,I10,Essential (primary) hypertension,1,2022-12-06
+571,180,121,E78.5,"Hyperlipidemia, unspecified",1,2022-01-10
+572,136,442,E11.65,Type 2 diabetes mellitus with hyperglycemia,1,2023-11-05
+573,22,496,N18.5,"Chronic kidney disease, stage 5",1,2021-09-23
+574,127,386,M79.3,Panniculitis,1,2024-04-18
+575,61,339,Z87.891,Personal history of nicotine dependence,1,2021-11-16
+576,54,296,A41.9,"Sepsis, unspecified organism",0,2020-08-10
+577,165,136,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2020-08-03
+578,43,238,G35,Multiple sclerosis,0,2025-05-04
+579,78,244,B97.29,Other coronavirus as the cause of diseases,1,2022-08-15
+580,98,350,G35,Multiple sclerosis,1,2025-04-27
+581,68,75,F32.1,"Major depressive disorder, single episode, moderate",1,2024-11-15
+582,4,148,Z87.891,Personal history of nicotine dependence,1,2024-04-13
+583,174,162,F32.1,"Major depressive disorder, single episode, moderate",1,2020-06-17
+584,25,470,B97.29,Other coronavirus as the cause of diseases,1,2023-12-20
+585,111,313,J44.1,COPD with acute exacerbation,1,2023-10-04
+586,70,137,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2022-11-11
+587,168,300,G35,Multiple sclerosis,1,2025-03-03
+588,198,346,I25.10,Atherosclerotic heart disease of native coronary artery,1,2022-03-09
+589,134,173,I10,Essential (primary) hypertension,1,2023-07-07
+590,141,6,E11.9,Type 2 diabetes mellitus without complications,1,2020-10-05
+591,4,211,N18.4,"Chronic kidney disease, stage 4 (severe)",0,2025-11-21
+592,27,351,Z87.891,Personal history of nicotine dependence,1,2023-12-10
+593,57,372,C34.10,"Malignant neoplasm of upper lobe, bronchus or lung",0,2022-10-28
+594,50,18,E11.9,Type 2 diabetes mellitus without complications,1,2021-01-11
+595,15,481,I50.9,"Heart failure, unspecified",1,2021-05-13
+596,182,491,N18.4,"Chronic kidney disease, stage 4 (severe)",1,2020-12-19
+597,155,67,G35,Multiple sclerosis,0,2022-01-26
+598,29,357,I10,Essential (primary) hypertension,1,2022-11-03
+599,76,240,N18.3,"Chronic kidney disease, stage 3 (moderate)",1,2025-01-31
+600,71,394,M79.3,Panniculitis,1,2023-08-17
