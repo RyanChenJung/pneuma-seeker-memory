@@ -112,3 +112,54 @@ entries + dedup + supersede. The `.md` is a local debugging window, NOT a persis
 asset — cross-conversation reuse is Tier 3/6's job, not Tier 1's. **Upgrade path
 (deferred, cheap because of the interface):** swap backend to a `ws.db` table keyed by
 `(user_id, chat_id)`; Conductor code unchanged.
+
+## D12 — Tier 2 episodic log v1: our own append-only JSONL store, dumb-capture, async-consumed
+Tier 2 design LOCKED (2026-06-10, decisions (1)–(4) confirmed with user). Tier 2 = the
+append-only **episodic state log** — the "messy raw-material warehouse" the Enhancer later
+distills into the persistent tiers (3–6). In Bayesian terms: **Tier 2 is the likelihood
+data; the Enhancer computes the posterior that becomes Tiers 4–6's priors** (which then
+accelerate latent-intent convergence). Key points:
+
+- **Character (vs Tier 1):** Tier 1 is LLM-*curated* (has a brain, online, consumed now by
+  the Conductor). Tier 2 is **dumb capture** — records *everything* (incl. failures), and
+  the write path uses **ZERO extra LLM calls** (hard constraint: Pneuma latency is already
+  high from the long ReAct chain). The ReAct reasoning text already lives in
+  `llm_messages`; Tier 2 just **serializes it before it's GC'd**. All "intelligence"
+  (summarizing/condensing) is deferred to the async Enhancer. See [[tier-2-episodic-log]].
+- **(1) Lifecycle:** **append-only**, must **survive the session** (session-purge is ruled
+  out by definition — Tier 1 purges, Tier 2 is saved & consumed async). Schema carries a
+  `processed_at` watermark (how far the Enhancer has consumed). **Cleanup policy is
+  deferred** — it's a cron/ops concern that doesn't block the schema, and the interface
+  wrapper lets us pick "keep-forever (event-sourcing replay) vs TTL (e.g. 24h floor, tied
+  to Enhancer-processed) vs purge-after-distill" later without touching the Conductor.
+- **(2) Backend:** our **own store** in `services/memory/_episodic/` (gitignored, mirrors
+  Tier 1's `_notebooks/`), **NOT** in upstream's `ws.db`. v1 = **JSONL** behind a small
+  `EpisodicLog` interface (`append` / `iter` / `mark_processed`). **Recorded upgrade path
+  (per user request): swap the JSONL backend to a DuckDB table** — reuse the existing stack
+  (ws.db is already DuckDB; DuckDB can even attach Postgres, `db/main.py:404`), Conductor
+  code unchanged. SQLite (Hermes-style) is rejected: DuckDB already occupies that niche.
+  Markdown (Kairos-style) is rejected: Tier 2 is high-volume machine-read, wrong shape.
+- **Why NOT in ws.db (user's pollution concern, confirmed valid):** (i) ws.db schema is
+  upstream-owned (🟡); (ii) per-conversation files force the Enhancer to crawl many files;
+  (iii) decisive — `persist_session` is **delete-and-replace** (`DELETE` rows,
+  `db/main.py:592-595`), which directly contradicts our **append-only** semantics. Reuse
+  the DuckDB *technology*, not the ws.db *file*.
+- **(3) Granularity:** **step-level full trajectory** (incl. failures + raw CoT). This is
+  *free on the LLM axis* — the data already exists in memory; only cost is disk + a clean
+  schema. Shape = **turn envelope** (`user_id`, prompt, final answer, user feedback,
+  timing, tokens) + **step event stream** (`{turn_id, step_idx, phase[conductor/
+  materializer], action, args, status, payload/error, sql?, retrieved_ids?, latency, ts}`).
+  Raw CoT is stored as-is (cheap bytes); any summarization is the Enhancer's job. **Field
+  set is decided by backward-reasoning from what each downstream tier needs** (Tier 3:
+  `user_id`+question+role; Tier 5: per-join success/failure+error+SQL; Tier 6: full
+  *successful* trajectories; Tier 4: question text+domain). (4) User OK'd storing failures
+  + raw CoT — nothing excluded.
+- **Provenance graph is NOT reused as Tier 2:** provenance is a success-only "what worked"
+  DAG of runnable code that gets `reset_materialization_nodes()`'d; Tier 2 needs exactly the
+  failures/reasoning/append-only it drops. Tier 2 may **reference** a provenance snapshot,
+  but is not provenance.
+- **Write path:** a hook inside the Conductor/Materializer ReAct loops (🟡 surgical,
+  additive, behind `ENABLE_MEMORY_*`, default off) → a single call into our `EpisodicLog`.
+- **Deferred (noted):** Enhancer trigger mechanism — explicitly out of scope for now, but
+  flagged because *how/when it runs* feeds back into the retention policy + watermark
+  semantics.

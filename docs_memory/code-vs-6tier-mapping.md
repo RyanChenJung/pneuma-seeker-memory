@@ -107,6 +107,23 @@ reasoning.
 **Attach:** new append-only episodic store (ours), written by a hook inside the
 existing ReAct loops (Tier 🟡 seam edits in `conductor/main.py` & `materializer/main.py`).
 
+**Decided (v1) — LOCKED 2026-06-10 (DECISIONS D12):**
+- **Dumb capture, zero extra LLM** at write time (Pneuma latency is already high). Tier 2
+  just serializes the ReAct trajectory (already in `llm_messages`) before it's GC'd; all
+  condensing is the async Enhancer's job. Contrast Tier 1, which is LLM-*curated*.
+- **Own store** at `services/memory/_episodic/` (gitignored), **not** in upstream `ws.db`
+  — because `persist_session` is delete-and-replace (`db/main.py:592-595`), which clashes
+  with append-only, and ws.db is upstream-owned + per-conversation.
+- **Backend:** v1 = **JSONL** behind an `EpisodicLog` interface (`append`/`iter`/
+  `mark_processed`). **Upgrade path = DuckDB table** (reuse existing stack; can attach
+  Postgres) — Conductor unchanged.
+- **Granularity:** **step-level full trajectory** incl. failures + raw CoT (free on the LLM
+  axis). Turn envelope + step-event stream; field set chosen by backward-reasoning from what
+  Tiers 3/4/5/6 need the Enhancer to distill.
+- **Lifecycle:** append-only, survives session, `processed_at` watermark; **cleanup policy
+  deferred** (keep-forever vs TTL decided later, doesn't block schema).
+- Provenance graph is **referenced, not reused** as Tier 2 (it's a success-only DAG).
+
 ---
 
 ## Tier 3 — User Memory  🔴
