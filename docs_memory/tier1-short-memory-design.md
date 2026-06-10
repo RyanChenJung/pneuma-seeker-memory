@@ -1,7 +1,7 @@
-# Tier 1 — Short-Memory "Notebook" — Design DRAFT
+# Tier 1 — Short-Memory "Notebook" — Build Spec (LOCKED v1)
 
-> Status: **DRAFT, pending user decisions (a)–(d).** Once locked, this becomes the build
-> spec. Background & confirmed intent: `DECISIONS.md` D9; gap analysis:
+> Status: **LOCKED 2026-06-10.** Decisions (a)–(d) confirmed by user; this is now the v1
+> build spec. Background & confirmed intent: `DECISIONS.md` D9; gap analysis:
 > `code-vs-6tier-mapping.md` (Tier 1). Confirmed understanding 2026-06-09.
 
 ## Purpose (confirmed)
@@ -39,16 +39,29 @@ glance at.
 | Scope / reset | conversation-level; cleared on new conversation/problem |
 | Agents | Conductor (yes); Materializer (OPEN — Q2) |
 
-## OPEN decisions — need user (a)–(d), recommendations inline
-- **(a) Write trigger.** *Rec:* v1 = LLM writes explicitly via a lightweight `note`
-  action when it deems something important (simplest, LLM-controlled). Auto post-event
-  "should I note this?" judge = deferred.
-- **(b) Storage.** *Rec:* one `.md` file per conversation under `services/memory/`
-  (matches the CLAUDE.md intuition, human-inspectable, simplest). Alt: a table in `ws.db`.
-- **(c) Pin position.** *Rec:* pin at the **end** of the assembled prompt, right before
+## LOCKED decisions (a)–(d) — confirmed 2026-06-10
+- **(a) Write trigger.** LLM writes explicitly via a lightweight `note` action when it
+  deems something important (simplest, LLM-controlled). Auto post-event "should I note
+  this?" judge = deferred.
+- **(b) Storage.** **Ephemeral, use-and-discard.** One `.md` file per conversation under a
+  **gitignored** scratch dir `services/memory/_notebooks/` (never committed/pushed; a
+  local debugging window so we can inspect what the notebook captured). Cleared on new
+  conversation. **All access goes through a small `Notebook` interface**
+  (`append` / `read_all` / `clear`) so the storage backend is hidden from the Conductor.
+  **Upgrade path (deferred, cheap because of the interface):** swap the backend to a
+  `ws.db` table keyed by `(user_id, chat_id)` — Conductor code unchanged. (ws.db is
+  already per-conversation; see `docs_understanding/modules/services_db`.)
+- **(c) Pin position.** Pin at the **end** of the assembled prompt, right before
   generation (ends are best-attended; matches "look at notes right before answering").
-- **(d) Capacity.** *Rec:* soft cap (~30 entries / token budget) + dedup + allow
-  supersede. Importance scoring / time decay = deferred.
+- **(d) Capacity.** Soft cap (~30 entries / token budget) + dedup + allow supersede.
+  Importance scoring / time decay = deferred.
+
+### Implementation notes for v1
+- `_notebooks/` must be added to `.gitignore` (it is local throwaway scratch).
+- The `Notebook` interface is the single seam for the future ws.db swap — keep all file
+  I/O inside it; nothing else touches storage.
+- Tier 1 is **short-term/ephemeral by design**. Cross-conversation reuse is NOT Tier 1's
+  job — that belongs to Tier 3 / Tier 6 (long-term memory).
 
 ## Deferred to later versions (not v1)
 Importance/confidence scores, time decay, automatic salience judging, Materializer

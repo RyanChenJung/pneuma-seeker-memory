@@ -23,18 +23,18 @@ page. Agents produce only their HTML page; **I update `CHECKPOINT.md` centrally*
 
 | ID | Page | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| H1 | `modules/services_core_materializer/` | needs-review | bg-agent | revised to 易懂規範 v2 (1028 lines, QA passed) — **new gold standard**. Batches 2–4 gated on user OK of this page; H2/H3 retrofit to v2 after. |
-| H2 | `modules/services_core_ir_system/` | needs-review | bg-agent | batch 1 done — 656 lines, QA passed |
-| H3 | `modules/services_core_action_set/` | needs-review | bg-agent | batch 1 done — ~580 lines, QA passed |
-| H4 | `modules/services_db/` | todo | — | batch 2 |
-| H5 | `modules/services_indexing/` | todo | — | batch 2 |
-| H6 | `modules/services_language_model/` | todo | — | batch 2 |
-| H7 | `modules/shared/` | todo | — | batch 3 |
-| H8 | `modules/provenance/` | todo | — | batch 3 |
-| H9 | `modules/tests/` | todo | — | batch 4 |
-| H10 | `modules/baselines/` | todo | — | batch 4 |
-| H11 | `modules/openwebui_functions/` | todo | — | batch 4 |
-| H12 | `01_architecture_deep_dive.html` | todo | — | batch 5 (depends on H1–H11) |
+| H1 | `modules/services_core_materializer/` | needs-review | bg-agent | 易懂規範 v2 (1028 lines) — **gold standard**. User OK'd v2 style 2026-06-10 → batches 2–4 + retrofits fanned out. |
+| H2 | `modules/services_core_ir_system/` | needs-review | bg-agent | retrofitted to v2 (656→943 lines) |
+| H3 | `modules/services_core_action_set/` | needs-review | bg-agent | retrofitted to v2 (~580→888 lines) |
+| H4 | `modules/services_db/` | needs-review | bg-agent | v2, 876 lines |
+| H5 | `modules/services_indexing/` | needs-review | bg-agent | v2, 837 lines |
+| H6 | `modules/services_language_model/` | needs-review | bg-agent | v2, 966 lines |
+| H7 | `modules/shared/` | needs-review | bg-agent | v2, 757 lines (notes ENABLE_MEMORY_* home) |
+| H8 | `modules/provenance/` | needs-review | bg-agent | v2, 1132 lines |
+| H9 | `modules/tests/` | needs-review | bg-agent | v2, 847 lines |
+| H10 | `modules/baselines/` | needs-review | bg-agent | v2, 844 lines (upstream — doc only) |
+| H11 | `modules/openwebui_functions/` | needs-review | bg-agent | v2, 866 lines |
+| H12 | `01_architecture_deep_dive.html` | todo | — | batch 5 (depends on H1–H11; H1–H11 now written) |
 | H13 | `02_flow_traces.html` | todo | — | batch 5 |
 | H14 | `03_concepts.html` | todo | — | batch 5 |
 

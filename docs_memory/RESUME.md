@@ -4,7 +4,7 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-09.
+> **Last updated:** 2026-06-10.
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -19,28 +19,25 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 - Foundation docs: `CLAUDE.md`, `DECISIONS.md`, `TASKS.md`, `codebase-map.md`,
   `code-vs-6tier-mapping.md` — **committed** to `feat-memory-experiement`.
   (`docs_understanding/` HTML stays local/uncommitted — CN-ignore, DECISIONS D10.)
-- HTML **batch 1** written (materializer / ir_system / action_set). **Materializer revised
-  to the new "易懂規範 v2" easier style** (1028 lines) — now the gold-standard template.
-- Tier 1 understanding corrected & recorded (DECISIONS **D9**): it is a curated salience
-  **"notebook"**, NOT the raw `llm_messages`. Design DRAFT → `tier1-short-memory-design.md`.
+- **HTML done: ALL 11 module pages written in 易懂規範 v2** (materializer 1028 = gold
+  standard; ir_system + action_set retrofitted to v2; db/indexing/language_model/shared/
+  provenance/tests/baselines/openwebui fanned out 2026-06-10). All = **needs-review** (user
+  to spot-check). Only **batch 5** (3 synthesis pages H12–H14) left. See CHECKPOINT.md.
+- **Tier 1 design LOCKED (DECISIONS D11)** — decisions (a)–(d) confirmed; (b) = ephemeral
+  `.md` per conversation in gitignored `services/memory/_notebooks/`, behind a small
+  `Notebook` interface; ws.db = deferred upgrade path. Spec: `tier1-short-memory-design.md`.
 
-## ⏸ Waiting on the user (can be answered now or after /clear)
-**A — HTML style lock.** Open
-`docs_understanding/modules/services_core_materializer/index.html`; confirm the easier v2
-style is good (or say what to adjust). This gates fanning out the rest of the HTML.
+## ⏸ Waiting on the user
+- (optional) User spot-check of any v2 module page — all are needs-review but not blocking.
+- Whether to fire **batch 5** (synthesis pages) now or after a review pass.
 
-**B — Tier 1 design decisions (a)–(d)** in `tier1-short-memory-design.md`:
-(a) write trigger · (b) storage (.md vs ws.db) · (c) pin position · (d) capacity policy.
-My recommendation for each is in that file — user just confirms or adjusts.
-
-## ▶ Next action once unblocked
-- **If user OKs v2 style** → dispatch HTML **batch 2–4** agents (db, indexing,
-  language_model, shared, provenance, tests, baselines, openwebui) using the v2 standard,
-  AND retrofit ir_system + action_set to v2. Then **batch 5** (3 deep-dive pages). Track in
-  TASKS G1. (Use background sub-agents; I update CHECKPOINT.md centrally.)
-- **If user answers Tier 1 (a)–(d)** → finalize `tier1-short-memory-design.md`, then move
-  to **Tier 2** discussion (the episodic log — the foundation the Enhancer + Tiers 3/5/6
-  depend on).
+## ▶ Next action
+- **Tier 2 discussion** — the append-only **episodic log**: the foundation the Enhancer +
+  Tiers 3/5/6 depend on, and likely the first *coding* goal (backlog B4). This is the main
+  next thread.
+- Secondary: fire HTML **batch 5** (H12 architecture_deep_dive / H13 flow_traces /
+  H14 concepts) — depends on H1–H11, which are now all written. Background sub-agents;
+  I update CHECKPOINT.md centrally.
 
 ## How to resume (minimal prompt)
 Type **`繼續`** (or `resume`). `CLAUDE.md` instructs me to read this file and pick up the

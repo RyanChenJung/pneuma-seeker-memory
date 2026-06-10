@@ -100,3 +100,15 @@ ignored via `.git/info/exclude` (local — so it does **not** modify upstream's 
 NOT in git, and must not be relied on for handoff. (When writing new files, English →
 `docs_memory/` and commit; Traditional-Chinese reading aids → `docs_understanding/`, local
 only.)
+
+## D11 — Tier 1 notebook v1: ephemeral .md behind a `Notebook` interface
+Decisions (a)–(d) for the Tier 1 short-memory notebook are LOCKED (2026-06-10; full spec
+in `tier1-short-memory-design.md`). Key points: **(a)** LLM writes via a lightweight
+`note` action; **(b)** storage is **ephemeral/use-and-discard** — one `.md` per
+conversation in a **gitignored** scratch dir `services/memory/_notebooks/`, accessed only
+through a small `Notebook` interface (`append`/`read_all`/`clear`) so the backend is
+hidden; **(c)** pinned at the **end** of the assembled prompt; **(d)** soft cap ~30
+entries + dedup + supersede. The `.md` is a local debugging window, NOT a persistent
+asset — cross-conversation reuse is Tier 3/6's job, not Tier 1's. **Upgrade path
+(deferred, cheap because of the interface):** swap backend to a `ws.db` table keyed by
+`(user_id, chat_id)`; Conductor code unchanged.
