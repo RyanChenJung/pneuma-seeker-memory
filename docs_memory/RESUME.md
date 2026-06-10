@@ -83,7 +83,10 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
 - **User to email the upstream author** re: whether the `DocumentDB`/`Knowledge` local/global
-  design generalizes / where our memory interface should attach (D13 OPEN item).
+  design generalizes / where our memory interface should attach (D13/D15 OPEN item). **Draft
+  ready** at `docs_memory/_email-draft-upstream-author.md` (untracked temp; user will delete
+  after sending). Asks 4 things: purpose, local-vs-global semantics, the `index()` conflict
+  TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
 - **Tier 4 drill is DONE and recorded (D15).** Tiers 1–4 now LOCKED (D11/D12/D14/D15); Tiers
