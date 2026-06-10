@@ -4,7 +4,7 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-10 (Tiers 3–6 big-picture/boundary pass recorded as D13).
+> **Last updated:** 2026-06-10 (Tier 3 internal design LOCKED as D14; opened BACKLOG.md).
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -12,7 +12,8 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 
 ## Two work threads in flight
 1. **Understanding (HTML docs)** — finishing `docs_understanding/` HTML. Goal **G1** in TASKS.md.
-2. **Design (6-tier memory)** — defining the memory tier by tier. Current focus = **Tier 1**.
+2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–3 LOCKED
+   (D11/D12/D14); **current focus = Tier 4**.
 
 ## Done recently
 - PR-safety guardrails + `gh` installed/authed, default repo = fork (S0.1–S0.4 ✅).
@@ -46,6 +47,21 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   abstract templates). **OPEN:** reuse author's `DocumentDB` local/global design? — user will
   **email upstream author** (local≈T3, global≈T4 working assumption); exact scope-level count
   + overlay precedence still provisional.
+- **Tier 3 design LOCKED (DECISIONS D14)** — spec `tier3-user-memory-design.md`. Persistent
+  prior *about a person*; two sources = **Provisioned** (manual file: role/dept/grade) +
+  **Learned** (Enhancer from T2: alias map, focus range, corrections, format prefs). **Focus
+  range = derived (Enhancer tallies a schema/concept frequency distribution), NOT a hand-typed
+  free-text line** — this is the single-user seed of the BACKLOG "user-similarity space /
+  emergent departments" idea. **Authorization deferred** (T3 = where the user *focuses*, not
+  what they may *see*). **Corrected D13's "T3 is a leaf of T4"** → two distinct tiers
+  (owner/authority/subject differ), only sharing the overlay *injection* mechanism. Read =
+  inject whole small block (no runtime summarization); write = async Enhancer, rewritable,
+  recurrence threshold; backend = file/user behind `UserMemory` iface (vector + multi-user =
+  deferred swaps).
+- **Opened `docs_memory/BACKLOG.md`** — registry of intentionally-deferred *design items*
+  (distinct from TASKS.md's unapproved-work backlog), each with a back-pointer. Seeded with:
+  authorization, vector/graph backends, DuckDB upgrade, multi-user T3, user-similarity space
+  + emergent departments, decay, DocumentDB-reuse question.
 
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
@@ -53,18 +69,19 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   design generalizes / where our memory interface should attach (D13 OPEN item).
 
 ## ▶ Next action
-- **Big-picture/boundary pass is DONE and recorded (D13).** Two OPEN items remain before/
-  alongside the Tier 3 drill: (i) user's email to the upstream author (DocumentDB reuse?),
-  (ii) exact scope-level count + overlay precedence (provisional).
-- **NEXT: drill into Tier 3 (User Memory)** detail and lock it, continuing the tier-by-tier
-  design-lock cadence (discuss → lock → record into mapping + DECISIONS; no coding yet).
-  Tier 3 = per-user persona/habits store, the "prior" that accelerates latent-intent
-  convergence; fed by the Tier 2 log keyed on `user_id`. **MVP = single-user (D13).** Drill
-  topics: what a user profile holds, how it's summarized for env-state injection, write/update
-  cadence via Enhancer, and how it overlays under the T4 scope hierarchy.
+- **Tier 3 drill is DONE and recorded (D14).** Tiers 1–3 now LOCKED (D11/D12/D14); Tiers 4–6
+  have D13 "Decided (direction)" blocks.
+- **NEXT: drill into Tier 4 (Organization Memory)** detail and lock it, same cadence (discuss
+  → lock → record into mapping + DECISIONS; no coding yet). T4 = shared, authoritative,
+  often externally-authored institutional truth (clinical definitions, protocols); scope =
+  the `Department → Institution` overlay layers above T3's user layer. Anchor against D13
+  (scope hierarchy, actionability filter, auto-fill mechanism) and D14 (T3↔T4 boundary:
+  owner/authority/subject differ; shared overlay-injection mechanism only; promotion ladder
+  gated by content-kind). Carry in the D14 refinement that org scope may be **soft
+  overlapping clusters** (BACKLOG), and the two D13 OPEN items: (i) email upstream author re
+  DocumentDB reuse, (ii) exact scope-level count + overlay precedence.
 - Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier
-  gap analysis; Tiers 1–2 LOCKED D11/D12, Tiers 3–6 now have D13 "Decided (direction)"
-  blocks). Anchor Tier 3 against D11/D12/D13.
+  gap analysis) + `BACKLOG.md` (deferred items).
 - **Coding is unblocked when the user wants it** (not the immediate path): B3 (scaffold
   `services/memory/` + `ENABLE_MEMORY_*` flags, default off) and B4 (Tier 2 episodic log —
   first coding goal, design locked). Both need user go-ahead (workflow step 3).

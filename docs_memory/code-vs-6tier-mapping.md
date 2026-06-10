@@ -143,8 +143,27 @@ episodic log keyed by `user_id` (which already flows through every layer).
 - **MVP = single-user.** Build for one user first, but keep `user_id` as the scope key and
   wrap the store in an interface, so the multi-user upgrade (a company DB keyed by
   `user_id`) is a **backend swap, not a redesign**. Same interface-first pattern as D11/D12.
-- Full Tier 3 internal design (what a user profile holds, how it's summarized for injection)
-  is the **next drill-down** after this boundary pass.
+
+**LOCKED v1 — 2026-06-10 (DECISIONS D14; full spec `tier3-user-memory-design.md`):**
+- **Two content sources:** (A) **Provisioned** = declared identity (role/grade/department/
+  clinical/location), v1 a **manually-filled file** (HR feed deferred); (B) **Learned** =
+  Enhancer-distilled from this user's Tier 2 (alias map, focus range, standing corrections,
+  format prefs).
+- **Focus range = derived, not typed** — Enhancer tallies a frequency distribution over the
+  schema elements/concepts the user touches (rejected a hand-typed free-text line as
+  unscalable). This is the single-user **seed** of the BACKLOG "user-similarity space /
+  emergent departments" idea (which refines D13: org scope may be soft overlapping clusters,
+  not a hard hierarchy; `department` label = weak prior only).
+- **Authorization deferred** (→ BACKLOG): T3 stores where the user *focuses*, never what
+  they're *permitted* to see; enforcement stays at the execution layer.
+- **T3 ↔ T4 corrected:** two distinct tiers (owner/authority/subject differ); they only
+  share the overlay *injection* mechanism (`institution → department → user`), NOT "T3 ⊂ T4".
+  The T1→T3→T4 promotion ladder applies only to generalizable learned conventions, gated by
+  content-kind.
+- **Read:** inject whole (small) block into Conductor env-state, no runtime summarization.
+  **Write:** async Enhancer, recurrence threshold, rewritable living doc (last-write-wins +
+  `last_seen`). **Backend:** one file/user behind a `UserMemory` interface; vector + multi-
+  user = deferred swaps.
 
 ---
 

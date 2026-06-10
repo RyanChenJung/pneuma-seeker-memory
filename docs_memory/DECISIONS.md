@@ -214,3 +214,49 @@ they feed** — NOT the mechanism (which is shared). Agreed points:
   `local ≈ Tier 3`, `global ≈ Tier 4`.
 - Exact **number of scope levels** + **overlay precedence rules** — provisional; refine when
   we drill T3/T4 in detail and after the author's reply.
+
+## D14 — Tier 3 (User Memory) internal design LOCKED
+Drill-down done 2026-06-10. Full spec: `tier3-user-memory-design.md`. Anchored on D11/D12
+(interface-first, gitignored local store, dumb-first) and D13 (persistent priors,
+Enhancer-only-write, scope key = `user_id`, MVP single-user). Locked points:
+
+- **Purpose:** a persistent prior *about a specific person* that accelerates latent intent
+  convergence. Read-only to frontline; Enhancer-written (+ a manual provisioned file in v1).
+- **Two content sources.** (A) **Provisioned** — declared identity (role, seniority/grade,
+  department, clinical-or-not, location); NOT learned; v1 = a **manually-filled file** (MVP
+  is for testing; HR-system feed deferred → BACKLOG). (B) **Learned** — Enhancer-distilled
+  from this user's Tier 2: term/alias map, **focus range**, standing corrections, format
+  prefs.
+- **Focus range = derived, not typed.** Rejected the earlier hand-typed "focus" free-text
+  line (too manual, won't scale; "where does that line come from at scale?"). Instead the
+  Enhancer **tallies a frequency distribution over the schema elements / concepts the user
+  actually touches** (tables/columns, default filters, time windows). This is the
+  single-user **seed** of the BACKLOG "user-similarity space / emergent departments" idea.
+- **Excludes:** raw trajectories (→T2/T6), org-wide facts (→T4), physical schema (→T5).
+  Governance line on demographic attributes used to shape answers.
+- **Authorization deferred.** T3 v1 stores where the user *focuses* (for convergence), NEVER
+  what they're *permitted* to see; real enforcement stays at the execution layer; a T3 cache
+  is never a security source of truth. → BACKLOG.
+- **T3 ↔ T4 (corrects D13's "T3 is a leaf of T4 overlay").** They are **two distinct
+  tiers**, differing in **owner / authority / subject** (T3 = about a person, heuristic,
+  non-authoritative; T4 = shared, authoritative, often externally-authored institutional
+  truth). They only **share the overlay *injection* mechanism** at read time (compose
+  read-only priors `institution → department → user`, narrowest augments/overrides) — that
+  is cross-tier prompt composition, **not** "T3 ⊂ T4". The T1→T3→T4 promotion ladder applies
+  **only to the thin slice of generalizable learned conventions**, gated by content-kind (a
+  personal preference never promotes to an org rule). Most of T3 and most of T4 never
+  overlap.
+- **Read path:** profile is small → inject the whole T3 block into the Conductor env-state
+  prompt (mini per-user CLAUDE.md); compression at write time, **no runtime summarization**.
+- **Write path:** async/off-peak Enhancer; recurrence threshold N before a pattern enters
+  the Learned profile; **rewritable living doc** (last-write-wins + `last_seen`; Enhancer has
+  Write/Delete, unlike T2 append-only). Decay deferred.
+- **v1 backend:** one structured file per user behind a **`UserMemory` interface**;
+  gitignored local store; vector backend + multi-user company DB = deferred backend swaps.
+
+**Refines D13:** org scope may be **soft, overlapping, multi-membership clusters** (emergent
+from behavior), not a clean hard hierarchy; Provisioned `department` is only a weak prior.
+Recorded in `BACKLOG.md` (verify in the multi-user phase).
+
+**Process note:** opened `docs_memory/BACKLOG.md` — a registry of intentionally-deferred
+*design items* (distinct from TASKS.md's unapproved-work backlog), each with a back-pointer.
