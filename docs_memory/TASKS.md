@@ -34,9 +34,9 @@ page. Agents produce only their HTML page; **I update `CHECKPOINT.md` centrally*
 | H9 | `modules/tests/` | needs-review | bg-agent | v2, 847 lines |
 | H10 | `modules/baselines/` | needs-review | bg-agent | v2, 844 lines (upstream — doc only) |
 | H11 | `modules/openwebui_functions/` | needs-review | bg-agent | v2, 866 lines |
-| H12 | `01_architecture_deep_dive.html` | todo | — | batch 5 (depends on H1–H11; H1–H11 now written) |
-| H13 | `02_flow_traces.html` | todo | — | batch 5 |
-| H14 | `03_concepts.html` | todo | — | batch 5 |
+| H12 | `01_architecture_deep_dive.html` | needs-review | bg-agent | v2, 804 lines (三服務序列圖/設計模式/DI), claims verified vs source |
+| H13 | `02_flow_traces.html` | needs-review | bg-agent | v2, 835 lines (提問/索引/物化/Semantic Join E2E), claims verified vs source |
+| H14 | `03_concepts.html` | needs-review | bg-agent | v2, 805 lines (State/Prompt/Factory/Provenance/flags/allow-list), claims verified vs source |
 
 Plan: batch 1 runs now → user eyeballs ONE page to lock tone/depth → fan out batches
 2–4 unsupervised → batch 5 last (synthesis).
