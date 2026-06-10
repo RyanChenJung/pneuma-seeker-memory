@@ -39,13 +39,20 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
 
 ## ▶ Next action
-- **Tier 3 discussion (User Memory)** — continue the tier-by-tier design-lock cadence the
-  user set (discuss → lock → record into mapping + DECISIONS; no coding yet). Tier 3 = per-
-  user persona/habits store, the "prior" that accelerates latent-intent convergence; fed by
-  the Tier 2 log keyed on `user_id`.
-- **Now unblocked when the user wants to start *coding*:** B3 (scaffold `services/memory/`
-  + `ENABLE_MEMORY_*` flags, default off) and B4 (Tier 2 episodic log — first coding goal,
-  design now locked). Both need user go-ahead (workflow step 3) before moving to `todo`.
+- **FIRST: big-picture + boundary alignment across the four remaining tiers (3, 4, 5, 6) in
+  one pass** — the user wants to confirm each tier's *big picture* and *boundaries* (who owns
+  what, where one tier ends and the next begins, how they hand off) BEFORE drilling into any
+  one. So: discuss Tiers 3/4/5/6 at the big-picture/boundary level together first.
+- **THEN: drill into Tier 3 (User Memory)** detail and lock it, continuing the tier-by-tier
+  design-lock cadence (discuss → lock → record into mapping + DECISIONS; no coding yet).
+  Tier 3 = per-user persona/habits store, the "prior" that accelerates latent-intent
+  convergence; fed by the Tier 2 log keyed on `user_id`.
+- Reference for the boundary pass: `system_architecture.md` (the 6-tier spec) +
+  `code-vs-6tier-mapping.md` (per-tier gap analysis; Tiers 1–2 now have locked "Decided"
+  blocks). Tiers 1 & 2 are already LOCKED (D11/D12) — anchor the others against them.
+- **Coding is unblocked when the user wants it** (not the immediate path): B3 (scaffold
+  `services/memory/` + `ENABLE_MEMORY_*` flags, default off) and B4 (Tier 2 episodic log —
+  first coding goal, design locked). Both need user go-ahead (workflow step 3).
 
 ## How to resume (minimal prompt)
 Type **`繼續`** (or `resume`). `CLAUDE.md` instructs me to read this file and pick up the
