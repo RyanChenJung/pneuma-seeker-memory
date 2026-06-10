@@ -163,3 +163,54 @@ accelerate latent-intent convergence). Key points:
 - **Deferred (noted):** Enhancer trigger mechanism — explicitly out of scope for now, but
   flagged because *how/when it runs* feeds back into the retention policy + watermark
   semantics.
+
+## D13 — Big-picture / boundary alignment across Tiers 3–6 (the persistent layer)
+Boundary pass done 2026-06-10 (per-tier "Decided (direction)" blocks added to
+`code-vs-6tier-mapping.md`). **Unifying frame:** Tiers 3–6 are all **persistent priors**,
+**written only by the Enhancer**, read-only to frontline agents, all distilled from the
+Tier 2 episodic log (Tier 2 = likelihood data; Enhancer = posterior → these tiers' priors).
+What distinguishes them is **what they store / their scope key / which frontline decision
+they feed** — NOT the mechanism (which is shared). Agreed points:
+
+- **Scope key = the dimension a tier is indexed by** (T3: `user_id`; T4: org scope; T5: DB
+  schema; T6: problem-type). Plain meaning: "this memory is about whom / about what."
+- **MVP = single-user (T3).** Build single-user first; keep `user_id` as the scope key and
+  wrap the store in an interface, so the company-DB / multi-user version is a **backend
+  swap**, not a redesign. Same interface-first pattern as D11/D12.
+- **Org (T4) is a SCOPE HIERARCHY, overlay-style — not flat:** `User → Department
+  (local-org) → Institution (global-org)`, retrieved like Claude Code's CLAUDE.md (global
+  base + project override/augment: broad layer is the base, narrower scope augments/
+  overrides). Content filter = **actionability, not breadth** (store "in Admissions a
+  'matriculant' means X", not "UChicago is a university"). Heterogeneous departments ⇒ the
+  institution layer is naturally **thin**; actionable mass concentrates at the department
+  layer automatically (this dissolves the "broad info can't help reasoning" worry).
+- **Scalability — answers "must we redesign Org per department?": NO.** Separate **building
+  the mechanism** (scope hierarchy + Enhancer promotion + overlay retrieval — built **once**,
+  department-agnostic) from **filling the content** (each scope's content is **auto-learned**
+  by the Enhancer from its users' Tier 2 logs). A new department = a new **auto-filled
+  bucket**, zero redesign. Two-stage convergence: Enhancer finds commonality **within** a
+  department (→ local-org), then promotes a lesson **across** departments (local-org →
+  global-org) when it recurs; too-specific lessons stay local. This is also the user→org
+  convergence that lets a brand-new user benefit from accumulated shared knowledge on day 1.
+  (Tier 5 grows the same way — only join paths actually used/corrected get reinforced, so we
+  never pre-map a giant schema.)
+- **T4 vs T5 boundary:** T4 = **meaning / institutional rules**; T5 = **physical DB
+  navigation**. Provenance-assisted; a user correction routes to T4 or T5 by its *subject*,
+  not its source. (e.g. "pre-2000 vs post-2000 encoding differs" = physical ⇒ T5.)
+- **T5 = property graph** (NetworkX/JSON v1 behind a `SchemaGraph` interface, D11/D12
+  pattern; **nodes AND edges both carry payload** — node = column value/temporal caveats,
+  edge = validated joins + utility + negative constraints), grown by **learn-by-correction**
+  via Tier 2 → Enhancer. Not Neo4j yet (too heavy); graph DB = deferred backend swap.
+- **T6 = method skeleton** (the *verb*: how to solve a *class* of problem, DB-agnostic) vs
+  **T5's navigation** (the *noun*: how to read *this* DB); they compose. **v1 =
+  trajectory-RAG** (retrieve most-similar past *successful* trajectory as a few-shot
+  example); **v2 = abstracted parameterized templates**. Risk: un-abstracted T6 collapses
+  into a SQL cache; v1 mitigates by being explicitly few-shot.
+
+**OPEN (NOT locked):**
+- (pt 2) Whether to **reuse the upstream author's `DocumentDB` / `Knowledge` (local/global)
+  design and attach our memory interface there** vs build our own. **User will email the
+  upstream author** to avoid rebuilding the wheel. Working assumption until then:
+  `local ≈ Tier 3`, `global ≈ Tier 4`.
+- Exact **number of scope levels** + **overlay precedence rules** — provisional; refine when
+  we drill T3/T4 in detail and after the author's reply.

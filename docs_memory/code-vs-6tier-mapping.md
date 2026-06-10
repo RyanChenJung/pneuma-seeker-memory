@@ -139,6 +139,13 @@ history). There is no user profile, no per-user persistent store, no semantic re
 summary into the Conductor env-state prompt. Write path: Enhancer derives habits from the
 episodic log keyed by `user_id` (which already flows through every layer).
 
+**Decided (direction) — 2026-06-10 (DECISIONS D13):**
+- **MVP = single-user.** Build for one user first, but keep `user_id` as the scope key and
+  wrap the store in an interface, so the multi-user upgrade (a company DB keyed by
+  `user_id`) is a **backend swap, not a redesign**. Same interface-first pattern as D11/D12.
+- Full Tier 3 internal design (what a user profile holds, how it's summarized for injection)
+  is the **next drill-down** after this boundary pass.
+
 ---
 
 ## Tier 4 — Organization Memory  🟡 (strongest existing scaffold — corrects my earlier under-rating)
@@ -165,6 +172,27 @@ provides "contextual priors."
 **Attach:** this is the **lowest-effort tier to light up** — populate `indices/kb/*`,
 re-enable the `DOCUMENT_DB` action behind a flag, and (optionally) back it with vectors.
 Most of the plumbing already exists.
+
+**Decided (direction) — 2026-06-10 (DECISIONS D13):**
+- **Content filter = actionability, not breadth.** Store specific, groundable facts
+  ("in Admissions, 'matriculant' means X"), not vague descriptions ("UChicago is a
+  university"). A broad org scope is fine; vague content is not.
+- **Scope is a HIERARCHY, not flat:** `User → Department (local-org) → Institution
+  (global-org)`, retrieved as a **layered overlay** (Claude Code's CLAUDE.md global+project
+  model: broad base, narrower scope augments/overrides). Heterogeneous departments ⇒ the
+  institution layer is naturally *thin*; actionable mass concentrates at the department
+  layer automatically.
+- **Scalability (resolves the "redesign per department?" worry): NO.** Build the *mechanism*
+  (scope hierarchy + Enhancer promotion + overlay retrieval) **once**; each scope's *content*
+  is **auto-learned** by the Enhancer from its users' Tier 2 logs. New department = new
+  auto-filled bucket, zero redesign. Two-stage convergence: commonality within a department
+  (→ local-org), then promote across departments (local-org → global-org) when a lesson
+  recurs; too-specific lessons stay local. Same machinery gives the user→org convergence
+  that lets a new user benefit from accumulated shared knowledge on day 1.
+- **OPEN (pending email to upstream author):** whether to **reuse the author's `DocumentDB`/
+  `Knowledge` (local/global) design and attach our memory interface there** (working
+  assumption: local≈Tier 3, global≈Tier 4) vs build our own. Don't rebuild the wheel until
+  we hear back.
 
 ---
 
@@ -209,6 +237,19 @@ the trace → reinforce/penalize an edge; failures → append a negative constra
 the Materializer consults it before choosing joins. This is the highest-value, highest-
 effort tier.
 
+**Decided (direction) — 2026-06-10 (DECISIONS D13):**
+- **Property graph is the right backbone** (joins *are* a graph; path queries beat a flat
+  rule list / vector store). Nodes = tables/columns; edges = validated join paths carrying
+  `utility_score` + `associated_experience` (incl. negative constraints).
+- **Node annotations are first-class too, not only edges:** column-level value/temporal
+  caveats ("pre-2000 vs post-2000 encoding differs") live on **nodes**, not on joins.
+- **Infra (same pattern as D11/D12):** v1 = **NetworkX + JSON persistence** behind a
+  `SchemaGraph` interface in `services/memory/` (gitignored); **NOT** Neo4j yet (too heavy).
+  Upgrade path = a real graph DB, backend swap only.
+- **Learn-by-correction loop:** user corrections land in Tier 2 → the Enhancer distills them
+  into an edge or node annotation. No pre-built templates; the graph grows from usage, and
+  only join paths actually used/corrected get reinforced (so we never pre-map a giant schema).
+
 ---
 
 ## Tier 6 — Long Memory  🔴
@@ -223,6 +264,19 @@ emits reusable Python for one result, but it isn't abstracted into a skill or re
 **Attach:** new skill store in `services/memory/`. Enhancer abstracts successful
 trajectories (from Tier 2) into templates; read path injects top-k exemplars into the
 Conductor/Materializer planning prompts.
+
+**Decided (direction) — 2026-06-10 (DECISIONS D13):**
+- **Verb vs noun split from Tier 5:** Tier 6 = the *method skeleton* (how to solve a
+  *class* of problem, DB-agnostic, e.g. "cohort → index date → outcome window → aggregate");
+  Tier 5 = the *navigation* (how to read *this* DB). They compose: T6 supplies the plan
+  shape, T5 grounds it to physical tables.
+- **v1 = trajectory-RAG** (retrieve the most-similar past *successful* trajectory, inject as
+  a few-shot worked example) — concrete, needs no perfect abstraction, still useful.
+- **v2 = abstracted, parameterized plan templates** keyed by problem-type (the spec's
+  "abstract procedural skills"). The abstraction is the Enhancer's hardest LLM-as-judge job;
+  deferred so T6 doesn't stall on it.
+- **Risk noted:** if entries aren't abstracted, T6 collapses into a cache of past SQL and
+  adds little over T5+T2. v1 mitigates by being explicitly few-shot, not a query cache.
 
 ---
 
