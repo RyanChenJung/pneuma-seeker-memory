@@ -4,7 +4,8 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-10 (Tier 3 internal design LOCKED as D14; opened BACKLOG.md).
+> **Last updated:** 2026-06-10 (Tier 4 internal design LOCKED as D15; backfilled missing
+> Tier 2 spec file `tier2-episodic-log-design.md`). Next = Tier 5.
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -12,8 +13,8 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 
 ## Two work threads in flight
 1. **Understanding (HTML docs)** — finishing `docs_understanding/` HTML. Goal **G1** in TASKS.md.
-2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–3 LOCKED
-   (D11/D12/D14); **current focus = Tier 4**.
+2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–4 LOCKED
+   (D11/D12/D14/D15); **current focus = Tier 5**.
 
 ## Done recently
 - PR-safety guardrails + `gh` installed/authed, default repo = fork (S0.1–S0.4 ✅).
@@ -29,7 +30,8 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   path. Spec: `tier1-short-memory-design.md`.
 - **Tier 2 design LOCKED (DECISIONS D12)** — append-only episodic log; **dumb capture, zero
   extra LLM** at write time (serialize ReAct trajectory before GC; condensing = async
-  Enhancer). Our own store `services/memory/_episodic/` (gitignored), **not** ws.db
+  Enhancer). Spec: `tier2-episodic-log-design.md`. Our own store
+  `services/memory/_episodic/` (gitignored), **not** ws.db
   (delete-and-replace clashes w/ append-only). v1 = **JSONL** behind `EpisodicLog`
   interface; **upgrade path = DuckDB table** (user asked to record this). Step-level full
   trajectory incl. failures + raw CoT; turn-envelope + step-event schema, fields chosen by
@@ -62,6 +64,21 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   (distinct from TASKS.md's unapproved-work backlog), each with a back-pointer. Seeded with:
   authorization, vector/graph backends, DuckDB upgrade, multi-user T3, user-similarity space
   + emergent departments, decay, DocumentDB-reuse question.
+- **Backfilled `tier2-episodic-log-design.md`** — Tier 2 had been locked only inside
+  DECISIONS D12 (no standalone spec like T1/T3); created the spec from D12 (no new design),
+  added "Spec:" back-pointers in D12 + this file. T1/T2/T3 spec form now consistent.
+- **Tier 4 design LOCKED (DECISIONS D15)** — spec `tier4-org-memory-design.md`. **Two-headed
+  tier**: (A) **Authored** authoritative KB (externally ingested, NOT from T2/Enhancer — the
+  heavy main body, the reason `DocumentDB` exists) + (B) **Learned** org conventions (Enhancer
+  from *aggregated* T2). **Authority/trust = T4-unique**: authored always wins, learned only
+  supplements. **Read splits by head**: learned → inject-whole (joins D14 overlay), authored →
+  top-k retrieval (Retriever → Tier 1). **One `OrgMemory` facade** (`get_org_overlay` +
+  `search_authored`, scope=(institution,department)); authored backend hidden (DocumentDB-reuse
+  = the OPEN email Q). **Only learned promotes** (T1→T3→T4-dept→T4-inst). **Refines D13**:
+  T4's authored side breaks "all tiers from T2"; T4 read ≠ single overlay (learned=overlay,
+  authored=retrieval). **MVP = single inst + single dept w/ a small REAL authored set; NEAR-
+  TERM (not backlog) = ≥2 departments** to prove "same question, different dept → each
+  converges to its own correct latent intent."
 
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
@@ -69,17 +86,19 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   design generalizes / where our memory interface should attach (D13 OPEN item).
 
 ## ▶ Next action
-- **Tier 3 drill is DONE and recorded (D14).** Tiers 1–3 now LOCKED (D11/D12/D14); Tiers 4–6
-  have D13 "Decided (direction)" blocks.
-- **NEXT: drill into Tier 4 (Organization Memory)** detail and lock it, same cadence (discuss
-  → lock → record into mapping + DECISIONS; no coding yet). T4 = shared, authoritative,
-  often externally-authored institutional truth (clinical definitions, protocols); scope =
-  the `Department → Institution` overlay layers above T3's user layer. Anchor against D13
-  (scope hierarchy, actionability filter, auto-fill mechanism) and D14 (T3↔T4 boundary:
-  owner/authority/subject differ; shared overlay-injection mechanism only; promotion ladder
-  gated by content-kind). Carry in the D14 refinement that org scope may be **soft
-  overlapping clusters** (BACKLOG), and the two D13 OPEN items: (i) email upstream author re
-  DocumentDB reuse, (ii) exact scope-level count + overlay precedence.
+- **Tier 4 drill is DONE and recorded (D15).** Tiers 1–4 now LOCKED (D11/D12/D14/D15); Tiers
+  5–6 have D13 "Decided (direction)" blocks.
+- **NEXT: drill into Tier 5 (Schema Routing Memory — CRITICAL)** and lock it, same cadence
+  (discuss → lock → record into mapping + DECISIONS; no coding yet). T5 = a persistent
+  **property graph** that patches messy EHR schemas: nodes = tables/columns (payload =
+  value/temporal caveats), edges = **validated join paths** (payload = empirical utility +
+  negative constraints / failure lessons). Anchor against D13's T5 "Decided (direction)"
+  block (`code-vs-6tier-mapping.md`): NetworkX/JSON v1 behind a `SchemaGraph` interface,
+  grown by **learn-by-correction** via Tier 2 → Enhancer; Neo4j = deferred swap. Boundary
+  vs T4 (D13): T4 = *meaning / institutional rules*; T5 = *physical DB navigation* — route a
+  correction by its subject. Note the two existing-but-wrong code analogues to disambiguate:
+  `join_paths` (throwaway heuristic string) and `ProvenanceGraph` (per-session op-level DAG)
+  — neither is T5 (see mapping Tier 5 section).
 - Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier
   gap analysis) + `BACKLOG.md` (deferred items).
 - **Coding is unblocked when the user wants it** (not the immediate path): B3 (scaffold

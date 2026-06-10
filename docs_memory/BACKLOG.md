@@ -37,10 +37,22 @@
   concept/schema vocabulary to embed over. Intrinsically a multi-user feature; single-user
   MVP only builds the *seed* (the per-user derived focus profile). *(D14; refines D13)*
 
-## Tier 4–6 (noted, drill later)
+## Tier 4 — Organization Memory
 
 - **Reuse upstream `DocumentDB` / `Knowledge` (local/global) vs build our own** — pending
   the user's email to the upstream author. Working assumption: `local ≈ T3`, `global ≈ T4`.
-  *(D13)*
-- **Exact scope-level count + overlay precedence rules** — provisional until T3/T4 drilled
-  and the author replies. *(D13)*
+  Authored backend is hidden behind the `OrgMemory` facade, so this is a deferred backend
+  swap. *(D13, D15)*
+- **Exact scope-level count + overlay precedence rules** — provisional until the author
+  replies. v1 = hard 2-level `(institution, department)` hierarchy. *(D13, D15)*
+- **Full org-memory governance** — v1 only tags authored content with thin metadata (source,
+  trust, scope). Real version-control / who-authored / approval (sign-off) workflow deferred.
+  *(D15)*
+- **HR / identity-system authored feed** — v1 ingests authored docs via manual/file import;
+  an automated org-knowledge feed is deferred. *(D15)*
+- **Soft, overlapping, multi-membership org clusters** — v1 = hard hierarchy; behavior-
+  emergent soft clusters (shared with the T3 "user-similarity space" idea) deferred to the
+  multi-department / multi-user phase. *(D14, D15)*
+
+## Tier 5–6 (noted, drill later)
+- (none beyond the cross-tier vector/graph backend item above — drill T5/T6 to populate)

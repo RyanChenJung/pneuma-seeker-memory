@@ -114,7 +114,8 @@ asset — cross-conversation reuse is Tier 3/6's job, not Tier 1's. **Upgrade pa
 `(user_id, chat_id)`; Conductor code unchanged.
 
 ## D12 — Tier 2 episodic log v1: our own append-only JSONL store, dumb-capture, async-consumed
-Tier 2 design LOCKED (2026-06-10, decisions (1)–(4) confirmed with user). Tier 2 = the
+Tier 2 design LOCKED (2026-06-10, decisions (1)–(4) confirmed with user). Full spec:
+`tier2-episodic-log-design.md`. Tier 2 = the
 append-only **episodic state log** — the "messy raw-material warehouse" the Enhancer later
 distills into the persistent tiers (3–6). In Bayesian terms: **Tier 2 is the likelihood
 data; the Enhancer computes the posterior that becomes Tiers 4–6's priors** (which then
@@ -260,3 +261,62 @@ Recorded in `BACKLOG.md` (verify in the multi-user phase).
 
 **Process note:** opened `docs_memory/BACKLOG.md` — a registry of intentionally-deferred
 *design items* (distinct from TASKS.md's unapproved-work backlog), each with a back-pointer.
+
+## D15 — Tier 4 (Organization Memory) internal design LOCKED
+Drill-down done 2026-06-10. Full spec: `tier4-org-memory-design.md`. Anchored on D13
+(scope hierarchy, actionability filter, auto-fill mechanism) and D14 (T3↔T4 boundary:
+owner/authority/subject differ, shared overlay-injection mechanism only). Locked points
+(Q1–Q5 confirmed with user):
+
+- **Q1 — T4 is a TWO-HEADED tier.** (A) **Authored knowledge base** — real clinical
+  definitions / official protocols / data dictionaries / guidelines; **externally authored,
+  ingested by a pipeline (human/HR/file import), NOT distilled from Tier 2, NOT written by
+  the Enhancer**; this is the heavy main body and the reason upstream's `DocumentDB` exists.
+  (B) **Learned org conventions** — cross-user org habits the Enhancer distills from
+  **aggregated** Tier 2 (scope key = org, not user). This mirrors T3's Provisioned/Learned
+  split, but T4's authored side is the *main mass* (T3's provisioned was a thin stub).
+  **Refines D13's unifying frame:** D13 said "Tiers 3–6 are all Enhancer-written, all
+  distilled from Tier 2" — T4's (A) authored side **breaks that** by design: T4 = a layer of
+  *external authoritative truth* + a layer of *internally-learned convention*.
+- **Q2 — Authority / trust is the T4-unique dimension (T3 has none).** Authored (A) is
+  **authoritative**; learned (B) is **heuristic / non-authoritative**. Conflict rule:
+  **authored always wins; learned may only *supplement*, never *override* authored.** At read
+  time both are injected **labelled with provenance + trust level** so the Conductor knows
+  which is a *rule* vs an *observed habit*. Governance (versioning, who-authored, sign-off) =
+  a **thin metadata tag in v1**; real version-control / approval workflow → BACKLOG.
+- **Q3 — Promotion ladder: only (B) learned participates.** The T1→T3→T4-department→
+  T4-institution promotion ladder applies **only to learned conventions**; **(A) authored
+  never promotes** (it is already authoritatively placed at a scope). Gate = recurrence
+  threshold N + content-kind filter (a generalizable convention may promote; a personal
+  preference / PII may not — per D14). Two-stage convergence per D13 (within-department →
+  local-org; recurs across departments → global-org).
+- **Q4 — MVP scope = single institution + single department, but the NEAR-TERM target is
+  single-institution + MULTI-department (≥ 2 departments), NOT far backlog.** Rationale (user):
+  the multi-department setup is what actually tests the core claim — **different departments
+  asking the *same* question each converge to the *correct* (different) latent intent**. So we
+  build the scope-hierarchy mechanism in the single-dept MVP, then jump straight to ≥2
+  departments to prove the convergence. (The soft-overlapping-cluster refinement from D14
+  stays BACKLOG — this is still the hard-hierarchy mechanism.)
+- **Q5 — Read paths split by head; one facade.** The two heads have **different read modes**:
+  (B) learned conventions are **small → injected whole**, joining D14's overlay composition
+  (`institution → department → user`, narrowest augments/overrides); (A) authored is a
+  **large corpus → retrieved top-k by query** (the Retriever pulls relevant slices into the
+  Tier 1 buffer — matches the spec's "RETRIEVER injects high-value facts into Conductor's
+  Tier 1 buffer"). **This refines D13/D14:** T4 read is NOT a single overlay injection —
+  learned = overlay, authored = retrieval. **Interface = one `OrgMemory` facade** (Q5-ii = A)
+  with two methods: `get_org_overlay(scope)` (learned, inject-whole) + `search_authored(query,
+  scope)` (authored top-k); `scope = (institution, department)`. One facade (not two split
+  interfaces) because: (i) concept alignment — one tier = one interface, like T1/T2/T3; (ii)
+  the Q3 promotion ladder needs both heads under one roof (a strongly-recurring learned
+  convention may one day be promoted into an authored draft). The authored-side backend is
+  **hidden behind the facade** — our own store vs reusing upstream `DocumentDB` is the still-
+  OPEN email question (D13); interface-first means the choice doesn't block us, only swaps the
+  authored backend later.
+  - **Q5-i — MVP DOES seed a small real authored set** (option b), not an empty pipeline,
+    because the Q4 cross-department convergence test very likely hinges on **differing
+    authored definitions per department** (e.g. Admissions' "matriculant" vs another dept's
+    term); with no authored content the convergence difference may be untestable.
+- **v1 backend:** `OrgMemory` facade over two stores — authored = document store
+  (`indices/kb/*`, BM25 → vector deferred; possibly the reused `DocumentDB`), learned =
+  structured overlay file (gitignored local, D11/D12 pattern). Vector backend + DocumentDB-
+  reuse = deferred backend swaps (BACKLOG).

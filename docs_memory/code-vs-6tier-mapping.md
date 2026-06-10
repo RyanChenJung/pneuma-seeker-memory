@@ -213,6 +213,26 @@ Most of the plumbing already exists.
   assumption: local≈Tier 3, global≈Tier 4) vs build our own. Don't rebuild the wheel until
   we hear back.
 
+**LOCKED (internal design) — 2026-06-10 (DECISIONS D15), full spec `tier4-org-memory-design.md`:**
+- **Two-headed tier.** (A) **Authored** authoritative knowledge base (externally ingested,
+  NOT from Tier 2 / Enhancer — the heavy main body, the reason `DocumentDB` exists) + (B)
+  **Learned** org conventions (Enhancer-distilled from *aggregated* Tier 2). Refines D13's
+  "all tiers Enhancer-written from T2": T4's authored side breaks that by design.
+- **Authority/trust = T4-unique.** Authored = authoritative & **always wins**; learned =
+  heuristic, may only **supplement, never override** authored. Both injected labelled with
+  provenance + trust level. Versioning/sign-off = thin metadata v1; full governance → BACKLOG.
+- **Promotion ladder: only (B) learned promotes** (T1→T3→T4-dept→T4-institution), gated by
+  recurrence N + content-kind. (A) authored never promotes (already authoritatively placed).
+- **Read = split by head, one facade.** Learned → **inject whole** (joins D14's
+  `institution→department→user` overlay); authored → **retrieve top-k** (Retriever → Tier 1
+  buffer). One **`OrgMemory` facade**: `get_org_overlay(scope)` + `search_authored(query,
+  scope)`, `scope=(institution, department)`. Authored backend hidden behind facade (our own
+  vs reused `DocumentDB` = the OPEN email question; interface-first → not blocking).
+- **MVP scope = single institution + single department; NEAR-TERM (not backlog) = ≥2
+  departments** to test the core claim: different departments, same question → each converges
+  to its own correct latent intent. MVP **does seed a small real authored set** (differing
+  per-department definitions are the likely convergence variable).
+
 ---
 
 ## Tier 5 — Schema Routing Memory  🔴 (CRITICAL tier, and the most misleading "overlap")
