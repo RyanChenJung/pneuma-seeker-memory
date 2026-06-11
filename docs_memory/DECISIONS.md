@@ -375,3 +375,67 @@ Locked points (D5-1 … D5-6 confirmed with user):
   prefs; T4-learned = org conventions).
 - **v1 backend:** NetworkX + JSON persistence behind the `SchemaGraph` interface; gitignored
   local store; Neo4j / graph DB = deferred backend swap (BACKLOG).
+
+## D17 — Tier 6 (Long Memory / Procedural Method Skeletons) internal design LOCKED
+Drill-down done 2026-06-11. Full spec: `tier6-long-memory-design.md`. Anchored on D13
+(T6 direction: T6 = the *verb* / method skeleton, T5 = the *noun* / navigation; v1 =
+trajectory-RAG, v2 = abstract templates) and D11/D12/D16 (interface-first, gitignored store,
+Enhancer-only-write, T2 = shared substrate, recurrence-gated) + D14 (recurrence threshold).
+**This is the last tier — all six (D11/D12/D14/D15/D16/D17) are now LOCKED.** Points confirmed
+one-at-a-time with the user (D6-1 … D6-5):
+
+- **D6-1 — Retrieval key = Option C now, Option B later.** v1 = hybrid: embed the incoming
+  **NL question** + match on a cheap **operator-sequence skeleton** read directly from the T2
+  trajectory (`join→filter→group-by→aggregate`), which needs **no LLM abstraction** yet
+  describes the *method shape*, not just the question's surface nouns. Interface reserves a
+  `problem_type` field (**empty in v1**) for v2. **User's true north = Option B** (structured
+  problem-type signature) — v1 uses C only so it does not stall on the v2 abstraction (D13), and
+  to avoid a runtime LLM classification that would hurt the latency T6 exists to cut. Pure NL
+  embedding rejected: it is the design that collapses T6 into "a SQL cache by question
+  similarity" (the D13 risk); the operator-sequence component is the cheap hedge. **Operator-
+  sequence skeleton kept but flagged provisional** — generality unproven (BACKLOG).
+- **D6-2 — Entry shape + `support` (not utility).** Two entry **types**: `positive exemplar`
+  (few-shot imitation) and `negative anti-pattern` (a "don't do this" calibration lesson,
+  mirrors T5 `negative_constraints[]`). **Sign (emulate/avoid) and magnitude are never fused.**
+  Magnitude = **`support` = recurrence-weighted importance**, computed by the Enhancer at
+  distillation time from how often a lesson recurs across T2 — measured **source-side (T2)**, so
+  free of the read-side feedback loop that poisons a usage-count (retriever inflating its own
+  favourites). **Causal `utility_score` deliberately dropped** (crediting one exemplar among
+  several co-injected items is not cleanly solvable; a fake score is worse than none) — revisit
+  only with a clean attribution method (BACKLOG). Named **`support`**, not `utility`, on
+  purpose. **Known blind spot:** recurrence under-weights the rare-but-critical entry → BACKLOG.
+  Every entry carries soft `source_episode` → T2; **no retention lock on T2** (same as D16).
+- **D6-3 — Success gate = two-stage; LLM reads reactions, never judges correctness.** Stage 1
+  (per-trajectory eligibility, cheap heuristics from T2 fields): positive = terminated with a
+  validated result + clean path; negative = a **ReAct self-overturn** event (localized
+  self-correction inside one trajectory — cheaper than a whole failed run) OR terminal
+  error/dead-end OR **implicit user pushback**. Stage 2 (aggregation): cluster by problem-shape,
+  apply a **recurrence threshold** (same as D14, **symmetric in v1**), then **LLM distills** the
+  cluster into a clean exemplar/anti-pattern. **LLM budget = "reaction-reading + distillation",
+  never "judge correctness from scratch"** (the latter = D13's hardest job, avoided in v1).
+  - **Implicit feedback (no explicit channel).** Pneuma has no accept/reject button → the
+    Enhancer reads the **next user turn's semantics/tone** in T2. Cheap+honest because we do
+    **not** ask the LLM *"is the answer correct?"* (no ground truth) but *"did the human seem
+    satisfied?"* — **the human is the ground truth, the LLM only parses the reaction.** Used as
+    **soft probabilistic evidence into `support`, not a hard label**; recurrence washes out
+    misreads. Shrinks the silent-semantic-error gap to "system AND user both missed it" (BACKLOG).
+- **D6-4 — Cross-tier routing of a correction (new shared principle).** The Enhancer is **one
+  shared distiller** that routes a lesson to the tier matching its **subject**: format/
+  presentation → **T3** (user prefs, D14) or **T4** (org conventions, D15); reasoning-path →
+  **T6**; physical-join → **T5**; a project-specific one-off never recurs → washed out.
+  **Recurrence is the universal noise filter shared by T3/T4/T5/T6.** This is what cleanly keeps
+  format gripes *out* of T6 (they route elsewhere) and one-off noise out of every tier.
+  (Generalises D16's "T2 = shared substrate".)
+- **D6-5 — `LongMemory` interface + permission.** Two clients (same as T5). Read (frontline
+  read-only): `get_exemplars(query, problem_type=None, k)` → positive worked examples;
+  `get_anti_patterns(query, problem_type=None, k)` → negative constraints; both injected into the
+  Conductor/Materializer planning prompt (T6 verb composes with T5 noun). Write (**Enhancer
+  only**): `distill(...)` (add/update an entry from a T2 cluster), `reinforce_support(...)`.
+  **Read path = inject-or-skip:** hit → inject top-k few-shot; **miss/cold start → inject
+  nothing → today's static prompt factory, no regression** (same principle as T5's fallback).
+- **v1 backend:** JSON/JSONL behind the `LongMemory` interface; gitignored local store;
+  vector/embedding store = deferred backend swap. **v2 = abstracted parameterized plan templates
+  keyed by structured problem-type (Option B)** — the Enhancer's hardest LLM job, deferred.
+- **Boundaries reaffirmed.** T6 vs T5 = verb vs noun (compose, not overlap). T6 vs T2 = T2 is
+  the raw journal (incl. failures); T6 is the distilled, recurrence-gated, cleaned skeletons —
+  never raw traces verbatim.

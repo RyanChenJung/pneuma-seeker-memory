@@ -68,8 +68,30 @@
   FK in an authored data dictionary never auto-seeds T5. Listed here only so it is not
   re-litigated. *(D16)*
 
-## Tier 6 (noted, drill later)
-- (none beyond the cross-tier vector/graph backend item above — drill T6 to populate)
+## Tier 6 — Long Memory (Procedural / Method Skeletons)
+
+- **v2 = abstracted, parameterized plan templates keyed by structured problem-type
+  (Option B)** — the user's true-north retrieval design and the spec's "abstract procedural
+  skills". The abstraction is the Enhancer's hardest LLM-as-judge job; v1 ships Option C
+  (NL-embedding + operator-sequence) only so T6 does not stall on it. *(D13, D17)*
+- **Operator-sequence-skeleton generality** — v1 uses the ReAct operator sequence
+  (`join→filter→group-by→aggregate`) as a cheap, no-LLM component of the retrieval key, but
+  whether it is general / worth storing is **unproven**; v2 may drop it for `problem_type`.
+  *(D17)*
+- **Causal credit attribution among co-injected exemplars** — v1 drops a causal
+  `utility_score` (cannot cleanly credit one exemplar among several co-injected items + T5
+  caveats + T4 facts). Revisit only with a clean method (single-template injection / A-B).
+  *(D17)*
+- **Rare-but-critical under-weighting** — `support` is recurrence-weighted, so a method used
+  once that averted a disaster scores low (same long-tail blind spot as a usage-count, moved
+  to the distillation side). *(D17)*
+- **Silent semantic errors** — the v1 success gate catches explicit signals (terminal state,
+  ReAct self-overturn, implicit user pushback) but not an answer that is silently wrong *and*
+  that the user also never pushes back on. Needs a v2 LLM semantic judge or accumulated later
+  corrections. *(D17)*
+- **Asymmetric recurrence threshold** — v1 uses one symmetric threshold for positive and
+  negative entries; a lower bar for negative anti-patterns (a repeatedly-made mistake should
+  promote faster) is a noted future direction. *(D17)*
 
 ## Cross-tier — open lean
 

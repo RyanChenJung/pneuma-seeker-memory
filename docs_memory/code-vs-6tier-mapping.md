@@ -347,6 +347,28 @@ Conductor/Materializer planning prompts.
 - **Risk noted:** if entries aren't abstracted, T6 collapses into a cache of past SQL and
   adds little over T5+T2. v1 mitigates by being explicitly few-shot, not a query cache.
 
+**Decided (internal design) — 2026-06-11 (DECISIONS D17; spec `tier6-long-memory-design.md`).
+LAST TIER — all six now LOCKED.**
+- **Retrieval key (D6-1):** v1 = **Option C hybrid** — NL-question embedding + a cheap
+  **operator-sequence skeleton** (`join→filter→group-by→aggregate`) read directly from the T2
+  trajectory, no LLM abstraction. `problem_type` field reserved (empty) for **v2 = Option B**
+  (structured signature, the user's true north). Pure NL embedding rejected (collapses to a SQL
+  cache). Operator-sequence kept but provisional (generality unproven).
+- **Entry + `support` (D6-2):** two types — `positive exemplar` / `negative anti-pattern`
+  (sign), each with **`support` = recurrence-weighted importance** (magnitude); never fused.
+  Causal `utility_score` dropped (attribution among co-injected items unsolvable cheaply).
+  Soft `source_episode` → T2, no retention lock.
+- **Success gate (D6-3):** two-stage — heuristic eligibility (terminal state / **ReAct
+  self-overturn** / **implicit user pushback** read from the next turn's tone) → recurrence
+  aggregation + LLM **distill**. LLM reads reactions + distills, **never judges correctness**.
+- **Cross-tier routing (D6-4):** the Enhancer routes a lesson by **subject** (format→T3/T4,
+  reasoning→T6, join→T5); **recurrence = the universal noise filter** across T3/T4/T5/T6.
+- **`LongMemory` iface (D6-5):** read (RO) `get_exemplars`/`get_anti_patterns` inject into the
+  planning prompt; write (Enhancer only) `distill`/`reinforce_support`; two clients. Read =
+  inject-or-skip → **miss = today's static prompt, no regression.**
+- **Backend:** JSON/JSONL behind `LongMemory`, gitignored; vector store + v2 abstract templates
+  deferred (BACKLOG).
+
 ---
 
 ## Agents & Permissions  🟡

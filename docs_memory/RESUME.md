@@ -4,8 +4,9 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-11 (Tier 5 internal design LOCKED as D16; spec
-> `tier5-schema-graph-design.md`). Next = Tier 6 (last tier).
+> **Last updated:** 2026-06-11 (Tier 6 internal design LOCKED as D17; spec
+> `tier6-long-memory-design.md`). **ALL SIX TIERS NOW LOCKED — design phase done.**
+> Next = coding (B3 scaffold + B4 Tier 2), pending user go-ahead.
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -13,8 +14,8 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 
 ## Two work threads in flight
 1. **Understanding (HTML docs)** — finishing `docs_understanding/` HTML. Goal **G1** in TASKS.md.
-2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–5 LOCKED
-   (D11/D12/D14/D15/D16); **current focus = Tier 6 (last tier)**.
+2. **Design (6-tier memory)** — defining the memory tier by tier. **ALL SIX TIERS LOCKED**
+   (D11/D12/D14/D15/D16/D17); **design phase DONE → next thread is coding (B3/B4)**.
 
 ## Done recently
 - PR-safety guardrails + `gh` installed/authed, default repo = fork (S0.1–S0.4 ✅).
@@ -95,6 +96,21 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   knowledge = T5 evidence-first**. NetworkX/JSON; Neo4j = deferred swap.
   - **New lean (not locked):** user leaning toward **T2 = no-delete** (traceability/explainability)
     → would downgrade D12 `processed_at` to a pure progress marker. Parked in BACKLOG; T5 unaffected.
+- **Tier 6 design LOCKED (DECISIONS D17) — LAST TIER, design phase DONE.** Spec
+  `tier6-long-memory-design.md`. Persistent **method skeletons** = the *verb* (how to solve a
+  *class* of problem, DB-agnostic); composes with T5's *noun* (how to read this DB).
+  **Retrieval key = Option C** (NL-embedding + cheap operator-sequence skeleton from T2, no LLM;
+  `problem_type` reserved for **v2 = Option B**, user's true north). **Two entry types**
+  (`positive exemplar` / `negative anti-pattern`); magnitude = **`support`** = recurrence-weighted
+  importance (source-side, dodges the read-side feedback loop); **causal `utility_score` dropped**
+  (attribution unsolvable). **Success gate = two-stage** (heuristic eligibility incl. **ReAct
+  self-overturn** + **implicit user pushback read from next-turn tone** → recurrence aggregation +
+  LLM **distill**); **LLM reads reactions + distills, never "judges correctness"** (the human is the
+  ground truth). **Cross-tier routing principle (D6-4):** the Enhancer routes a lesson by *subject*
+  (format→T3/T4, reasoning→T6, join→T5); **recurrence = universal noise filter** across T3–T6.
+  **`LongMemory` iface** read (RO) `get_exemplars`/`get_anti_patterns` → planning prompt; write
+  (Enhancer only) `distill`/`reinforce_support`; read = inject-or-skip → **miss = today's static
+  prompt, no regression.** JSON/JSONL; vector store + v2 abstract templates = BACKLOG.
 
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
@@ -105,25 +121,22 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
-- **Tier 5 drill is DONE and recorded (D16).** Tiers 1–5 now LOCKED (D11/D12/D14/D15/D16);
-  only Tier 6 has a D13 "Decided (direction)" block left.
-- **NEXT: drill into Tier 6 (Long Memory — the LAST tier)** and lock it, same cadence
-  (discuss → lock → record into mapping + DECISIONS; no coding yet). Anchor against D13's T6
-  "Decided (direction)" block (`code-vs-6tier-mapping.md`): T6 = the **method skeleton / the
-  *verb*** (how to solve a *class* of problem, DB-agnostic) vs T5's navigation (the *noun*:
-  how to read *this* DB) — they compose. **v1 = trajectory-RAG** (retrieve the most-similar
-  past *successful* trajectory, inject as a few-shot worked example); **v2 = abstracted,
-  parameterized plan templates** keyed by problem-type (the Enhancer's hardest LLM-as-judge
-  job, deferred). Risk to resolve: un-abstracted T6 collapses into a SQL cache (v1 mitigates
-  by being explicitly few-shot). Likely D6 questions to settle: what "problem-type" key to
-  retrieve on, success-detection from Tier 2, T6/T2 boundary (template vs raw trace), and the
-  `LongMemory` interface surface. After T6, **all six tiers are locked** → design phase done,
-  coding (B3/B4) is the natural next move.
-- Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier
-  gap analysis) + `BACKLOG.md` (deferred items).
-- **Coding is unblocked when the user wants it** (not the immediate path): B3 (scaffold
-  `services/memory/` + `ENABLE_MEMORY_*` flags, default off) and B4 (Tier 2 episodic log —
-  first coding goal, design locked). Both need user go-ahead (workflow step 3).
+- **Tier 6 drill is DONE and recorded (D17).** **ALL SIX TIERS LOCKED** (D11/D12/D14/D15/D16/D17).
+  The tier-by-tier design phase is **complete** — every tier has a spec + a DECISIONS lock + a
+  "Decided" block in `code-vs-6tier-mapping.md`.
+- **NEXT: coding — needs user go-ahead (workflow step 3).** Natural first move per the mapping's
+  build order (T2 = the foundation everything feeds on):
+  - **B3** — scaffold `services/memory/` package + `ENABLE_MEMORY_*` config flags (default OFF),
+    additive/feature-flagged per CLAUDE.md ownership boundaries.
+  - **B4** — implement **Tier 2 episodic log** (first coding goal; design locked in D12, spec
+    `tier2-episodic-log-design.md`) — JSONL behind `EpisodicLog`, dumb-capture, gitignored store.
+  Both need the user to approve a TASKS.md breakdown before sub-agents dispatch.
+- **Open non-coding item still pending:** user to **email the upstream author** re: `DocumentDB`
+  local/global reuse (D13/D15) — draft at `docs_memory/_email-draft-upstream-author.md`. Its
+  answer only affects T4's *authored* backend (hidden behind `OrgMemory`), so it does **not**
+  block B3/B4.
+- Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier gap
+  analysis + build order) + `BACKLOG.md` (deferred items) + each tier's `tierN-*-design.md` spec.
 
 ## How to resume (minimal prompt)
 Type **`繼續`** (or `resume`). `CLAUDE.md` instructs me to read this file and pick up the
