@@ -4,8 +4,8 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-10 (Tier 4 internal design LOCKED as D15; backfilled missing
-> Tier 2 spec file `tier2-episodic-log-design.md`). Next = Tier 5.
+> **Last updated:** 2026-06-11 (Tier 5 internal design LOCKED as D16; spec
+> `tier5-schema-graph-design.md`). Next = Tier 6 (last tier).
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -13,8 +13,8 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 
 ## Two work threads in flight
 1. **Understanding (HTML docs)** — finishing `docs_understanding/` HTML. Goal **G1** in TASKS.md.
-2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–4 LOCKED
-   (D11/D12/D14/D15); **current focus = Tier 5**.
+2. **Design (6-tier memory)** — defining the memory tier by tier. Tiers 1–5 LOCKED
+   (D11/D12/D14/D15/D16); **current focus = Tier 6 (last tier)**.
 
 ## Done recently
 - PR-safety guardrails + `gh` installed/authed, default repo = fork (S0.1–S0.4 ✅).
@@ -79,6 +79,22 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   authored=retrieval). **MVP = single inst + single dept w/ a small REAL authored set; NEAR-
   TERM (not backlog) = ≥2 departments** to prove "same question, different dept → each
   converges to its own correct latent intent."
+- **Tier 5 design LOCKED (DECISIONS D16)** — spec `tier5-schema-graph-design.md`. Persistent
+  **property graph** patching messy EHR schemas. **Data model**: `table`+`column` nodes,
+  `column` hangs off table via `contains`, **join edges connect two column nodes**. **Payload**:
+  edges = `utility_score`/success+fail counts/`negative_constraints[]`/`last_seen`; column nodes
+  = value/temporal caveats; every learned item carries `source_episode` = **Tier 2 id as a SOFT
+  back-pointer** (self-contained lessons → **no retention lock on T2**, decoupled from the
+  delete/keep decision). **`SchemaGraph` iface**: read (RO) `get_join_path`/`get_column_caveats`;
+  write (**Enhancer only**) `reinforce`/`penalize`/`annotate`; permission = two different clients.
+  **Read = graph-first, heuristic fallback** (graph hit → validated edge + inject caveats; miss →
+  today's `join_paths` heuristic, no regression; corrected joins written back). **Organic growth,
+  NO pre-built FK expansion** (declared FK = intent not guarantee; dirty EHR joins fail). Node key
+  = fully-qualified `schema.table.column`; rename → orphaned node (relearn from zero) → BACKLOG.
+  **T4/T5 boundary sharpened**: authored = org norms/definitions only, **all empirical join
+  knowledge = T5 evidence-first**. NetworkX/JSON; Neo4j = deferred swap.
+  - **New lean (not locked):** user leaning toward **T2 = no-delete** (traceability/explainability)
+    → would downgrade D12 `processed_at` to a pure progress marker. Parked in BACKLOG; T5 unaffected.
 
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
@@ -89,19 +105,20 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
-- **Tier 4 drill is DONE and recorded (D15).** Tiers 1–4 now LOCKED (D11/D12/D14/D15); Tiers
-  5–6 have D13 "Decided (direction)" blocks.
-- **NEXT: drill into Tier 5 (Schema Routing Memory — CRITICAL)** and lock it, same cadence
-  (discuss → lock → record into mapping + DECISIONS; no coding yet). T5 = a persistent
-  **property graph** that patches messy EHR schemas: nodes = tables/columns (payload =
-  value/temporal caveats), edges = **validated join paths** (payload = empirical utility +
-  negative constraints / failure lessons). Anchor against D13's T5 "Decided (direction)"
-  block (`code-vs-6tier-mapping.md`): NetworkX/JSON v1 behind a `SchemaGraph` interface,
-  grown by **learn-by-correction** via Tier 2 → Enhancer; Neo4j = deferred swap. Boundary
-  vs T4 (D13): T4 = *meaning / institutional rules*; T5 = *physical DB navigation* — route a
-  correction by its subject. Note the two existing-but-wrong code analogues to disambiguate:
-  `join_paths` (throwaway heuristic string) and `ProvenanceGraph` (per-session op-level DAG)
-  — neither is T5 (see mapping Tier 5 section).
+- **Tier 5 drill is DONE and recorded (D16).** Tiers 1–5 now LOCKED (D11/D12/D14/D15/D16);
+  only Tier 6 has a D13 "Decided (direction)" block left.
+- **NEXT: drill into Tier 6 (Long Memory — the LAST tier)** and lock it, same cadence
+  (discuss → lock → record into mapping + DECISIONS; no coding yet). Anchor against D13's T6
+  "Decided (direction)" block (`code-vs-6tier-mapping.md`): T6 = the **method skeleton / the
+  *verb*** (how to solve a *class* of problem, DB-agnostic) vs T5's navigation (the *noun*:
+  how to read *this* DB) — they compose. **v1 = trajectory-RAG** (retrieve the most-similar
+  past *successful* trajectory, inject as a few-shot worked example); **v2 = abstracted,
+  parameterized plan templates** keyed by problem-type (the Enhancer's hardest LLM-as-judge
+  job, deferred). Risk to resolve: un-abstracted T6 collapses into a SQL cache (v1 mitigates
+  by being explicitly few-shot). Likely D6 questions to settle: what "problem-type" key to
+  retrieve on, success-detection from Tier 2, T6/T2 boundary (template vs raw trace), and the
+  `LongMemory` interface surface. After T6, **all six tiers are locked** → design phase done,
+  coding (B3/B4) is the natural next move.
 - Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier
   gap analysis) + `BACKLOG.md` (deferred items).
 - **Coding is unblocked when the user wants it** (not the immediate path): B3 (scaffold

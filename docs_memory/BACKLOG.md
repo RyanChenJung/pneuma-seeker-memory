@@ -54,5 +54,27 @@
   emergent soft clusters (shared with the T3 "user-similarity space" idea) deferred to the
   multi-department / multi-user phase. *(D14, D15)*
 
-## Tier 5–6 (noted, drill later)
-- (none beyond the cross-tier vector/graph backend item above — drill T5/T6 to populate)
+## Tier 5 — Schema Routing Memory (Schema Graph)
+
+- **Schema-drift / table-rename node aliasing** — v1 keys nodes by fully-qualified
+  `schema.table.column`; a rename changes the key and **orphans** the old node (accumulated
+  join knowledge stranded; graph relearns from zero). Re-keying / alias migration for renamed
+  tables/columns deferred. Distinct from T3's *person* alias map — this is a *table* alias.
+  *(D16)*
+- **Neo4j / graph-DB backend** — v1 = NetworkX + JSON behind the `SchemaGraph` interface;
+  swap to a real graph DB is a deferred backend swap (also covered by the cross-tier vector/
+  graph item above). *(D13, D16)*
+- **Authored-FK seeding — rejected by design, not deferred:** T5 is evidence-first; a declared
+  FK in an authored data dictionary never auto-seeds T5. Listed here only so it is not
+  re-litigated. *(D16)*
+
+## Tier 6 (noted, drill later)
+- (none beyond the cross-tier vector/graph backend item above — drill T6 to populate)
+
+## Cross-tier — open lean
+
+- **Tier 2 = no-delete (retention policy)** — as of 2026-06-11 the user is *leaning* toward
+  making the episodic log **never delete** (traceability / explainability matter across many
+  tiers), which would downgrade D12's `processed_at` from a GC watermark to a pure progress
+  marker. **Lean, not locked** — revisit when finalising T2 retention. (Supersedes, if
+  adopted, the "Episodic-log cleanup / retention" item above.) *(D16; touches D12)*

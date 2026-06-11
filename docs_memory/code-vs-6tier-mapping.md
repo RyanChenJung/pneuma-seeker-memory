@@ -289,6 +289,36 @@ effort tier.
   into an edge or node annotation. No pre-built templates; the graph grows from usage, and
   only join paths actually used/corrected get reinforced (so we never pre-map a giant schema).
 
+**Decided (internal) — 2026-06-11 (DECISIONS D16, LOCKED). Full spec:
+`tier5-schema-graph-design.md`.**
+- **Data model:** two node types (`table`, `column`); `column` hangs off `table` via a
+  `contains` edge; **join edges connect two `column` nodes** (joins are column-level). Node
+  payload = value/temporal caveats; edge payload = join utility + failure lessons.
+- **Payload:** edge = `utility_score`, `success_count`/`fail_count`, `negative_constraints[]`,
+  `last_seen`; column node = `value_caveats[]` / `temporal_caveats[]`. Every learned item
+  carries `source_episode` = a **Tier 2 episode id as a SOFT back-pointer** (audit/reversibility,
+  not a hard FK); distilled lessons are self-contained → **no retention lock on T2**, decoupled
+  from the T2 delete/keep decision. *(User leaning toward T2 = no-delete as of 2026-06-11 — a
+  lean, not locked; T5 unaffected either way.)*
+- **`SchemaGraph` interface:** read (frontline RO) `get_join_path` / `get_column_caveats`;
+  write (**Enhancer only**) `reinforce_edge` / `penalize_edge(…, lesson, source_episode)` /
+  `annotate_node(…, caveat, source_episode)`. Permission = **two different clients** (RO vs
+  write), not self-discipline — realises "only Enhancer writes persistent memory".
+- **Read path = graph-first, heuristic fallback:** graph is a high-confidence empirical cache
+  in front of the existing dumb `join_paths` heuristic. Hit → use validated edge + inject its
+  caveats; miss/cold → fall back to today's heuristic (**no regression**); corrected heuristic
+  joins get written back → graph hits next time.
+- **Organic growth, no pre-build:** do **NOT** auto-expand declared FKs (a declared FK is
+  intent, not a guarantee — dirty EHR joins routinely fail). Only joins actually used/corrected
+  get edges; negative constraints distilled from **Tier 2 failure steps**.
+- **Node keying:** v1 = fully-qualified `schema.table.column`; cross-session persistence by key
+  match. Table/column rename → old node **orphaned** (relearn from zero; degraded, never wrong);
+  schema-drift aliasing deferred → BACKLOG (a *table* alias, distinct from T3's *person* alias).
+- **T4/T5 boundary sharpened:** authored (T4) = authoritative org norms/definitions only; **all
+  empirical join knowledge = T5, evidence-first**; a declared FK in an authored data dictionary
+  does **not** seed T5.
+- **Backend:** NetworkX + JSON behind `SchemaGraph`, gitignored; Neo4j = deferred swap.
+
 ---
 
 ## Tier 6 — Long Memory  🔴

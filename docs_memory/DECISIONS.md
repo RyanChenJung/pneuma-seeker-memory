@@ -320,3 +320,58 @@ owner/authority/subject differ, shared overlay-injection mechanism only). Locked
   (`indices/kb/*`, BM25 → vector deferred; possibly the reused `DocumentDB`), learned =
   structured overlay file (gitignored local, D11/D12 pattern). Vector backend + DocumentDB-
   reuse = deferred backend swaps (BACKLOG).
+
+## D16 — Tier 5 (Schema Routing Memory / Schema Graph) internal design LOCKED
+Drill-down done 2026-06-11. Full spec: `tier5-schema-graph-design.md`. Anchored on D13
+(T5 = property graph, NetworkX/JSON behind `SchemaGraph`, learn-by-correction, T4/T5 = meaning
+vs physical-navigation boundary) and D11/D12 (interface-first, gitignored store, dumb-first).
+Locked points (D5-1 … D5-6 confirmed with user):
+
+- **D5-1 — Data model.** Two node types (`table`, `column`); `column` attaches to `table` via
+  a `contains` edge; **join edges connect two `column` nodes** (joins are column-level). Node
+  payload = value/temporal caveats; edge payload = join utility + failure lessons.
+- **D5-2 — Payload + provenance.** Edge: `utility_score`, `success_count`/`fail_count`,
+  `negative_constraints[]` (`{lesson, source_episode}`), `last_seen`. Column node:
+  `value_caveats[]` / `temporal_caveats[]` (`{caveat, source_episode}`). Every learned item
+  carries a **`source_episode` = a Tier 2 episode id** as a **SOFT back-pointer** (audit /
+  explainability / reversibility), **not** a hard FK. Distilled lessons are self-contained
+  ("Provenance referenced, not reused", D12) → T5 imposes **no retention lock on T2**; if T2
+  GCs an episode the lesson still works, the id may dangle (acceptable). **This design is
+  deliberately decoupled from the T2 retention decision** and holds either way.
+  - **Lean (not locked) 2026-06-11:** user is now leaning toward **T2 = no-delete** (for
+    traceability / explainability across tiers). If adopted, D12's `processed_at` downgrades
+    from a GC watermark to a pure progress marker. Recorded as a lean; T5 unaffected either way.
+- **D5-3 — `SchemaGraph` interface + permission model.** Read (frontline, read-only):
+  `get_join_path(table_a, table_b)` → ranked paths w/ utility + negative constraints;
+  `get_column_caveats(table, column)`. Write (**Enhancer only**): `reinforce_edge`,
+  `penalize_edge(…, lesson, source_episode)`, `annotate_node(…, caveat, source_episode)`.
+  Permission enforced by **handing out two different clients** (frontline read-only vs Enhancer
+  write) — not self-discipline. Realises the mapping's "only Enhancer writes persistent memory".
+- **D5-4 — Read path = graph-first, heuristic fallback.** Graph is a high-confidence empirical
+  cache **in front of** the existing dumb `join_paths` heuristic. Graph hit → use validated
+  edge + inject its caveats into the Materializer prompt. Graph miss / cold start → fall back to
+  today's Damerau–Levenshtein heuristic string (**no regression, identical to today**). Used
+  heuristic joins, once corrected, are written back → become graph hits next time.
+- **D5-5 — Organic growth, no pre-build.** Do **NOT** auto-expand all declared foreign keys
+  (FKs) from the schema — a declared FK is intent, not a guarantee, and in dirty EHR data
+  declared joins routinely fail (type/format mismatch, FK constraints declared-but-disabled →
+  referential drift, multi-source name collisions, time-encoding drift). Only joins **actually
+  used / corrected** get an edge; never pre-map a giant schema; never trust schema claims over
+  evidence. Negative constraints are distilled from **Tier 2 failure steps** (a primary payoff
+  of T2 storing failures).
+- **D5-6 — Node identity / keying.** v1 key = **fully-qualified name** `schema.table.column`;
+  same key across sessions → same node grows (the basis of cross-session persistence). **Known
+  limitation:** a table/column rename changes the key → the old node is **orphaned** (knowledge
+  stranded, graph relearns from zero — degraded, never wrong). Schema-drift / table-rename
+  aliasing deferred → BACKLOG (distinct from T3's *person* alias map; this is a *table* alias).
+
+- **Refines D13's T4/T5 boundary (sharper).** Route a correction by its **subject**. T4's
+  *authored* head holds only **authoritative org norms / definitions** (regulation-class, with a
+  backer); **all empirical operational join knowledge is T5, evidence-first** — because authored
+  content is human-uploaded, rarely cleaned, and goes stale. A declared FK in an authored data
+  dictionary therefore **does NOT seed T5**.
+- **Reaffirms T2 = shared substrate.** The same T2 trajectory (incl. failures) feeds multiple
+  tiers; each tier's Enhancer pass takes its own slice (T5 = join/schema-navigation; T3 = format
+  prefs; T4-learned = org conventions).
+- **v1 backend:** NetworkX + JSON persistence behind the `SchemaGraph` interface; gitignored
+  local store; Neo4j / graph DB = deferred backend swap (BACKLOG).
