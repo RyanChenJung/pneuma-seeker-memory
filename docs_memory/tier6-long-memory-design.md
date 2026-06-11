@@ -41,9 +41,20 @@ What we match the incoming NL question against to fetch exemplars.
   may drop it in favour of the structured `problem_type`.
 
 ## Entry shape + `support` (D6-2)
-Two entry **types** (sign), each carrying a `support` **score** (magnitude). Sign and magnitude
-are **never fused** — the score says *how important / confident*, the type says *emulate vs
-avoid*.
+
+**Canonical entry = the quadruplet** (faithful to `system_architecture.md` §5, renamed where we
+diverged): `(clinical_intent, associated_experience, support, last_seen)`.
+
+| Quadruplet element | T6 field | Notes |
+|--------------------|----------|-------|
+| clinical intent | retrieval key | v1 = NL-question embedding + operator-sequence skeleton; v2 = `problem_type` |
+| associated experience | the exemplar / anti-pattern body | the actual worked example or "don't do this" lesson |
+| (empirical) utility score | **`support`** | recurrence-weighted evidential weight (see below + Glossary) |
+| timestamp | **`last_seen`** | recency; the hook a future dormancy-decay / capacity-purge uses (BACKLOG) |
+
+Plus the soft `source_episode` back-pointer (below). Two entry **types** (sign), each carrying a
+`support` **score** (magnitude). Sign and magnitude are **never fused** — the score says *how
+important / confident*, the type says *emulate vs avoid*.
 
 - **`positive exemplar`** — a cleaned successful worked example, for few-shot *imitation*.
 - **`negative anti-pattern`** — a distilled "don't do this" calibration lesson (mirrors T5's
@@ -54,10 +65,13 @@ avoid*.
 - Computed by the Enhancer **at distillation time**, from how often the lesson recurs across
   Tier 2. Measured on the **source side (T2)**, so it is free of the retrieval feedback loop
   that poisons a read-side usage-count (the retriever inflating its own favourites).
-- **Causal `utility_score` is deliberately dropped:** crediting one exemplar among several
+- **Causal credit-attribution is deliberately dropped:** crediting one exemplar among several
   co-injected items (+ T5 caveats + T4 facts) for a success is not cleanly solvable, and a fake
-  score is worse than none. Revisit only if a clean attribution method appears (single-template
-  injection / A-B) → BACKLOG.
+  score is worse than none. So `support` here is a recurrence prior, **not** a measured utility.
+  (T5 calls its edge weight `support` too, but computes it from clean per-edge success/fail — the
+  same word, the same "evidence backing the item", different per-tier computation; see Glossary.)
+  Revisit a causal score only if a clean attribution method appears (single-template injection /
+  A-B) → BACKLOG.
 - **Known blind spot:** frequency under-weights the **rare-but-critical** entry (a method used
   once that averted a disaster scores low). Same long-tail blind spot family as a usage-count,
   moved to the distillation side; accepted for v1 → BACKLOG.
@@ -145,9 +159,9 @@ principle as T5's heuristic fallback).
 ## v1 spec (minimal — simplicity first)
 | Aspect | Design |
 |--------|--------|
-| Unit | a method skeleton: `positive exemplar` or `negative anti-pattern` |
+| Unit | a method skeleton, quadruplet `(clinical_intent, associated_experience, support, last_seen)` + `source_episode`; type ∈ {`positive exemplar`, `negative anti-pattern`} |
 | Retrieval key | **v1 = Option C**: NL-question embedding + cheap operator-sequence skeleton from T2; `problem_type` field reserved (empty) for **v2 = Option B** (structured signature) |
-| Score | **`support`** = recurrence-weighted importance (Enhancer, source-side); **no** causal `utility_score` |
+| Score | **`support`** = recurrence-weighted evidential weight (Enhancer, source-side); **no** causal credit-attribution; `last_seen` for recency/decay-hook |
 | Sign vs magnitude | type = emulate/avoid; `support` = importance — never fused |
 | Backend | JSON/JSONL behind a **`LongMemory` interface**; gitignored local store; **vector/embedding store = deferred backend swap** |
 | Read | `get_exemplars` / `get_anti_patterns`; inject-or-skip into planning prompt; **no regression on miss** |

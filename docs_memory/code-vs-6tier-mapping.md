@@ -18,7 +18,7 @@
 | 2 — Episodic state log | Append-only full trace: thoughts, tool calls, SQL outcomes, **failures**, feedback | `chat_history` + `provenance_*` tables | 🔴 |
 | 3 — User memory | Persona/constraints/habits, vector store | *(none)* | 🔴 |
 | 4 — Organization memory | Clinical defs/guidelines, vector + doc store | `DocumentDB` retriever + `Knowledge` type + `indices/kb/{local,global}` | 🟡 |
-| 5 — Schema routing memory | Persistent property graph: tables/cols as nodes, **validated join paths** as edges with utility scores + negative constraints | `join_paths` (string) and `ProvenanceGraph` (op DAG) | 🔴 |
+| 5 — Schema routing memory | Persistent property graph: tables/cols as nodes, **validated join paths** as edges with `support` (evidential weight) + negative constraints | `join_paths` (string) and `ProvenanceGraph` (op DAG) | 🔴 |
 | 6 — Long memory | Abstract procedural skills, few-shot template store | *(none; static prompt factories)* | 🔴 |
 | Agents | Conductor/Retriever/Materializer/**Enhancer** with tiered R/W permissions | First three exist; no Enhancer, no permission model | 🟡 |
 
@@ -77,7 +77,8 @@ structure — Claude to propose).
 
 **Spec:** append-only **raw recording of the entire session** — user prompts,
 *Conductor's internal thoughts (ReAct trace)*, *tool calls*, *SQL execution outcomes
-(success **and** errors)*, *user feedback*. JSON/JSONL. The Enhancer's input.
+(success **and** errors)*. JSON/JSONL. The Enhancer's input. *(The brief's "user feedback"
+field is dropped — no explicit channel; inferred from the next turn, D17.)*
 
 **Code — what actually gets persisted (`PneumaDB.persist_session`):**
 - `chat_history`: only `(role, content)` for the **user input** and the **final
@@ -107,22 +108,9 @@ reasoning.
 **Attach:** new append-only episodic store (ours), written by a hook inside the
 existing ReAct loops (Tier 🟡 seam edits in `conductor/main.py` & `materializer/main.py`).
 
-**Decided (v1) — LOCKED 2026-06-10 (DECISIONS D12):**
-- **Dumb capture, zero extra LLM** at write time (Pneuma latency is already high). Tier 2
-  just serializes the ReAct trajectory (already in `llm_messages`) before it's GC'd; all
-  condensing is the async Enhancer's job. Contrast Tier 1, which is LLM-*curated*.
-- **Own store** at `services/memory/_episodic/` (gitignored), **not** in upstream `ws.db`
-  — because `persist_session` is delete-and-replace (`db/main.py:592-595`), which clashes
-  with append-only, and ws.db is upstream-owned + per-conversation.
-- **Backend:** v1 = **JSONL** behind an `EpisodicLog` interface (`append`/`iter`/
-  `mark_processed`). **Upgrade path = DuckDB table** (reuse existing stack; can attach
-  Postgres) — Conductor unchanged.
-- **Granularity:** **step-level full trajectory** incl. failures + raw CoT (free on the LLM
-  axis). Turn envelope + step-event stream; field set chosen by backward-reasoning from what
-  Tiers 3/4/5/6 need the Enhancer to distill.
-- **Lifecycle:** append-only, survives session, `processed_at` watermark; **cleanup policy
-  deferred** (keep-forever vs TTL decided later, doesn't block schema).
-- Provenance graph is **referenced, not reused** as Tier 2 (it's a success-only DAG).
+**Internal design — LOCKED (DECISIONS D12; full spec `tier2-episodic-log-design.md`).** The
+authoritative design lives in those two; not duplicated here, to keep a single source of
+truth. This section keeps only the code↔tier gap above (Spec / Code / Attach).
 
 ---
 
@@ -139,31 +127,9 @@ history). There is no user profile, no per-user persistent store, no semantic re
 summary into the Conductor env-state prompt. Write path: Enhancer derives habits from the
 episodic log keyed by `user_id` (which already flows through every layer).
 
-**Decided (direction) — 2026-06-10 (DECISIONS D13):**
-- **MVP = single-user.** Build for one user first, but keep `user_id` as the scope key and
-  wrap the store in an interface, so the multi-user upgrade (a company DB keyed by
-  `user_id`) is a **backend swap, not a redesign**. Same interface-first pattern as D11/D12.
-
-**LOCKED v1 — 2026-06-10 (DECISIONS D14; full spec `tier3-user-memory-design.md`):**
-- **Two content sources:** (A) **Provisioned** = declared identity (role/grade/department/
-  clinical/location), v1 a **manually-filled file** (HR feed deferred); (B) **Learned** =
-  Enhancer-distilled from this user's Tier 2 (alias map, focus range, standing corrections,
-  format prefs).
-- **Focus range = derived, not typed** — Enhancer tallies a frequency distribution over the
-  schema elements/concepts the user touches (rejected a hand-typed free-text line as
-  unscalable). This is the single-user **seed** of the BACKLOG "user-similarity space /
-  emergent departments" idea (which refines D13: org scope may be soft overlapping clusters,
-  not a hard hierarchy; `department` label = weak prior only).
-- **Authorization deferred** (→ BACKLOG): T3 stores where the user *focuses*, never what
-  they're *permitted* to see; enforcement stays at the execution layer.
-- **T3 ↔ T4 corrected:** two distinct tiers (owner/authority/subject differ); they only
-  share the overlay *injection* mechanism (`institution → department → user`), NOT "T3 ⊂ T4".
-  The T1→T3→T4 promotion ladder applies only to generalizable learned conventions, gated by
-  content-kind.
-- **Read:** inject whole (small) block into Conductor env-state, no runtime summarization.
-  **Write:** async Enhancer, recurrence threshold, rewritable living doc (last-write-wins +
-  `last_seen`). **Backend:** one file/user behind a `UserMemory` interface; vector + multi-
-  user = deferred swaps.
+**Internal design — LOCKED (DECISIONS D13 direction → D14 lock; full spec
+`tier3-user-memory-design.md`).** The authoritative design lives in those; not duplicated
+here, to keep a single source of truth. This section keeps only the code↔tier gap above.
 
 ---
 
@@ -192,46 +158,12 @@ provides "contextual priors."
 re-enable the `DOCUMENT_DB` action behind a flag, and (optionally) back it with vectors.
 Most of the plumbing already exists.
 
-**Decided (direction) — 2026-06-10 (DECISIONS D13):**
-- **Content filter = actionability, not breadth.** Store specific, groundable facts
-  ("in Admissions, 'matriculant' means X"), not vague descriptions ("UChicago is a
-  university"). A broad org scope is fine; vague content is not.
-- **Scope is a HIERARCHY, not flat:** `User → Department (local-org) → Institution
-  (global-org)`, retrieved as a **layered overlay** (Claude Code's CLAUDE.md global+project
-  model: broad base, narrower scope augments/overrides). Heterogeneous departments ⇒ the
-  institution layer is naturally *thin*; actionable mass concentrates at the department
-  layer automatically.
-- **Scalability (resolves the "redesign per department?" worry): NO.** Build the *mechanism*
-  (scope hierarchy + Enhancer promotion + overlay retrieval) **once**; each scope's *content*
-  is **auto-learned** by the Enhancer from its users' Tier 2 logs. New department = new
-  auto-filled bucket, zero redesign. Two-stage convergence: commonality within a department
-  (→ local-org), then promote across departments (local-org → global-org) when a lesson
-  recurs; too-specific lessons stay local. Same machinery gives the user→org convergence
-  that lets a new user benefit from accumulated shared knowledge on day 1.
-- **OPEN (pending email to upstream author):** whether to **reuse the author's `DocumentDB`/
-  `Knowledge` (local/global) design and attach our memory interface there** (working
-  assumption: local≈Tier 3, global≈Tier 4) vs build our own. Don't rebuild the wheel until
-  we hear back.
-
-**LOCKED (internal design) — 2026-06-10 (DECISIONS D15), full spec `tier4-org-memory-design.md`:**
-- **Two-headed tier.** (A) **Authored** authoritative knowledge base (externally ingested,
-  NOT from Tier 2 / Enhancer — the heavy main body, the reason `DocumentDB` exists) + (B)
-  **Learned** org conventions (Enhancer-distilled from *aggregated* Tier 2). Refines D13's
-  "all tiers Enhancer-written from T2": T4's authored side breaks that by design.
-- **Authority/trust = T4-unique.** Authored = authoritative & **always wins**; learned =
-  heuristic, may only **supplement, never override** authored. Both injected labelled with
-  provenance + trust level. Versioning/sign-off = thin metadata v1; full governance → BACKLOG.
-- **Promotion ladder: only (B) learned promotes** (T1→T3→T4-dept→T4-institution), gated by
-  recurrence N + content-kind. (A) authored never promotes (already authoritatively placed).
-- **Read = split by head, one facade.** Learned → **inject whole** (joins D14's
-  `institution→department→user` overlay); authored → **retrieve top-k** (Retriever → Tier 1
-  buffer). One **`OrgMemory` facade**: `get_org_overlay(scope)` + `search_authored(query,
-  scope)`, `scope=(institution, department)`. Authored backend hidden behind facade (our own
-  vs reused `DocumentDB` = the OPEN email question; interface-first → not blocking).
-- **MVP scope = single institution + single department; NEAR-TERM (not backlog) = ≥2
-  departments** to test the core claim: different departments, same question → each converges
-  to its own correct latent intent. MVP **does seed a small real authored set** (differing
-  per-department definitions are the likely convergence variable).
+**Internal design — LOCKED (DECISIONS D13 direction → D15 lock; full spec
+`tier4-org-memory-design.md`).** The authoritative design lives in those; not duplicated
+here, to keep a single source of truth. Two-headed tier (authored authoritative KB +
+learned org conventions); the still-OPEN `DocumentDB`-reuse question is parked in
+`BACKLOG.md`. This section keeps only the code↔tier gap above (note the dormant `DocumentDB`
+scaffold is the lowest-effort attach point).
 
 ---
 
@@ -276,48 +208,12 @@ the trace → reinforce/penalize an edge; failures → append a negative constra
 the Materializer consults it before choosing joins. This is the highest-value, highest-
 effort tier.
 
-**Decided (direction) — 2026-06-10 (DECISIONS D13):**
-- **Property graph is the right backbone** (joins *are* a graph; path queries beat a flat
-  rule list / vector store). Nodes = tables/columns; edges = validated join paths carrying
-  `utility_score` + `associated_experience` (incl. negative constraints).
-- **Node annotations are first-class too, not only edges:** column-level value/temporal
-  caveats ("pre-2000 vs post-2000 encoding differs") live on **nodes**, not on joins.
-- **Infra (same pattern as D11/D12):** v1 = **NetworkX + JSON persistence** behind a
-  `SchemaGraph` interface in `services/memory/` (gitignored); **NOT** Neo4j yet (too heavy).
-  Upgrade path = a real graph DB, backend swap only.
-- **Learn-by-correction loop:** user corrections land in Tier 2 → the Enhancer distills them
-  into an edge or node annotation. No pre-built templates; the graph grows from usage, and
-  only join paths actually used/corrected get reinforced (so we never pre-map a giant schema).
-
-**Decided (internal) — 2026-06-11 (DECISIONS D16, LOCKED). Full spec:
-`tier5-schema-graph-design.md`.**
-- **Data model:** two node types (`table`, `column`); `column` hangs off `table` via a
-  `contains` edge; **join edges connect two `column` nodes** (joins are column-level). Node
-  payload = value/temporal caveats; edge payload = join utility + failure lessons.
-- **Payload:** edge = `utility_score`, `success_count`/`fail_count`, `negative_constraints[]`,
-  `last_seen`; column node = `value_caveats[]` / `temporal_caveats[]`. Every learned item
-  carries `source_episode` = a **Tier 2 episode id as a SOFT back-pointer** (audit/reversibility,
-  not a hard FK); distilled lessons are self-contained → **no retention lock on T2**, decoupled
-  from the T2 delete/keep decision. *(User leaning toward T2 = no-delete as of 2026-06-11 — a
-  lean, not locked; T5 unaffected either way.)*
-- **`SchemaGraph` interface:** read (frontline RO) `get_join_path` / `get_column_caveats`;
-  write (**Enhancer only**) `reinforce_edge` / `penalize_edge(…, lesson, source_episode)` /
-  `annotate_node(…, caveat, source_episode)`. Permission = **two different clients** (RO vs
-  write), not self-discipline — realises "only Enhancer writes persistent memory".
-- **Read path = graph-first, heuristic fallback:** graph is a high-confidence empirical cache
-  in front of the existing dumb `join_paths` heuristic. Hit → use validated edge + inject its
-  caveats; miss/cold → fall back to today's heuristic (**no regression**); corrected heuristic
-  joins get written back → graph hits next time.
-- **Organic growth, no pre-build:** do **NOT** auto-expand declared FKs (a declared FK is
-  intent, not a guarantee — dirty EHR joins routinely fail). Only joins actually used/corrected
-  get edges; negative constraints distilled from **Tier 2 failure steps**.
-- **Node keying:** v1 = fully-qualified `schema.table.column`; cross-session persistence by key
-  match. Table/column rename → old node **orphaned** (relearn from zero; degraded, never wrong);
-  schema-drift aliasing deferred → BACKLOG (a *table* alias, distinct from T3's *person* alias).
-- **T4/T5 boundary sharpened:** authored (T4) = authoritative org norms/definitions only; **all
-  empirical join knowledge = T5, evidence-first**; a declared FK in an authored data dictionary
-  does **not** seed T5.
-- **Backend:** NetworkX + JSON behind `SchemaGraph`, gitignored; Neo4j = deferred swap.
+**Internal design — LOCKED (DECISIONS D13 direction → D16 lock; full spec
+`tier5-schema-graph-design.md`).** The authoritative design lives in those; not duplicated
+here, to keep a single source of truth. Property graph (table/column nodes, column-level
+join edges) behind a `SchemaGraph` interface, graph-first/heuristic-fallback read, organic
+growth (no pre-built FK expansion), edge weight = `support` (see Glossary). This section
+keeps only the code↔tier gap above (`join_paths` and `ProvenanceGraph` are **not** T5).
 
 ---
 
@@ -334,40 +230,13 @@ emits reusable Python for one result, but it isn't abstracted into a skill or re
 trajectories (from Tier 2) into templates; read path injects top-k exemplars into the
 Conductor/Materializer planning prompts.
 
-**Decided (direction) — 2026-06-10 (DECISIONS D13):**
-- **Verb vs noun split from Tier 5:** Tier 6 = the *method skeleton* (how to solve a
-  *class* of problem, DB-agnostic, e.g. "cohort → index date → outcome window → aggregate");
-  Tier 5 = the *navigation* (how to read *this* DB). They compose: T6 supplies the plan
-  shape, T5 grounds it to physical tables.
-- **v1 = trajectory-RAG** (retrieve the most-similar past *successful* trajectory, inject as
-  a few-shot worked example) — concrete, needs no perfect abstraction, still useful.
-- **v2 = abstracted, parameterized plan templates** keyed by problem-type (the spec's
-  "abstract procedural skills"). The abstraction is the Enhancer's hardest LLM-as-judge job;
-  deferred so T6 doesn't stall on it.
-- **Risk noted:** if entries aren't abstracted, T6 collapses into a cache of past SQL and
-  adds little over T5+T2. v1 mitigates by being explicitly few-shot, not a query cache.
-
-**Decided (internal design) — 2026-06-11 (DECISIONS D17; spec `tier6-long-memory-design.md`).
-LAST TIER — all six now LOCKED.**
-- **Retrieval key (D6-1):** v1 = **Option C hybrid** — NL-question embedding + a cheap
-  **operator-sequence skeleton** (`join→filter→group-by→aggregate`) read directly from the T2
-  trajectory, no LLM abstraction. `problem_type` field reserved (empty) for **v2 = Option B**
-  (structured signature, the user's true north). Pure NL embedding rejected (collapses to a SQL
-  cache). Operator-sequence kept but provisional (generality unproven).
-- **Entry + `support` (D6-2):** two types — `positive exemplar` / `negative anti-pattern`
-  (sign), each with **`support` = recurrence-weighted importance** (magnitude); never fused.
-  Causal `utility_score` dropped (attribution among co-injected items unsolvable cheaply).
-  Soft `source_episode` → T2, no retention lock.
-- **Success gate (D6-3):** two-stage — heuristic eligibility (terminal state / **ReAct
-  self-overturn** / **implicit user pushback** read from the next turn's tone) → recurrence
-  aggregation + LLM **distill**. LLM reads reactions + distills, **never judges correctness**.
-- **Cross-tier routing (D6-4):** the Enhancer routes a lesson by **subject** (format→T3/T4,
-  reasoning→T6, join→T5); **recurrence = the universal noise filter** across T3/T4/T5/T6.
-- **`LongMemory` iface (D6-5):** read (RO) `get_exemplars`/`get_anti_patterns` inject into the
-  planning prompt; write (Enhancer only) `distill`/`reinforce_support`; two clients. Read =
-  inject-or-skip → **miss = today's static prompt, no regression.**
-- **Backend:** JSON/JSONL behind `LongMemory`, gitignored; vector store + v2 abstract templates
-  deferred (BACKLOG).
+**Internal design — LOCKED (DECISIONS D13 direction → D17 lock; full spec
+`tier6-long-memory-design.md`). LAST TIER — all six now LOCKED.** The authoritative design
+lives in those; not duplicated here, to keep a single source of truth. Method-skeleton store
+(the *verb*, composes with T5's *noun*): trajectory-RAG few-shot exemplars + negative
+anti-patterns, weight = `support` (see Glossary), Enhancer-distilled behind a `LongMemory`
+interface, inject-or-skip read (miss = today's static prompt, no regression). This section
+keeps only the code↔tier gap above (static prompt factories are **not** T6).
 
 ---
 

@@ -28,9 +28,12 @@ Every learned item carries a **provenance back-pointer** = the **Tier 2 episode 
 distilled from (see "Provenance" below).
 
 **`join` edge payload:**
-- `utility_score` — accumulated reliability weight (reinforced on success, penalized on
-  failure).
-- `success_count` / `fail_count`.
+- `support` — accumulated empirical evidential weight (the cross-tier term, see DECISIONS
+  Glossary). **In T5 it is computed from per-edge success/failure**: reinforced on a
+  successful join, penalized on a failed one. (Cf. T6, where `support` is computed from
+  recurrence — same name, same meaning "evidence backing this learned item", different
+  per-tier computation.)
+- `success_count` / `fail_count` — the inputs T5's `support` is computed from.
 - `negative_constraints[]` — human-readable failure lessons, each `{lesson, source_episode}`
   (e.g. *"join on patient_id duplicates rows; use encounter_id"*).
 - `last_seen`.
@@ -46,7 +49,7 @@ frontline agents get a read-only client (only `get_*`); the Enhancer gets the on
 with write methods. Nothing relies on self-discipline.
 
 **Read (frontline, read-only):**
-- `get_join_path(table_a, table_b)` → ranked join paths, each with `utility_score` +
+- `get_join_path(table_a, table_b)` → ranked join paths, each with `support` +
   `negative_constraints`. Used by the Materializer before it picks a join.
 - `get_column_caveats(table, column)` → that column's value/temporal caveats.
 
@@ -117,7 +120,7 @@ T5**; T5 only stores joins it has empirically validated.
 | Scope key | DB schema |
 | Backbone | property graph (nodes = tables/columns, edges = validated joins) |
 | Backend | **NetworkX + JSON persistence** behind a **`SchemaGraph` interface**; gitignored local store; **Neo4j / graph DB = deferred backend swap** |
-| Payload | edges: `utility_score`, `success/fail_count`, `negative_constraints[]`, `last_seen`; nodes: `value_caveats[]`, `temporal_caveats[]`; every item carries `source_episode` |
+| Payload | edges: `support` (from `success/fail_count`), `negative_constraints[]`, `last_seen`; nodes: `value_caveats[]`, `temporal_caveats[]`; every item carries `source_episode` |
 | Read | `get_join_path` / `get_column_caveats`; **graph-first, heuristic fallback**; inject caveats into Materializer prompt; no runtime summarization |
 | Write | Enhancer only (`reinforce`/`penalize`/`annotate`); learn-by-correction from Tier 2; organic growth, no pre-built FK expansion |
 | Permission | two clients: frontline read-only, Enhancer write-only seam |

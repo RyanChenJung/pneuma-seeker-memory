@@ -1,5 +1,27 @@
 # ClinicalPneuma: 6-Tier Memory Architecture Implementation Guide
 
+> ⚠️ **This is the ORIGINAL design brief.** It states the intent and vocabulary, but several
+> specifics have since been refined. **Where this document and `DECISIONS.md` (D11–D17) /
+> the per-tier `tierN-*-design.md` specs disagree, the DECISIONS + specs win** — they are the
+> implementation source of truth. Build from those; read this for the why/intent.
+>
+> **Points already superseded (do NOT implement from this doc):**
+> - **Storage = "Vector Database" for Tiers 3/4/6** → v1 uses plain backends (JSON / JSONL /
+>   Markdown / BM25 / NetworkX); a vector/graph store is a **deferred backend swap** (BACKLOG).
+> - **`Utility Score` (the triplet/quadruplet weight, §5)** → renamed **`support`** (evidential
+>   weight); causal credit-attribution is dropped where it can't be cleanly computed (D16/D17,
+>   Glossary). The Enhancer's "candidate memory" is a **quadruplet** `(clinical intent,
+>   associated experience, support, last_seen)`.
+> - **§5 Enhancer "LLM-as-a-judge" judging correctness + "Micro A/B Validation"** → v1 LLM only
+>   **reads user reactions + distills**, never judges answer-correctness from scratch; A/B is
+>   **deferred** (D17, BACKLOG).
+> - **§5.1 Trigger via explicit `R_user` reward** + the **"user feedback" field** in the Tier 2
+>   record → there is **no explicit feedback channel**; satisfaction is inferred from the next
+>   turn's tone by the Enhancer (D17).
+> - **§5.5 "decay Utility Score / purge idle"** → persistent-tier retention (dormancy-decay +
+>   capacity-purge on `support`/`last_seen`) is **deferred** (BACKLOG); distinct from the Tier 2
+>   no-delete lean.
+
 ## 1. Project Overview & Objective
 
 You are tasked with implementing the core memory subsystem for **ClinicalPneuma**, an self-evolving multi-agent framework designed for clinical EHR analytics.

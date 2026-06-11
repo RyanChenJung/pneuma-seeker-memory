@@ -15,6 +15,13 @@
   upgrade path = a DuckDB table. *(D12)*
 - **Episodic-log cleanup / retention** — `processed_at` watermark exists but actual GC of
   consumed episodes is deferred. *(D12)*
+- **Persistent-tier retention (dormancy-decay + capacity-purge)** — `system_architecture.md`
+  §5.5's "decay Utility Score / purge idle". A maintenance job over the **persistent** tiers
+  (T3–T6): lower an item's `support` as its `last_seen` ages (dormancy decay), and evict the
+  lowest-`support` items when an inject-whole tier exceeds its token budget (capacity purge).
+  The fields (`support` + `last_seen`) are in place; the policy is deferred. **Distinct from the
+  Tier 2 no-delete lean** (that is the raw log; this is the distilled priors). *(D17; touches
+  system_architecture §5.5)*
 
 ## Tier 3 — User Memory
 
@@ -78,10 +85,10 @@
   (`join→filter→group-by→aggregate`) as a cheap, no-LLM component of the retrieval key, but
   whether it is general / worth storing is **unproven**; v2 may drop it for `problem_type`.
   *(D17)*
-- **Causal credit attribution among co-injected exemplars** — v1 drops a causal
-  `utility_score` (cannot cleanly credit one exemplar among several co-injected items + T5
-  caveats + T4 facts). Revisit only with a clean method (single-template injection / A-B).
-  *(D17)*
+- **Causal credit attribution among co-injected exemplars** — v1's `support` is a recurrence
+  prior, not a causal utility (cannot cleanly credit one exemplar among several co-injected
+  items + T5 caveats + T4 facts). Revisit a causal score only with a clean method
+  (single-template injection / A-B). *(D17)*
 - **Rare-but-critical under-weighting** — `support` is recurrence-weighted, so a method used
   once that averted a disaster scores low (same long-tail blind spot as a usage-count, moved
   to the distillation side). *(D17)*

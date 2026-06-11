@@ -6,7 +6,7 @@ Human gate: a task only moves past `todo` after the user approves the breakdown.
 
 | ID | Task | Status | Agent | Commit | Notes |
 |----|------|--------|-------|--------|-------|
-| S0.1 | Apply PR-safety guardrails (disable upstream push, pushDefault=origin) | done | — | (uncommitted, local git config) | `gh repo set-default` still pending — see S0.4 |
+| S0.1 | Apply PR-safety guardrails (disable upstream push, pushDefault=origin) | done | — | (local git config) | Guardrails live; `gh` default repo = fork done in S0.4 |
 | S0.2 | Create root `CLAUDE.md` (ownership, PR-safety, workflow) | needs-review | — | — | Awaiting user review before commit |
 | S0.3 | Create this task ledger | done | — | — | — |
 | S0.4 | Install `gh` + set fork as default PR target | done | — | — | `gh` v2.93.0 installed, authed as RyanChenJung, default repo = fork ✅. PRs via `gh pr create --repo RyanChenJung/pneuma-seeker-memory --base prod`. |
@@ -46,9 +46,6 @@ Plan: batch 1 runs now → user eyeballs ONE page to lock tone/depth → fan out
 These came up in discussion. They need the user's go-ahead (workflow step 3) before
 moving to `todo`/`in-progress`:
 
-- **B1** — Finish `docs_understanding/` (complete the half-done project-understanding
-  doc; md = source for me, HTML = output for the user; reuse `docs_memory/codebase-map.md`
-  as the basis). *(User leaning toward doing this first — see discussion.)*
 - **B3** — Scaffold the `src/pneuma_seeker/services/memory/` package skeleton (empty
   structure + `ENABLE_MEMORY_*` flags in `shared/config.py`, default off).
 - **B4** — (implied by gap analysis) Tier 2 append-only **episodic log** is the

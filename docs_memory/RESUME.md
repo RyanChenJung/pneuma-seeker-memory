@@ -4,9 +4,11 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-11 (Tier 6 internal design LOCKED as D17; spec
-> `tier6-long-memory-design.md`). **ALL SIX TIERS NOW LOCKED — design phase done.**
-> Next = coding (B3 scaffold + B4 Tier 2), pending user go-ahead.
+> **Last updated:** 2026-06-11 (Tier 6 LOCKED as D17 → **ALL SIX TIERS LOCKED**; then a
+> docs-consistency pass: `support` unified across T5/T6, `system_architecture.md` banner'd as
+> superseded-where-noted, mapping "Decided" blocks slimmed to pointers, minor hygiene fixes).
+> **Next task = discuss the quadruplet** `(clinical_intent, associated_experience, support,
+> last_seen)` (now the T6 entry canonical shape) before any coding.
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -83,7 +85,7 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 - **Tier 5 design LOCKED (DECISIONS D16)** — spec `tier5-schema-graph-design.md`. Persistent
   **property graph** patching messy EHR schemas. **Data model**: `table`+`column` nodes,
   `column` hangs off table via `contains`, **join edges connect two column nodes**. **Payload**:
-  edges = `utility_score`/success+fail counts/`negative_constraints[]`/`last_seen`; column nodes
+  edges = `support` (from success+fail counts)/`negative_constraints[]`/`last_seen`; column nodes
   = value/temporal caveats; every learned item carries `source_episode` = **Tier 2 id as a SOFT
   back-pointer** (self-contained lessons → **no retention lock on T2**, decoupled from the
   delete/keep decision). **`SchemaGraph` iface**: read (RO) `get_join_path`/`get_column_caveats`;
@@ -102,7 +104,7 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   **Retrieval key = Option C** (NL-embedding + cheap operator-sequence skeleton from T2, no LLM;
   `problem_type` reserved for **v2 = Option B**, user's true north). **Two entry types**
   (`positive exemplar` / `negative anti-pattern`); magnitude = **`support`** = recurrence-weighted
-  importance (source-side, dodges the read-side feedback loop); **causal `utility_score` dropped**
+  importance (source-side, dodges the read-side feedback loop); **causal credit-attribution dropped**
   (attribution unsolvable). **Success gate = two-stage** (heuristic eligibility incl. **ReAct
   self-overturn** + **implicit user pushback read from next-turn tone** → recurrence aggregation +
   LLM **distill**); **LLM reads reactions + distills, never "judges correctness"** (the human is the
@@ -121,9 +123,16 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
+- **NEXT TASK (user-set): discuss the quadruplet** `(clinical_intent, associated_experience,
+  support, last_seen)` — adopted as the T6 entry canonical shape (tier6 spec, from
+  `system_architecture.md` §5). Pick up there after `/clear`.
 - **Tier 6 drill is DONE and recorded (D17).** **ALL SIX TIERS LOCKED** (D11/D12/D14/D15/D16/D17).
-  The tier-by-tier design phase is **complete** — every tier has a spec + a DECISIONS lock + a
-  "Decided" block in `code-vs-6tier-mapping.md`.
+  The tier-by-tier design phase is **complete** — every tier has a spec + a DECISIONS lock.
+- **Docs-consistency pass done (this session):** `support` is now the cross-tier evidential-weight
+  term (T5 from success/fail, T6 from recurrence — defined in DECISIONS Glossary; renamed from
+  `utility_score`); `system_architecture.md` carries a "superseded where noted" banner; the
+  mapping's per-tier "Decided" blocks are slimmed to pointers (single source = DECISIONS + specs);
+  T2 `user feedback` field dropped (D17); D8/D9 reordered; tier1 status cites D11; B1 removed.
 - **NEXT: coding — needs user go-ahead (workflow step 3).** Natural first move per the mapping's
   build order (T2 = the foundation everything feeds on):
   - **B3** — scaffold `services/memory/` package + `ENABLE_MEMORY_*` config flags (default OFF),

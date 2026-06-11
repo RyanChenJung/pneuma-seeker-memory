@@ -64,6 +64,22 @@ Pinned definitions, grounded in the code. Use these terms consistently.
 - Convention: we say **"turn"** for 一輪 and **"conversation"** (or session) for the whole
   chat box. The Tier 1 notebook lives at **conversation** scope and resets on a new
   conversation/problem.
+- **`support`** = the cross-tier name for the **accumulated empirical evidential weight** on a
+  learned item (how much Tier 2 evidence backs it / how much to trust-and-prioritise it). The
+  **meaning is uniform; the computation is per-tier**: **Tier 5** computes it from per-edge
+  `success_count`/`fail_count` (reinforced on a join that worked, penalized on one that
+  failed — a clean causal signal); **Tier 6** computes it from **recurrence** across Tier 2 (a
+  frequency prior, *not* causal — attribution among co-injected exemplars is unsolvable, D17).
+  Replaced the older `utility_score` (2026-06-11) so the word never implies "measured causal
+  usefulness". Pairs with `last_seen` (the four-element `(intent, experience, support,
+  last_seen)` shape; see system_architecture §5 quadruplet).
+
+## D8 — The 6-tier mapping is provisional and will be refined tier-by-tier
+`code-vs-6tier-mapping.md` is a first pass; the user found it not precise enough because
+the 6-tier intent wasn't fully conveyed. We will go **tier by tier**: I elaborate the
+similarities I see, the user corrects/adds concepts, I record the agreed version into the
+mapping doc (and key conclusions here). Current ratings (Tier 2 & 5 = build-new, Tier 4 =
+strongest existing scaffold) are **subject to revision** after that discussion.
 
 ## D9 — Tier 1 = a curated salience "notebook", NOT the raw transcript
 (Confirmed with user 2026-06-09. Supersedes the earlier wrong claim that Tier 1 already
@@ -83,13 +99,6 @@ exists as `Conductor.llm_messages`.)
   curation + pinned re-read mechanism is **new** (rated 🔴 in the mapping doc).
 - **Still open:** Q5 (notebook internal structure) — Claude to propose a design once
   intent is fully locked.
-
-## D8 — The 6-tier mapping is provisional and will be refined tier-by-tier
-`code-vs-6tier-mapping.md` is a first pass; the user found it not precise enough because
-the 6-tier intent wasn't fully conveyed. We will go **tier by tier**: I elaborate the
-similarities I see, the user corrects/adds concepts, I record the agreed version into the
-mapping doc (and key conclusions here). Current ratings (Tier 2 & 5 = build-new, Tier 4 =
-strongest existing scaffold) are **subject to revision** after that discussion.
 
 ## D10 — Traditional-Chinese files are git-ignored (not committed)
 Per user convention, Traditional-Chinese content stays out of git. Concretely,
@@ -147,8 +156,9 @@ accelerate latent-intent convergence). Key points:
   the DuckDB *technology*, not the ws.db *file*.
 - **(3) Granularity:** **step-level full trajectory** (incl. failures + raw CoT). This is
   *free on the LLM axis* — the data already exists in memory; only cost is disk + a clean
-  schema. Shape = **turn envelope** (`user_id`, prompt, final answer, user feedback,
-  timing, tokens) + **step event stream** (`{turn_id, step_idx, phase[conductor/
+  schema. Shape = **turn envelope** (`user_id`, prompt, final answer, timing, tokens; no
+  explicit `user feedback` field — inferred from the next turn per D17) + **step event
+  stream** (`{turn_id, step_idx, phase[conductor/
   materializer], action, args, status, payload/error, sql?, retrieved_ids?, latency, ts}`).
   Raw CoT is stored as-is (cheap bytes); any summarization is the Enhancer's job. **Field
   set is decided by backward-reasoning from what each downstream tier needs** (Tier 3:
@@ -330,8 +340,11 @@ Locked points (D5-1 … D5-6 confirmed with user):
 - **D5-1 — Data model.** Two node types (`table`, `column`); `column` attaches to `table` via
   a `contains` edge; **join edges connect two `column` nodes** (joins are column-level). Node
   payload = value/temporal caveats; edge payload = join utility + failure lessons.
-- **D5-2 — Payload + provenance.** Edge: `utility_score`, `success_count`/`fail_count`,
-  `negative_constraints[]` (`{lesson, source_episode}`), `last_seen`. Column node:
+- **D5-2 — Payload + provenance.** Edge: `support` (the cross-tier evidential-weight term —
+  see Glossary; in T5 computed from `success_count`/`fail_count`), `negative_constraints[]`
+  (`{lesson, source_episode}`), `last_seen`. *(Renamed from `utility_score` 2026-06-11 to
+  unify with T6; both tiers' weight is "evidence backing a learned item", computed differently
+  per tier.)* Column node:
   `value_caveats[]` / `temporal_caveats[]` (`{caveat, source_episode}`). Every learned item
   carries a **`source_episode` = a Tier 2 episode id** as a **SOFT back-pointer** (audit /
   explainability / reversibility), **not** a hard FK. Distilled lessons are self-contained
@@ -400,10 +413,12 @@ one-at-a-time with the user (D6-1 … D6-5):
   Magnitude = **`support` = recurrence-weighted importance**, computed by the Enhancer at
   distillation time from how often a lesson recurs across T2 — measured **source-side (T2)**, so
   free of the read-side feedback loop that poisons a usage-count (retriever inflating its own
-  favourites). **Causal `utility_score` deliberately dropped** (crediting one exemplar among
+  favourites). **Causal credit-attribution deliberately dropped** (crediting one exemplar among
   several co-injected items is not cleanly solvable; a fake score is worse than none) — revisit
-  only with a clean attribution method (BACKLOG). Named **`support`**, not `utility`, on
-  purpose. **Known blind spot:** recurrence under-weights the rare-but-critical entry → BACKLOG.
+  only with a clean attribution method (BACKLOG). Named **`support`** (evidential weight), not
+  `utility`, on purpose; this is the same cross-tier term T5 uses, computed from recurrence here
+  vs success/fail there (see Glossary). **Known blind spot:** recurrence under-weights the
+  rare-but-critical entry → BACKLOG.
   Every entry carries soft `source_episode` → T2; **no retention lock on T2** (same as D16).
 - **D6-3 — Success gate = two-stage; LLM reads reactions, never judges correctness.** Stage 1
   (per-trajectory eligibility, cheap heuristics from T2 fields): positive = terminated with a

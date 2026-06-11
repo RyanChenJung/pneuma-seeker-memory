@@ -1,8 +1,8 @@
 # Tier 1 — Short-Memory "Notebook" — Build Spec (LOCKED v1)
 
-> Status: **LOCKED 2026-06-10.** Decisions (a)–(d) confirmed by user; this is now the v1
-> build spec. Background & confirmed intent: `DECISIONS.md` D9; gap analysis:
-> `code-vs-6tier-mapping.md` (Tier 1). Confirmed understanding 2026-06-09.
+> Status: **LOCKED 2026-06-10 (DECISIONS D11).** Decisions (a)–(d) confirmed by user; this is
+> now the v1 build spec. Background & confirmed intent: `DECISIONS.md` D9 (intent) → D11 (lock);
+> gap analysis: `code-vs-6tier-mapping.md` (Tier 1). Confirmed understanding 2026-06-09.
 
 ## Purpose (confirmed)
 Counter "lost in the middle": key evidence retrieved mid-context gets buried and
