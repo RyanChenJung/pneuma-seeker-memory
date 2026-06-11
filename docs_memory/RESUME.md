@@ -4,11 +4,12 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-11 (Tier 6 LOCKED as D17 → **ALL SIX TIERS LOCKED**; then a
-> docs-consistency pass: `support` unified across T5/T6, `system_architecture.md` banner'd as
-> superseded-where-noted, mapping "Decided" blocks slimmed to pointers, minor hygiene fixes).
-> **Next task = discuss the quadruplet** `(clinical_intent, associated_experience, support,
-> last_seen)` (now the T6 entry canonical shape) before any coding.
+> **Last updated:** 2026-06-11 (the quadruplet discussion landed as **D18**: explicit **sextuple**
+> record `(intent, associated_experience, support, last_seen, type, source_episode)`; **T6 v1 =
+> inject-whole md, NO embedding/vector DB** — embedding/retrieval demoted to Layer 1+; `support` vs
+> **A/B validation** corrected; **T2 = no-delete LOCKED** as the A/B replay corpus; shared
+> **base record** across T3–T6; authored **dynamic trust**; **three north-star goals** recorded).
+> **Design phase fully done. Next task = coding (B3/B4), needs user go-ahead on a TASKS breakdown.**
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -96,8 +97,9 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   = fully-qualified `schema.table.column`; rename → orphaned node (relearn from zero) → BACKLOG.
   **T4/T5 boundary sharpened**: authored = org norms/definitions only, **all empirical join
   knowledge = T5 evidence-first**. NetworkX/JSON; Neo4j = deferred swap.
-  - **New lean (not locked):** user leaning toward **T2 = no-delete** (traceability/explainability)
-    → would downgrade D12 `processed_at` to a pure progress marker. Parked in BACKLOG; T5 unaffected.
+  - **New lean (later LOCKED in D18-6):** user leaning toward **T2 = no-delete** (traceability/
+    explainability) → downgrades D12 `processed_at` to a pure progress marker. *(Was a lean at D16;
+    D18-6 locked it — T2 is the A/B replay corpus.)* T5 unaffected.
 - **Tier 6 design LOCKED (DECISIONS D17) — LAST TIER, design phase DONE.** Spec
   `tier6-long-memory-design.md`. Persistent **method skeletons** = the *verb* (how to solve a
   *class* of problem, DB-agnostic); composes with T5's *noun* (how to read this DB).
@@ -113,6 +115,24 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   **`LongMemory` iface** read (RO) `get_exemplars`/`get_anti_patterns` → planning prompt; write
   (Enhancer only) `distill`/`reinforce_support`; read = inject-or-skip → **miss = today's static
   prompt, no regression.** JSON/JSONL; vector store + v2 abstract templates = BACKLOG.
+- **The quadruplet discussion → DECISIONS D18 (partially supersedes D17, locks the D16 no-delete
+  lean).** Settled: (1) **three north-star goals** = latent intent / tribal knowledge / schema
+  knowledge (Glossary; T6 does NOT solve latent intent). (2) Entry = explicit **sextuple**
+  `(intent, associated_experience, support, last_seen, type, source_episode)`; `clinical_intent`→
+  **`intent`**; `type`=sign (emulate/avoid), orthogonal to `support`, **applies T3–T6**. (3) **T6
+  v1 = inject-whole md, NO embedding/vector DB/retrieval key** — *"inject-whole vs retrieve"*
+  depends only on store size; at MVP it's small → inject whole → the embedding latent-intent-
+  collision flaw doesn't even arise (it only exists when you select by fuzzy similarity).
+  Embedding/retrieval = **Layer 1** (conditioned on T3/T4 context, fixes the collision — NOT v2);
+  `problem_type` taxonomy = **Layer 2/v2** (must be discovered from T2, can't be first). (4)
+  **`support` vs A/B corrected:** A/B validation is a *separate* Enhancer conflict-resolver, NOT
+  replaced by recurrence; Enhancer update = 4-branch (insert / `support`++ / merge-split /
+  contradiction), **partial-overlap + contradiction both A/B-replay against T2**. (5) **T2 =
+  no-delete LOCKED** (it IS the A/B replay corpus); A/B sampled-replay cost → BACKLOG. (6) shared
+  **base record** `{support,last_seen,source_episode,type}` across T3–T6 learned records +
+  experiential payload `{intent,associated_experience}`; T5 shares base not intent (keeps graph
+  topology); T4-authored/T3-provisioned don't inherit. (7) **authored dynamic trust** = f(authority,
+  learned negative `support`) → BACKLOG. Specs updated: tier6 (core rewrite), tier2, tier4, BACKLOG.
 
 ## ⏸ Waiting on the user
 - (optional) User spot-check of any v2 HTML page — all needs-review but not blocking.
@@ -123,27 +143,35 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
-- **NEXT TASK (user-set): discuss the quadruplet** `(clinical_intent, associated_experience,
-  support, last_seen)` — adopted as the T6 entry canonical shape (tier6 spec, from
-  `system_architecture.md` §5). Pick up there after `/clear`.
-- **Tier 6 drill is DONE and recorded (D17).** **ALL SIX TIERS LOCKED** (D11/D12/D14/D15/D16/D17).
-  The tier-by-tier design phase is **complete** — every tier has a spec + a DECISIONS lock.
-- **Docs-consistency pass done (this session):** `support` is now the cross-tier evidential-weight
-  term (T5 from success/fail, T6 from recurrence — defined in DECISIONS Glossary; renamed from
-  `utility_score`); `system_architecture.md` carries a "superseded where noted" banner; the
-  mapping's per-tier "Decided" blocks are slimmed to pointers (single source = DECISIONS + specs);
-  T2 `user feedback` field dropped (D17); D8/D9 reordered; tier1 status cites D11; B1 removed.
-- **NEXT: coding — needs user go-ahead (workflow step 3).** Natural first move per the mapping's
-  build order (T2 = the foundation everything feeds on):
-  - **B3** — scaffold `services/memory/` package + `ENABLE_MEMORY_*` config flags (default OFF),
-    additive/feature-flagged per CLAUDE.md ownership boundaries.
-  - **B4** — implement **Tier 2 episodic log** (first coding goal; design locked in D12, spec
-    `tier2-episodic-log-design.md`) — JSONL behind `EpisodicLog`, dumb-capture, gitignored store.
-  Both need the user to approve a TASKS.md breakdown before sub-agents dispatch.
+- **STEP 1 (user will ask first): verify the docs are clean & correct.** D18 just landed across 7
+  files (DECISIONS, tier6 core rewrite, tier2, tier4, BACKLOG, code-vs-6tier-mapping, RESUME). On
+  resume the user wants a consistency pass — check no stale "T6 v1 = embedding/trajectory-RAG"
+  claims survive, `support`/A-B/sextuple/no-delete are coherent across files, no dangling pointers.
+  *(Nothing committed yet — all 7 are unstaged working-tree edits; `git diff` to review.)*
+- **STEP 2 (the actual next discussion): how to design the ENHANCER.** This is the next
+  architecture topic the user wants to drill. The Enhancer is the **background synthesizer** that
+  reads T2 and writes T3–T6; the design phase already pinned much of its *behaviour* — pull these
+  together as the starting material:
+  - **4-branch update logic** (D18-5): no-match→INSERT / exact→`support`++ / partial→LLM merge-split
+    / contradiction→A/B; partial+contradiction both **A/B-replay against the no-delete T2**.
+  - **Two-stage success gate** (D6-3): heuristic eligibility (terminal state / ReAct self-overturn /
+    implicit user pushback) → recurrence aggregation + LLM **distill** (never "judge correctness").
+  - **Cross-tier routing by subject** (D6-4): format→T3/T4, reasoning→T6, join→T5; **recurrence =
+    universal noise filter**.
+  - **One shared distiller**, writes the shared **base record** (D18-7), Enhancer-only write client
+    on every persistent tier, runs **offline**.
+  - Open Enhancer questions likely to surface: trigger/scheduling (when does it run), how clustering
+    + recurrence threshold are actually computed, A/B replay cost (→ sampled replay, BACKLOG), LLM
+    budget/prompt design for distillation, ordering of the per-tier passes.
+- **Design phase status:** all six tiers locked (D11/D12/D14/D15/D16/D17) + cross-tier D18. No open
+  *tier* drills remain; the Enhancer is the *cross-cutting mechanism* discussion, not a 7th tier.
+- **STEP 3 (after the Enhancer discussion): coding — needs user go-ahead (workflow step 3).**
+  - **B3** — scaffold `services/memory/` package + `ENABLE_MEMORY_*` config flags (default OFF).
+  - **B4** — implement **Tier 2 episodic log** (JSONL behind `EpisodicLog`, dumb-capture, gitignored).
+  Both need an approved TASKS.md breakdown before sub-agents dispatch.
 - **Open non-coding item still pending:** user to **email the upstream author** re: `DocumentDB`
-  local/global reuse (D13/D15) — draft at `docs_memory/_email-draft-upstream-author.md`. Its
-  answer only affects T4's *authored* backend (hidden behind `OrgMemory`), so it does **not**
-  block B3/B4.
+  local/global reuse (D13/D15) — draft at `docs_memory/_email-draft-upstream-author.md`. Affects
+  only T4's *authored* backend (behind `OrgMemory`), so it does **not** block the Enhancer talk or B3/B4.
 - Reference: `system_architecture.md` (6-tier spec) + `code-vs-6tier-mapping.md` (per-tier gap
   analysis + build order) + `BACKLOG.md` (deferred items) + each tier's `tierN-*-design.md` spec.
 

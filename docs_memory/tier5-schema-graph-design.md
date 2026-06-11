@@ -101,9 +101,9 @@ The graph is a **high-confidence empirical cache in front of the existing dumb h
   trace ("Provenance referenced, not reused", D12). If Tier 2 ever GCs that episode, the T5
   lesson still works; the id may dangle, which is acceptable.
 - **Deliberately decoupled from the T2 retention decision:** the soft-pointer design holds
-  whether T2 deletes or never deletes, so T5 imposes **no retention lock** on T2. (As of
-  2026-06-11 the user is *leaning* toward T2 = no-delete for traceability/explainability, but
-  that is not yet locked and does not change this spec — see DECISIONS D16 lean note.)
+  whether T2 deletes or never deletes, so T5 imposes **no retention lock** on T2. (T2 = no-delete
+  is now **LOCKED in D18-6** — it is the A/B-validation replay corpus; this does not change the T5
+  spec, which was deliberately decoupled from the T2 retention decision regardless.)
 
 ## T4 ↔ T5 boundary (refines D13)
 Route a correction by its **subject**: T5 = **physical DB navigation** (how to read *this*

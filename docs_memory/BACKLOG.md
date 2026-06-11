@@ -13,15 +13,15 @@
   big to inject wholesale, or fuzzy semantic match needed). *(D11, D12, D13, D14)*
 - **DuckDB upgrade for the episodic log** — Tier 2 v1 = JSONL behind `EpisodicLog`;
   upgrade path = a DuckDB table. *(D12)*
-- **Episodic-log cleanup / retention** — `processed_at` watermark exists but actual GC of
-  consumed episodes is deferred. *(D12)*
+- ~~**Episodic-log cleanup / retention**~~ — **DROPPED (D18-6):** T2 is no-delete (it is the A/B
+  replay corpus), so there is no GC of consumed episodes; `processed_at` is a pure progress marker.
 - **Persistent-tier retention (dormancy-decay + capacity-purge)** — `system_architecture.md`
   §5.5's "decay Utility Score / purge idle". A maintenance job over the **persistent** tiers
   (T3–T6): lower an item's `support` as its `last_seen` ages (dormancy decay), and evict the
   lowest-`support` items when an inject-whole tier exceeds its token budget (capacity purge).
   The fields (`support` + `last_seen`) are in place; the policy is deferred. **Distinct from the
-  Tier 2 no-delete lean** (that is the raw log; this is the distilled priors). *(D17; touches
-  system_architecture §5.5)*
+  Tier 2 no-delete rule** (LOCKED D18-6 — that is the raw log; this is the distilled priors). *(D17;
+  touches system_architecture §5.5)*
 
 ## Tier 3 — User Memory
 
@@ -57,6 +57,10 @@
   *(D15)*
 - **HR / identity-system authored feed** — v1 ingests authored docs via manual/file import;
   an automated org-knowledge feed is deferred. *(D15)*
+- **Authored dynamic-trust formula** — v1's "authored always wins" is static. Later: authored
+  trust = f(base authority, the `negative`-`support` the *learned* side accumulates against it),
+  so repeated empirical contradiction erodes a stale authored fact ("learned > authored" made
+  operational). Needs the conflict-resolution weighting formula. *(D18-8; refines D15)*
 - **Soft, overlapping, multi-membership org clusters** — v1 = hard hierarchy; behavior-
   emergent soft clusters (shared with the T3 "user-similarity space" idea) deferred to the
   multi-department / multi-user phase. *(D14, D15)*
@@ -77,14 +81,20 @@
 
 ## Tier 6 — Long Memory (Procedural / Method Skeletons)
 
-- **v2 = abstracted, parameterized plan templates keyed by structured problem-type
-  (Option B)** — the user's true-north retrieval design and the spec's "abstract procedural
-  skills". The abstraction is the Enhancer's hardest LLM-as-judge job; v1 ships Option C
-  (NL-embedding + operator-sequence) only so T6 does not stall on it. *(D13, D17)*
-- **Operator-sequence-skeleton generality** — v1 uses the ReAct operator sequence
-  (`join→filter→group-by→aggregate`) as a cheap, no-LLM component of the retrieval key, but
-  whether it is general / worth storing is **unproven**; v2 may drop it for `problem_type`.
-  *(D17)*
+> **D18 reframed T6 v1.** v1 (= Layer 0) is now **inject-whole md, no embedding / no retrieval
+> key**. Everything about retrieval below is therefore a *Layer 1+* future, not "v1 vs v2".
+
+- **Layer 1 — embedding/retrieval when the store outgrows the prompt budget** — add a retrieval
+  key = NL-embedding + operator-sequence, **conditioned on T3/T4 context** to disambiguate latent
+  intent (this, not Layer 2, is what fixes the same-words-different-intent collision). Built only
+  once inject-whole no longer fits. *(D18-4; supersedes D17 D6-1 as a layer)*
+- **Layer 2 (v2) = abstracted, parameterized plan templates keyed by a structured `problem_type`
+  taxonomy (Option B)** — the user's true-north retrieval design. The taxonomy must be
+  **discovered from accumulated Tier 2 data** (so it cannot be built first); the abstraction is the
+  Enhancer's hardest LLM job. *(D13, D17, D18-4)*
+- **Operator-sequence-skeleton generality** — the ReAct operator sequence
+  (`join→filter→group-by→aggregate`) is a candidate Layer 1 retrieval component, but whether it is
+  general / worth storing is **unproven**; Layer 2 may drop it for `problem_type`. *(D17, D18)*
 - **Causal credit attribution among co-injected exemplars** — v1's `support` is a recurrence
   prior, not a causal utility (cannot cleanly credit one exemplar among several co-injected
   items + T5 caveats + T4 facts). Revisit a causal score only with a clean method
@@ -100,10 +110,14 @@
   negative entries; a lower bar for negative anti-patterns (a repeatedly-made mistake should
   promote faster) is a noted future direction. *(D17)*
 
-## Cross-tier — open lean
+## Cross-tier
 
-- **Tier 2 = no-delete (retention policy)** — as of 2026-06-11 the user is *leaning* toward
-  making the episodic log **never delete** (traceability / explainability matter across many
-  tiers), which would downgrade D12's `processed_at` from a GC watermark to a pure progress
-  marker. **Lean, not locked** — revisit when finalising T2 retention. (Supersedes, if
-  adopted, the "Episodic-log cleanup / retention" item above.) *(D16; touches D12)*
+- **A/B-validation replay cost / sampled replay** — the Enhancer validates a conflicting new
+  lesson by **replaying it (and the stored one) against the never-deleted Tier 2** (D18-5/6). This
+  can re-run historical episodes (incl. EHR DB). Runs offline so volume is tolerable, but if it
+  gets too large the reserved fallback is **sampled replay** (only a few past episodes, not full).
+  Cost to be measured before adding the limit. *(D18)*
+
+> **Resolved (no longer deferred):** *Tier 2 = no-delete* was a lean here; **LOCKED in D18-6**
+> (T2 is the A/B replay corpus). `processed_at` → pure progress marker. The old "Episodic-log
+> cleanup / retention" GC item is therefore dropped.

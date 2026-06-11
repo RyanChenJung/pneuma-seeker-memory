@@ -230,13 +230,14 @@ emits reusable Python for one result, but it isn't abstracted into a skill or re
 trajectories (from Tier 2) into templates; read path injects top-k exemplars into the
 Conductor/Materializer planning prompts.
 
-**Internal design — LOCKED (DECISIONS D13 direction → D17 lock; full spec
-`tier6-long-memory-design.md`). LAST TIER — all six now LOCKED.** The authoritative design
-lives in those; not duplicated here, to keep a single source of truth. Method-skeleton store
-(the *verb*, composes with T5's *noun*): trajectory-RAG few-shot exemplars + negative
-anti-patterns, weight = `support` (see Glossary), Enhancer-distilled behind a `LongMemory`
-interface, inject-or-skip read (miss = today's static prompt, no regression). This section
-keeps only the code↔tier gap above (static prompt factories are **not** T6).
+**Internal design — LOCKED (DECISIONS D13 direction → D17 lock → D18 refinement; full spec
+`tier6-long-memory-design.md`). LAST TIER — all six locked + D18 cross-tier refinement.** The
+authoritative design lives in those; not duplicated here, to keep a single source of truth.
+Method-skeleton store (the *verb*, composes with T5's *noun*): **v1 = inject-whole `.md`** few-shot
+exemplars + negative anti-patterns (NO embedding/vector DB — that is a Layer 1+ scale upgrade,
+D18-4), weight = `support` (see Glossary), Enhancer-distilled behind a `LongMemory` interface,
+inject-or-skip read (miss = today's static prompt, no regression). This section keeps only the
+code↔tier gap above (static prompt factories are **not** T6).
 
 ---
 

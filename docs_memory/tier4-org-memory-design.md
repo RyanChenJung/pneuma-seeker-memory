@@ -41,6 +41,14 @@ T3 had no authority dimension; T4 does, and it drives the conflict rule:
   is a *rule* vs an *observed habit*.
 - **Governance is thin in v1:** a metadata tag (source, trust, scope). Real version-control /
   who-authored / approval workflow → BACKLOG.
+- **Authored trust is static in v1, DYNAMIC later (D18-8).** v1's "authored always wins" is a
+  fixed rule. The refinement: authored gains a **dynamic trust weight = f(base authority, the
+  `negative`-`support` the *learned* side accumulates against it)** — when learned empirical
+  evidence repeatedly contradicts an authored fact (learned records of `type: negative_anti_pattern`
+  whose `support` keeps climbing), authored trust **erodes**, and the system learns the org's real
+  practice diverges from its docs (the "learned > authored" north-star made operational). Authored
+  stays *outside* the shared sextuple record (it is declarative, D18-7), but is *governed by* the
+  learned side's `type`+`support`. Conflict-resolution formula → BACKLOG (does not block B3/B4).
 
 ## Scope & hierarchy
 - **Scope key = `(institution, department)`** — a hierarchy, overlay-style (D13): broad

@@ -1,7 +1,7 @@
 # ClinicalPneuma: 6-Tier Memory Architecture Implementation Guide
 
 > ⚠️ **This is the ORIGINAL design brief.** It states the intent and vocabulary, but several
-> specifics have since been refined. **Where this document and `DECISIONS.md` (D11–D17) /
+> specifics have since been refined. **Where this document and `DECISIONS.md` (D11–D18) /
 > the per-tier `tierN-*-design.md` specs disagree, the DECISIONS + specs win** — they are the
 > implementation source of truth. Build from those; read this for the why/intent.
 >
@@ -10,8 +10,9 @@
 >   Markdown / BM25 / NetworkX); a vector/graph store is a **deferred backend swap** (BACKLOG).
 > - **`Utility Score` (the triplet/quadruplet weight, §5)** → renamed **`support`** (evidential
 >   weight); causal credit-attribution is dropped where it can't be cleanly computed (D16/D17,
->   Glossary). The Enhancer's "candidate memory" is a **quadruplet** `(clinical intent,
->   associated experience, support, last_seen)`.
+>   Glossary). The Enhancer's "candidate memory" is now an explicit **sextuple** `(intent,
+>   associated_experience, support, last_seen, type, source_episode)` — `clinical_intent` → `intent`
+>   (D18-2); the "quadruplet" name is kept only as homage to §5.
 > - **§5 Enhancer "LLM-as-a-judge" judging correctness + "Micro A/B Validation"** → v1 LLM only
 >   **reads user reactions + distills**, never judges answer-correctness from scratch; A/B is
 >   **deferred** (D17, BACKLOG).
@@ -20,7 +21,7 @@
 >   turn's tone by the Enhancer (D17).
 > - **§5.5 "decay Utility Score / purge idle"** → persistent-tier retention (dormancy-decay +
 >   capacity-purge on `support`/`last_seen`) is **deferred** (BACKLOG); distinct from the Tier 2
->   no-delete lean.
+>   no-delete rule (**LOCKED, D18-6** — T2 is the A/B replay corpus, so it is never deleted).
 
 ## 1. Project Overview & Objective
 

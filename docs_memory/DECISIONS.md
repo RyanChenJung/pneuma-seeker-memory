@@ -52,6 +52,22 @@ run through the multi-agent workflow (low risk, parallelizable, no upstream code
 
 ## Glossary — shared vocabulary (so we stop talking past each other)
 Pinned definitions, grounded in the code. Use these terms consistently.
+
+### Three north-star goals (why the memory layer exists)
+The whole memory layer serves Pneuma along **three goals** (user-stated, terminology aligned
+2026-06-11, D18):
+- **Latent intent** — the deeper true question under an *underspecified* surface query; the same
+  words mean different things per user/department (admissions "流失率" = student attrition; HR
+  "流失率" = teacher attrition). Resolved by **T3 (user) + T4 (org) context** — **not** by T6, and
+  T6 does not try to solve it.
+- **Tribal knowledge** — undocumented know-how: conventions, in-the-head practices, how to
+  understand the DB, how a problem *should / should not* be solved; org- or even person-specific
+  working methods. May live in documents or nowhere written. Captured by **T5 + T6, partly T3**
+  (the *learned* side → the reason "learned > authored").
+- **Schema knowledge** — how the DB should be *correctly* understood, especially when dirty, so
+  the LLM queries it right. Home tier = **T5**.
+
+### Pinned terms
 - **Turn (一輪)** = one user message → one final system answer. In code = one
   `Conductor.chat()` call. The *entire* ReAct loop (up to `MAX_CONDUCTOR_STEPS`) happens
   **inside one turn**. `Conductor.llm_messages` is reset at the **start of each turn**.
@@ -69,10 +85,21 @@ Pinned definitions, grounded in the code. Use these terms consistently.
   **meaning is uniform; the computation is per-tier**: **Tier 5** computes it from per-edge
   `success_count`/`fail_count` (reinforced on a join that worked, penalized on one that
   failed — a clean causal signal); **Tier 6** computes it from **recurrence** across Tier 2 (a
-  frequency prior, *not* causal — attribution among co-injected exemplars is unsolvable, D17).
-  Replaced the older `utility_score` (2026-06-11) so the word never implies "measured causal
-  usefulness". Pairs with `last_seen` (the four-element `(intent, experience, support,
-  last_seen)` shape; see system_architecture §5 quadruplet).
+  frequency prior, *not* causal — read-side attribution among co-injected exemplars is unsolvable,
+  D17). Replaced the older `utility_score` (2026-06-11) so the word never implies "measured causal
+  usefulness". Lives on the shared **sextuple** memory record `(intent, associated_experience,
+  support, last_seen, type, source_episode)` (D18; the system_architecture §5 triplet/quadruplet
+  made explicit).
+- **`type`** = the **sign** of a learned record: `positive exemplar` (emulate) vs
+  `negative anti-pattern` (avoid). **Orthogonal to `support`** (the magnitude) — never fused: you
+  cannot encode "strongly avoid" as a negative `support`, or ranking by support buries the most
+  important anti-patterns. Applies to T3/T4/T5/T6 learned records (D18).
+- **A/B validation** = the Enhancer's **offline conflict-resolution** step (system_architecture
+  §5.3), distinct from `support` and **not** replaced by it. When a new candidate lesson partially
+  overlaps or directly contradicts a stored record, the Enhancer **replays both against the
+  never-deleted Tier 2 log** (= the ground-truth corpus) to decide which performs better, instead
+  of blindly trusting the newer result. `support` answers "how much evidence / how important";
+  A/B answers "when two lessons conflict, which is right" (D18).
 
 ## D8 — The 6-tier mapping is provisional and will be refined tier-by-tier
 `code-vs-6tier-mapping.md` is a first pass; the user found it not precise enough because
@@ -351,9 +378,9 @@ Locked points (D5-1 … D5-6 confirmed with user):
   ("Provenance referenced, not reused", D12) → T5 imposes **no retention lock on T2**; if T2
   GCs an episode the lesson still works, the id may dangle (acceptable). **This design is
   deliberately decoupled from the T2 retention decision** and holds either way.
-  - **Lean (not locked) 2026-06-11:** user is now leaning toward **T2 = no-delete** (for
-    traceability / explainability across tiers). If adopted, D12's `processed_at` downgrades
-    from a GC watermark to a pure progress marker. Recorded as a lean; T5 unaffected either way.
+  - **No-delete lean → now LOCKED in D18.** T2 = no-delete is locked, because T2 is the
+    **A/B-validation replay corpus** (D18); D12's `processed_at` downgrades to a pure progress
+    marker. T5 unaffected either way.
 - **D5-3 — `SchemaGraph` interface + permission model.** Read (frontline, read-only):
   `get_join_path(table_a, table_b)` → ranked paths w/ utility + negative constraints;
   `get_column_caveats(table, column)`. Write (**Enhancer only**): `reinforce_edge`,
@@ -390,6 +417,13 @@ Locked points (D5-1 … D5-6 confirmed with user):
   local store; Neo4j / graph DB = deferred backend swap (BACKLOG).
 
 ## D17 — Tier 6 (Long Memory / Procedural Method Skeletons) internal design LOCKED
+> ⚠️ **Partially superseded by D18 (2026-06-11).** D18 simplifies the T6 **v1** from the
+> embedding/trajectory-RAG design below to **inject-whole `.md`** (no embedding, no vector DB, no
+> retrieval key), demoting D6-1 (retrieval key / Option C / operator-sequence) to a *later* scale
+> upgrade; corrects `support` vs A/B validation (D6-2); and makes the entry a **sextuple**. The
+> success gate (D6-3), cross-tier routing (D6-4), and the `LongMemory` seam (D6-5) **still hold**.
+> Read D17 for the reasoning trail; read **D18 for what v1 actually builds**.
+
 Drill-down done 2026-06-11. Full spec: `tier6-long-memory-design.md`. Anchored on D13
 (T6 direction: T6 = the *verb* / method skeleton, T5 = the *noun* / navigation; v1 =
 trajectory-RAG, v2 = abstract templates) and D11/D12/D16 (interface-first, gitignored store,
@@ -454,3 +488,69 @@ one-at-a-time with the user (D6-1 … D6-5):
 - **Boundaries reaffirmed.** T6 vs T5 = verb vs noun (compose, not overlap). T6 vs T2 = T2 is
   the raw journal (incl. failures); T6 is the distilled, recurrence-gated, cleaned skeletons —
   never raw traces verbatim.
+
+## D18 — Quadruplet → shared sextuple record; T6 v1 = inject-whole md; support/A-B corrected
+Discussion done 2026-06-11 (one-at-a-time with the user). **Partially supersedes D17** (T6 v1)
+and **locks** the D16 "T2 no-delete" lean. Folds the `system_architecture.md` §5 triplet
+`[Clinical Intent, Associated Experience, Utility Score]` into our design. Spec updates:
+`tier6-long-memory-design.md` (core rewrite), `tier2-episodic-log-design.md`,
+`tier4-org-memory-design.md`, `BACKLOG.md`.
+
+- **D18-1 — North-star goals recorded.** The memory layer serves three goals — **latent intent /
+  tribal knowledge / schema knowledge** (see Glossary). T6 explicitly does **not** solve latent
+  intent (T3/T4 context does).
+- **D18-2 — Entry = explicit sextuple, `intent` rename.** The §5 triplet/quadruplet is made
+  explicit as **`(intent, associated_experience, support, last_seen, type, source_episode)`**.
+  `clinical_intent` → **`intent`** (= the deeper problem this memory addresses; its v1 physical
+  encoding is just the md text — see D18-4). `type` and `source_episode` were always there; the
+  "quadruplet" name is kept only as homage to §5.
+- **D18-3 — `type` is the sign, orthogonal to `support`; applies T3–T6.** `type` ∈
+  {`positive exemplar`, `negative anti-pattern`} = emulate vs avoid; `support` = magnitude. Never
+  fused (corrects nothing in D17, but stated explicitly). **`type` applies to T3/T4 too** (users/
+  orgs express preferences/conventions as positive or negative), not only T6 — corrects the
+  earlier "awkward for T3/T4" read.
+- **D18-4 — T6 v1 = inject-whole md, NO embedding (supersedes D6-1).** The MVP injects the method
+  skeletons as **`.md` into the planning prompt** (whole, or coarse-tag-selected), exactly like
+  the T3/T4-learned overlays — **no vector DB, no retrieval key, no operator-sequence, no v2
+  classifier.** Rationale: *"inject-whole vs retrieve"* depends **only** on whether the store is
+  too big to inject + not all relevant each time. At MVP T6 has few skeletons → inject whole.
+  **The embedding flaw (latent-intent collision, misleading injection) only exists when you
+  *select a subset by fuzzy similarity*; inject-whole has no selection → no flaw.** The layering:
+  - **Layer 0 (MVP / real v1)** = inject-whole md, no retrieval.
+  - **Layer 1** = add retrieval (key = embedding + operator-sequence) **only when the store
+    outgrows the context budget**; the embedding flaw appears here, mitigated by conditioning the
+    retrieval key on **T3/T4 context** (which disambiguates latent intent — note v2's classifier
+    does *not*, it needs the same context). → BACKLOG.
+  - **Layer 2 (v2)** = upgrade the retrieval key to a structured `problem_type` taxonomy; the
+    taxonomy must be *discovered from accumulated T2 data*, so it cannot be built first. → BACKLOG.
+  Demotes D17's D6-1 (Option C / op-sequence / embedding) from "v1" to "Layer 1+".
+- **D18-5 — `support` vs A/B validation corrected (refines D6-2).** `support` keeps its D17 role
+  (evidential weight, recurrence-computed, source-side, no causal attribution; blind spots →
+  BACKLOG). **A/B validation is a *separate* Enhancer mechanism, NOT replaced by recurrence.** The
+  Enhancer's update logic is a 4-branch match of a new candidate against the stored record:
+  **no match → INSERT; exact same → `support`++; partial overlap → LLM merge/split; direct
+  contradiction → A/B.** **Both the partial-overlap (merged candidate vs old) and the contradiction
+  branch run A/B** — replay both versions against Tier 2 to pick the winner, never blind-trusting
+  the newer one. (Corrects this session's earlier wrong claim that recurrence-threshold *replaced*
+  §5.3 A/B.)
+- **D18-6 — T2 = no-delete, LOCKED (locks the D16 lean).** The concrete reason: **T2 is the
+  ground-truth replay corpus for A/B validation** (D18-5). Without the full history, conflict
+  resolution falls back to blind-trusting the newer lesson. D12's `processed_at` → pure progress
+  marker (no GC). A/B replay cost: Enhancer runs offline (users asleep) so larger volume is
+  acceptable; if still too large, a future **sampled replay** (only a few past episodes) is the
+  reserved fallback — cost to be measured. → BACKLOG.
+- **D18-7 — Shared base record across T3–T6 (envelope/payload pattern).** Reusing the T2
+  turn-envelope + step-event pattern: a **`BaseMemoryRecord` = `{support, last_seen,
+  source_episode, type}`** is shared by all **learned** records (one Enhancer write path, one
+  support/last_seen/decay/audit logic); the **experiential payload `{intent,
+  associated_experience}`** is carried by T6 / T3-learned / T4-learned. **T5** edges share the base
+  but **not `intent`** (their connection point is a fact, not a user intent) and keep their **graph
+  topology** as their own upper structure. **T4-authored and T3-provisioned do NOT inherit the
+  base** (declarative facts, not experiential lessons). This is "common envelope, typed payload",
+  not one flat schema forced everywhere.
+- **D18-8 — Authored dynamic trust (refines D15).** T4-authored stays outside the base record, but
+  gains a **dynamic trust weight** = f(base authority, the `negative`-`support` the *learned* side
+  accumulates against it). When learned empirical evidence repeatedly contradicts an authored fact,
+  authored trust erodes → the system learns the org's real practice diverges from its docs (the
+  "learned > authored" goal made operational). Conflict-resolution formula → BACKLOG (does not
+  block B3/B4).

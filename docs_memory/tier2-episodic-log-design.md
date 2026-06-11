@@ -22,12 +22,13 @@ to disk, must survive the session, consumed **asynchronously** by the Enhancer.
 
 ## LOCKED decisions (1)–(4) — confirmed 2026-06-10
 
-- **(1) Lifecycle.** **Append-only**, must **survive the session** (session-purge is ruled
-  out by definition — Tier 1 purges, Tier 2 is saved & consumed async). Schema carries a
-  `processed_at` watermark (how far the Enhancer has consumed). **Cleanup policy is
-  deferred** — a cron/ops concern that doesn't block the schema; the interface wrapper lets
-  us pick "keep-forever (event-sourcing replay) vs TTL (e.g. 24h floor, tied to
-  Enhancer-processed) vs purge-after-distill" later without touching the Conductor.
+- **(1) Lifecycle. NO-DELETE — LOCKED (D18-6).** **Append-only** and **never deleted**. The
+  concrete reason (locked in D18, was a lean under D16): **T2 is the ground-truth replay corpus
+  for the Enhancer's A/B validation** (DECISIONS D18-5) — to decide whether a new lesson beats a
+  stored one, the Enhancer replays both against past episodes; without the full history, conflict
+  resolution falls back to blind-trusting the newer lesson. So `processed_at` is **just a progress
+  marker** (how far the Enhancer has consumed), **not** a GC watermark. (Earlier "TTL /
+  purge-after-distill" options are dropped; A/B sampled-replay cost limit → BACKLOG.)
 - **(2) Backend.** Our **own store** in `services/memory/_episodic/` (gitignored, mirrors
   Tier 1's `_notebooks/`), **NOT** in upstream's `ws.db`. v1 = **JSONL** behind a small
   `EpisodicLog` interface (`append` / `iter` / `mark_processed`). **Recorded upgrade path
