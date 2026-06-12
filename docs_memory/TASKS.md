@@ -23,7 +23,7 @@ page. Agents produce only their HTML page; **I update `CHECKPOINT.md` centrally*
 
 | ID | Page | Status | Agent | Notes |
 |----|------|--------|-------|-------|
-| H1 | `modules/services_core_materializer/` | needs-review | bg-agent | 易懂規範 v2 (1028 lines) — **gold standard**. User OK'd v2 style 2026-06-10 → batches 2–4 + retrofits fanned out. |
+| H1 | `modules/services_core_materializer/` | needs-review | bg-agent | plain-language spec v2 (1028 lines) — **gold standard**. User OK'd v2 style 2026-06-10 → batches 2–4 + retrofits fanned out. |
 | H2 | `modules/services_core_ir_system/` | needs-review | bg-agent | retrofitted to v2 (656→943 lines) |
 | H3 | `modules/services_core_action_set/` | needs-review | bg-agent | retrofitted to v2 (~580→888 lines) |
 | H4 | `modules/services_db/` | needs-review | bg-agent | v2, 876 lines |
@@ -34,8 +34,8 @@ page. Agents produce only their HTML page; **I update `CHECKPOINT.md` centrally*
 | H9 | `modules/tests/` | needs-review | bg-agent | v2, 847 lines |
 | H10 | `modules/baselines/` | needs-review | bg-agent | v2, 844 lines (upstream — doc only) |
 | H11 | `modules/openwebui_functions/` | needs-review | bg-agent | v2, 866 lines |
-| H12 | `01_architecture_deep_dive.html` | needs-review | bg-agent | v2, 804 lines (三服務序列圖/設計模式/DI), claims verified vs source |
-| H13 | `02_flow_traces.html` | needs-review | bg-agent | v2, 835 lines (提問/索引/物化/Semantic Join E2E), claims verified vs source |
+| H12 | `01_architecture_deep_dive.html` | needs-review | bg-agent | v2, 804 lines (three-service sequence diagrams / design patterns / DI), claims verified vs source |
+| H13 | `02_flow_traces.html` | needs-review | bg-agent | v2, 835 lines (query / indexing / materialization / Semantic Join E2E), claims verified vs source |
 | H14 | `03_concepts.html` | needs-review | bg-agent | v2, 805 lines (State/Prompt/Factory/Provenance/flags/allow-list), claims verified vs source |
 
 Plan: batch 1 runs now → user eyeballs ONE page to lock tone/depth → fan out batches
@@ -43,7 +43,7 @@ Plan: batch 1 runs now → user eyeballs ONE page to lock tone/depth → fan out
 
 ## Goal WS — Walking Skeleton (knowledge injection wired into Pneuma, flag-gated)
 
-Approved 2026-06-12 (user: "先做 walking skeleton"). **Goal:** `POST /chat` with a known
+Approved 2026-06-12 (user: "do the walking skeleton first"). **Goal:** `POST /chat` with a known
 persona `user_id` + flag ON → a dept/role + tribal-knowledge SYSTEM message is injected into
 the prompt; flag OFF → byte-identical to baseline; plugin fully removable. De-risks the
 project's #1 unknown (clean injection into Pneuma). **NOT in scope:** retrieval/embedding

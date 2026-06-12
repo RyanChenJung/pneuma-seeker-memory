@@ -57,8 +57,8 @@ Pinned definitions, grounded in the code. Use these terms consistently.
 The whole memory layer serves Pneuma along **three goals** (user-stated, terminology aligned
 2026-06-11, D18):
 - **Latent intent** — the deeper true question under an *underspecified* surface query; the same
-  words mean different things per user/department (admissions "流失率" = student attrition; HR
-  "流失率" = teacher attrition). Resolved by **T3 (user) + T4 (org) context** — **not** by T6, and
+  words mean different things per user/department (admissions "churn rate" = student attrition; HR
+  "churn rate" = teacher attrition). Resolved by **T3 (user) + T4 (org) context** — **not** by T6, and
   T6 does not try to solve it.
 - **Tribal knowledge** — undocumented know-how: conventions, in-the-head practices, how to
   understand the DB, how a problem *should / should not* be solved; org- or even person-specific
@@ -68,16 +68,16 @@ The whole memory layer serves Pneuma along **three goals** (user-stated, termino
   the LLM queries it right. Home tier = **T5**.
 
 ### Pinned terms
-- **Turn (一輪)** = one user message → one final system answer. In code = one
+- **Turn (one round)** = one user message → one final system answer. In code = one
   `Conductor.chat()` call. The *entire* ReAct loop (up to `MAX_CONDUCTOR_STEPS`) happens
   **inside one turn**. `Conductor.llm_messages` is reset at the **start of each turn**.
-- **Conversation / Session (整段對話 / 一個對話框)** = the whole thread in one chat box,
+- **Conversation / Session (the whole dialogue / one chat box)** = the whole thread in one chat box,
   keyed by `(user_id, chat_id)`, spanning **many turns**, for as long as the process/LLM
   is not restarted. In code = one `ChatSession`, persisted in one `ws.db`. The 6-tier
   spec's word "session" = **this** (a conversation), not a single turn.
 - **Materialization run** = one `Materializer.materialize_T()` call, nested *inside* a
   turn; has its own separate buffer.
-- Convention: we say **"turn"** for 一輪 and **"conversation"** (or session) for the whole
+- Convention: we say **"turn"** for one round and **"conversation"** (or session) for the whole
   chat box. The Tier 1 notebook lives at **conversation** scope and resets on a new
   conversation/problem.
 - **`support`** = the cross-tier name for the **accumulated empirical evidential weight** on a

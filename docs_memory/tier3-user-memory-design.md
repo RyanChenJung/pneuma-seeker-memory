@@ -21,12 +21,12 @@ file** (MVP is for testing; the HR/identity-system feed is deferred → BACKLOG)
   personalization before any behavior is learned (cold-start).
 
 **(B) Learned profile** — distilled by the **Enhancer from this user's Tier 2 log**. Holds:
-- **Term/alias map** — this user's idiolect ("he says 病人 meaning the Patient table").
+- **Term/alias map** — this user's idiolect ("he says 'cases' meaning the Patient table").
 - **Focus range** — *derived, not typed*: a **frequency distribution over schema
   elements / concepts** the user actually touches (which tables/columns/concepts, default
   filters, time windows). Replaces the rejected hand-typed "focus" line. Single-user seed
   of the BACKLOG "user-similarity space / emergent departments" idea.
-- **Standing corrections** — corrections that recur across conversations ("近期 = last 90
+- **Standing corrections** — corrections that recur across conversations ("'recent' = last 90
   days").
 - **Format preferences** — show SQL? de-identified output? table vs prose.
 
@@ -52,7 +52,7 @@ order `institution → department → user`, narrowest augments/overrides (CLAUD
 The overlay is *cross-tier prompt composition*, not "T3 ⊂ T4". The promotion ladder
 (T1 → T3 → T4) applies **only to the thin slice of generalizable learned conventions** and
 is gated by content-kind (a personal preference like "likes SQL shown" never promotes to an
-org rule; a convention like "近期 = 90 days" may). Most of T3 (identity + personal prefs)
+org rule; a convention like "'recent' = 90 days" may). Most of T3 (identity + personal prefs)
 and most of T4 (authoritative definitions/protocols) never overlap.
 
 ## Read path (injection)

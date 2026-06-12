@@ -109,7 +109,7 @@ knowledge. Declaring identity is **not cheating** (it is a legitimately-known fa
 real logged-in-user setup); the cheating line is pre-supplying the *resolved formula / SQL /
 answer* — which we never do. The agent still retrieves, reasons, and generates SQL; we only
 supply institutional knowledge it cannot know on its own.
-- **共見 / shared visibility (authorization deferred — BACKLOG):** both departments' datasets
+- **Shared visibility (authorization deferred — BACKLOG):** both departments' datasets
   are **co-searchable**, so an ambiguous term has real competing tables. Justification: real
   deployments restrict tables by role/dept, but that does not stop *two users with the same
   permissions and different purposes* — holding authorization constant and varying intent is
@@ -141,7 +141,7 @@ Owns the synthetic campus world's **data** and getting it loaded into Pneuma.
   "exclude transfers" changes the number); fiscal-vs-calendar year must change the answer; the
   ambiguous terms (`retention`, `yield`) must resolve to **different tables** per department.
   Data clean enough that the baseline already answers correctly proves nothing.
-- **Both datasets must be co-loadable / co-searchable** (共見) so the ambiguous terms have real
+- **Both datasets must be co-loadable / co-searchable** (shared visibility) so the ambiguous terms have real
   competing tables — not isolated per-department instances.
 - Provide **column descriptions / metadata** (Pneuma indexes these for retrieval).
 - Stay in our-owned dirs; never touch upstream paths.

@@ -52,7 +52,7 @@ to disk, must survive the session, consumed **asynchronously** by the Enhancer.
 Reuse the DuckDB *technology* (upgrade path), not the ws.db *file*.
 
 ## Schema (v1)
-**Turn envelope** — one per turn (一輪 = one `Conductor.chat()`):
+**Turn envelope** — one per turn (one round = one `Conductor.chat()`):
 `user_id`, prompt, final answer, timing, tokens.
 *(No explicit `user feedback` field: Pneuma has no feedback channel; satisfaction is inferred
 by the Enhancer from the **next turn's** prompt/tone — which is just the next envelope — per

@@ -195,7 +195,7 @@ scaffold is the lowest-effort attach point).
      session** (reset between materializations), and carries **no utility/experience
      payload**.
 
-**Why the gap matters (this is the "差很多" the user sensed):** Tier 5 wants a
+**Why the gap matters (this is the "big difference" the user sensed):** Tier 5 wants a
 *cross-session, persistent, table/column-level* graph whose edges accumulate empirical
 reliability and human-readable failure lessons. The provenance graph is a *per-session,
 operation-level* lineage DAG; `join_paths` is *throwaway heuristic text*. Spirit overlaps
