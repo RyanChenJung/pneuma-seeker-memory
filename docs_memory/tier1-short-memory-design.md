@@ -14,17 +14,17 @@ resets on a new conversation/problem. Conductor has it for sure; Materializer = 
 A per-conversation Markdown, three sections, each entry tagged with source + turn:
 
 ```markdown
-# 📒 Notebook — conversation c45 (problem: 2023 年住院 > 30 天的病人與主治醫師)
+# 📒 Notebook — conversation c45 (problem: patients hospitalized > 30 days in 2023 and their attending physicians)
 
 ## 🎯 Ground-truth evidence (retrieved, judged important)
-- [E1] 住院天數欄位是 `length_of_stay`（單位：天），不是 `los_hours`。 ⟵ table_retrieve, turn 1
-- [E2] 病人↔醫師關聯用 `physician_id`（admissions 表有此欄）。 ⟵ join_path, turn 1
+- [E1] The length-of-stay column is `length_of_stay` (unit: days), not `los_hours`. ⟵ table_retrieve, turn 1
+- [E2] The patient↔physician link uses `physician_id` (the admissions table has this column). ⟵ join_path, turn 1
 
 ## 🧠 Reasoning conclusions
-- [R1] 「超過 30 天」= `length_of_stay > 30`（已確認單位是天）。 ⟵ turn 1
+- [R1] "more than 30 days" = `length_of_stay > 30` (confirmed the unit is days). ⟵ turn 1
 
 ## 🙋 User corrections / constraints
-- [C1] 只算入院日期落在 2023 的，不是出院日期。 ⟵ user, turn 2 (supersedes earlier assumption)
+- [C1] Count only rows whose admission date falls in 2023, not the discharge date. ⟵ user, turn 2 (supersedes earlier assumption)
 ```
 
 Before generating an answer, the whole notebook is pinned into the prompt for the LLM to

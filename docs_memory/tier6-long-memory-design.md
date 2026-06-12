@@ -113,7 +113,7 @@ LLM):**
 
 ### Implicit feedback — no explicit channel (D6-3)
 Pneuma has **no accept/reject button**. The Enhancer reads the **next user turn's semantics / tone**
-in Tier 2 as a soft signal (rejection: *"不對 / 不是這個 / 我是說…"*, an immediate re-ask, a
+in Tier 2 as a soft signal (rejection: *"that's wrong / not this one / I meant…"*, an immediate re-ask, a
 corrected parameter; acceptance: building on the result, drilling deeper, moving on).
 - **Cheap and honest:** we never ask the LLM *"is the answer correct?"* (no ground truth). We ask
   *"did the human seem satisfied?"* — **the human is the ground truth, the LLM only parses the

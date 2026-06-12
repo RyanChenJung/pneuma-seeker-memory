@@ -15,7 +15,7 @@
 
 ## 1. The world
 
-A single fictional university. Two departments, **co-loaded and co-searchable** (共見):
+A single fictional university. Two departments, **co-loaded and co-searchable** (shared visibility):
 
 - **Admissions** — student application, admission, matriculation, retention.
 - **Finance** — funds, transactions, investments.
@@ -199,7 +199,7 @@ Three decoupled contracts. Each teammate needs only their own contract + this sp
   retention/yield change when excluded); non-degree applicants must exist; transactions must
   straddle the **Jun 30 / Jul 1** fiscal boundary (so calendar-year math differs from fiscal);
   unrealized investment returns must exist.
-- **Co-loadable / co-searchable (共見):** both departments' tables loaded into the **same**
+- **Co-loadable / co-searchable (shared visibility):** both departments' tables loaded into the **same**
   Pneuma instance and searchable together — not isolated per-department instances.
 - **Provide column descriptions / metadata** (Pneuma indexes these for retrieval).
 - **Scale (🎛️):** ~hundreds of rows, 3 tables/dept is the target; bigger/more realistic welcome.
@@ -288,7 +288,7 @@ the current code** (`src/pneuma_seeker/main.py`):
   layer maps `user_id → (department, role)` via the T3 provisioned map (§5, Ryan-owned). **Do not**
   invent a `department`/`role` field; `user_id` is the whole mechanism.
 - **Do NOT set `data_source`** — both departments are co-loaded server-side (Ryan's setup). Setting
-  it would narrow to one source and break 共見.
+  it would narrow to one source and break shared visibility.
 - **Multi-turn:** reuse the **same `chat_id`** across a case's turns, and **resend the full
   conversation** in `messages[]` each turn (safe regardless of server-side history handling).
   Sessions are keyed by `(user_id, chat_id)`. Use a **fresh `chat_id` per case run** for isolation.
