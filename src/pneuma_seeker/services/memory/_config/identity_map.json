@@ -1,0 +1,6 @@
+{
+  "u_adm_analyst":  { "department": "Admissions", "role": "analyst" },
+  "u_adm_director": { "department": "Admissions", "role": "director" },
+  "u_fin_analyst":  { "department": "Finance",    "role": "analyst" },
+  "u_fin_director": { "department": "Finance",    "role": "director" }
+}

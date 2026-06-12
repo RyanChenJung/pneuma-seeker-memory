@@ -42,6 +42,10 @@ class Config:
         self.ENABLE_MEMORY_PROFILING = (
             getenv("ENABLE_MEMORY_PROFILING", "false").lower() == "true"
         )
+        # Memory-layer plugin (🟡 surgical, SC-1). A/B master switch; default off = baseline.
+        self.ENABLE_MEMORY_INJECTION = (
+            getenv("ENABLE_MEMORY_INJECTION", "false").lower() == "true"
+        )
 
         # Action Settings
         ## Retrieval Action Settings

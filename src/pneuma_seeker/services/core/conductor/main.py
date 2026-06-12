@@ -25,6 +25,7 @@ from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.option import LLMOption
 from pneuma_seeker.shared.schemas.language_model.role import Role
 from pneuma_seeker.shared.table_reader import TableReader
+from pneuma_seeker.services.memory import MemoryInjector  # 🟡 surgical (SC-2)
 
 
 class Conductor:
@@ -56,6 +57,10 @@ class Conductor:
             self.language_model_api,
         )
         self.prompt_factory = ConductorPromptFactory(self.config, self.action_set)
+        # Memory-layer plugin hook (🟡 surgical, SC-2). None when disabled → fully inert.
+        self.memory_injector = (
+            MemoryInjector() if self.config.ENABLE_MEMORY_INJECTION else None
+        )
         self.materializer = Materializer(
             self.user_id,
             self.chat_id,
@@ -93,6 +98,18 @@ class Conductor:
         self.prov_graph = prov_graph
         self.action_set.prov_graph = prov_graph
         self.materializer.prov_graph = prov_graph
+
+    def _inject_memory(self, user_input: str) -> None:
+        """Memory-layer plugin hook (🟡 surgical, SC-2): append institutional context for the
+        asking user as one extra SYSTEM message. No-op when the plugin is disabled or the
+        ``user_id`` is an unknown persona — so flag-off is byte-identical to baseline."""
+        if self.memory_injector is None:
+            return
+        injected = self.memory_injector.get_injection(self.user_id, user_input)
+        if injected:
+            self.llm_messages.append(
+                LLMMessage(role=Role.SYSTEM.value, content=injected)
+            )
 
     def chat(
         self,
@@ -141,6 +158,7 @@ class Conductor:
                 content=self.prompt_factory.get_sys_prompt(),
             )
         ]
+        self._inject_memory(user_input)  # 🟡 surgical (SC-2); inert when flag off
 
         current_step = 0
         previous_step_input_tokens = 0

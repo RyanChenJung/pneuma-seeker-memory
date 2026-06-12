@@ -31,7 +31,7 @@ Everything in `services/memory/`, `tests/memory/`, `docs_memory/` is 🟢 ours (
 Status values: `planned` → `applied` (with commit) → `reverted`.
 
 ### SC-1 — `shared/config.py` — add `ENABLE_MEMORY_INJECTION` flag
-- **Status:** planned (Goal WS / WS1).
+- **Status:** applied (Goal WS / WS1; on `feat-memory-experiement`).
 - **What:** add one `Config` attribute reading an env var, default `"false"` → `False`, **exactly
   mirroring the existing `ENABLE_MEMORY_PROFILING`** pattern in the same file.
 - **Flag:** this entry *defines* the flag (`ENABLE_MEMORY_INJECTION`). It is the A/B master switch
@@ -43,20 +43,23 @@ Status values: `planned` → `applied` (with commit) → `reverted`.
 - **Refs:** D19; `scenario-spec-v1.md` §6.3 (Lawrence A/B contract); TASKS WS1.
 
 ### SC-2 — `services/core/conductor/main.py` — prompt-injection hook
-- **Status:** planned (Goal WS / WS5).
-- **What:** two flag-guarded additions —
-  - **(a)** in `Conductor.__init__`: construct `self.memory_injector` once
-    (`MemoryInjector(...) if self.config.ENABLE_MEMORY_INJECTION else None`).
-  - **(b)** in `Conductor.chat()`, immediately **after** the initial
-    `self.llm_messages = [LLMMessage(role=SYSTEM, content=get_sys_prompt())]` assignment: if the
-    flag is on, call `self.memory_injector.get_injection(self.user_id, user_input)` and, when it
-    returns a non-empty string, `append` it as one additional SYSTEM `LLMMessage`.
+- **Status:** applied (Goal WS / WS5; on `feat-memory-experiement`).
+- **What:** three flag-guarded additions —
+  - **(a)** top-level import: `from pneuma_seeker.services.memory import MemoryInjector`.
+  - **(b)** in `Conductor.__init__` (after `self.prompt_factory = ...`): construct
+    `self.memory_injector = MemoryInjector() if self.config.ENABLE_MEMORY_INJECTION else None`.
+  - **(c)** a small private method `Conductor._inject_memory(user_input)` (no-op when
+    `memory_injector is None` or the persona is unknown; else appends one SYSTEM `LLMMessage`),
+    called by **one added line** in `chat()` immediately **after** the initial
+    `self.llm_messages = [LLMMessage(role=SYSTEM, content=get_sys_prompt())]` assignment.
 - **Flag:** `ENABLE_MEMORY_INJECTION` (SC-1).
 - **Why unavoidable:** the prompt is assembled **only** here; this is the irreducible seam for any
-  prompt-level injection. `self.user_id` and `user_input` are already in scope (no plumbing).
-- **Footprint:** ~5 added lines across the two blocks; **single call** into `services/memory`
-  (`get_injection`). No existing line changed.
-- **Removal:** delete the two guarded blocks → conductor identical to upstream.
+  prompt-level injection. `self.user_id` and `user_input` are already in scope (no plumbing). The
+  helper keeps `chat()`'s touch to a single line while staying unit-testable.
+- **Footprint:** ~9 added lines (import + `__init__` line + the helper + its one call); **single
+  call** into `services/memory` (`get_injection`). No existing line changed.
+- **Removal:** delete the import, the `__init__` line, the helper, and its call → conductor
+  identical to upstream.
 - **Refs:** D19; anchor = the `self.llm_messages = [sys_prompt]` line in `chat()`; TASKS WS5.
 
 ## Removability checklist (run before claiming "plugin removed")
