@@ -4,14 +4,21 @@
 > `TASKS.md`, and (if touching the 6-tier work) `code-vs-6tier-mapping.md`. Continue from
 > **"Next action"**. Do not re-derive settled facts. Keep this file updated at the end of
 > each working session.
-> **Last updated:** 2026-06-11 (the quadruplet discussion landed as **D18**: explicit **sextuple**
+> **Last updated:** 2026-06-12 (the quadruplet discussion landed as **D18**: explicit **sextuple**
 > record `(intent, associated_experience, support, last_seen, type, source_episode)`; **T6 v1 =
 > inject-whole md, NO embedding/vector DB** — embedding/retrieval demoted to Layer 1+; `support` vs
 > **A/B validation** corrected; **T2 = no-delete LOCKED** as the A/B replay corpus; shared
 > **base record** across T3–T6; authored **dynamic trust**; **three north-star goals** recorded).
-> **Design phase fully done. D18 consistency pass committed (`d68fb6c`, 2026-06-12). IMMEDIATE next
-> = a one-off throwaway roadmap + teammate-allocation review (do NOT persist to md). Then STEP 2 =
-> Enhancer design; coding (B3/B4) needs user go-ahead on a TASKS breakdown.**
+> **Design phase fully done. Roadmap + team-allocation thread COMPLETE & user-approved (2026-06-12):
+> `ROADMAP.md` (def + M1–M4 + roles 🔒/🎛️ + 4-week weekly breakdown).**
+> **SCENARIO SPEC v1 DRAFTED & user-approved (2026-06-12)** — `scenario-spec-v1.md` (full) +
+> the team-facing `Team Contract & Tasks (v1).docx` §7 filled to match. Campus world: 2 depts
+> (Admissions/Finance, 共見); ambiguous terms retention/yield → diff table per dept; 4 hidden
+> rules; 3 traps; canonical schema; personas via `user_id`→(dept,role); 3 contracts written
+> "ready-to-build" (Sola data / Juan 2 JSONs / Lawrence `/chat`). Contract 3 verified against
+> live `main.py` (persona=`user_id`, A/B=server-env flag, no `data_source`). Two old planning
+> `.docx` deleted; surviving contract `.docx` is git-ignored (local-only export). **IMMEDIATE
+> next = STEP 2: Enhancer design. Coding (B3/B4) needs user go-ahead.**
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -147,11 +154,34 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
 ## ▶ Next action
 - **STEP 1 — DONE (commit `d68fb6c`).** D18 consistency pass complete; also fixed stale "no-delete
   lean" + pre-D18 quadruplet survivors in `system_architecture.md` / tier5 / BACKLOG. Docs coherent.
-- **IMMEDIATE next (one-off, do NOT persist): roadmap + teammate-allocation review.** The user wants
-  to talk through their go-forward plan/roadmap and how to split work across teammates. **This is a
-  throwaway planning chat — its content must NOT be written into any design md (no DECISIONS/spec/
-  BACKLOG entry); discard after.** Only this pointer is recorded. The design thread (STEP 2) resumes
-  after.
+- **ROADMAP review — IN PROGRESS, now PERSISTED (user overrode the earlier "throwaway" call).**
+  Created `docs_memory/ROADMAP.md`. **Locked so far:** project definition (3 north-star goals =
+  latent intent / tribal knowledge / schema knowledge, ref D18-1) + milestone backbone **M1 (7/5,
+  hard target) = latent intent + tribal knowledge, static-first OK / M2 (end Aug) = self-evolving
+  Enhancer / M3 (end Sept) = schema knowledge + PoC / M4 (Oct–Dec) = real-world**. Self-evolution =
+  core target, static = fallback. Dataset must be engineered to make baseline fail (3 prongs).
+  - **ROADMAP.md now substantially COMPLETE:** project definition (3 north-star goals) + milestone
+    backbone (M1 7/5 hard / M2 Aug self-evolving / M3 Sept schema knowledge / M4 Oct–Dec real-world)
+    + **team roles** (Sola=Sandbox data, Juan=Domain Truth knowledge+tests, Lawrence=Judge benchmark;
+    each in 🔒MUST / 🎛️FLEXIBLE) + **next-4-week weekly breakdown** (Wed deliverables 6/17, 6/24,
+    7/1, 7/8). Key settled design: context = asking-user identity (dept, role) via minimal T3 — NOT
+    a query param (declaring identity ≠ cheating; pre-supplying the formula = cheating); **共見**
+    (both datasets co-searchable, authz deferred); role dosed small for M1 (presentation only);
+    multi-turn from M1. Architecture RESOLVED: Pneuma is already FastAPI (`/chat`), memory = in-process
+    plugin toggled by `ENABLE_MEMORY_*` (= the A/B benchmark switch); DB = DuckDB (not Postgres).
+    SOTA research dropped (M2 lightweighting now unowned = Ryan just-in-time). **.docx kept (not
+    deleted) per Ryan.**
+  - **SCENARIO SPEC v1 — DONE (2026-06-12).** `docs_memory/scenario-spec-v1.md` is the keystone
+    that gates everyone's 6/17. Locked: campus world (2 depts Admissions/Finance, 共見); retention
+    /yield → diff table per dept; 4 hidden rules (Adm retention=exclude transfers / Adm yield=degree-
+    seeking only / Fin retention=fiscal-yr Jul–Jun / Fin yield=realized only); 3 traps; canonical
+    schema (§4, M3-dirtiable); personas (`user_id`→(dept,role), Ryan-owned T3 map); 3 contracts
+    written ready-to-build. **Contract C verified vs live `main.py`:** persona carried by existing
+    `user_id` field (no endpoint change), A/B = server-side env flag (two launches, not per-request),
+    Lawrence must NOT set `data_source` (共見 is server-side). §7 of the team `.docx` filled to match.
+    Open TBDs parked in §7 (flag name, server-side history, role presentation) — none block 6/17.
+  - Open critique items the user has seen (not all actioned): walking skeleton = Ryan W2 output (not
+    day-0); M1 cut-to-thinnest ("做了再說"); coordination timebox ("不是問題", dropped).
 - **STEP 2 (the actual next *design* discussion): how to design the ENHANCER.** This is the next
   architecture topic the user wants to drill. The Enhancer is the **background synthesizer** that
   reads T2 and writes T3–T6; the design phase already pinned much of its *behaviour* — pull these
