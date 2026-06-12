@@ -9,7 +9,9 @@
 > inject-whole md, NO embedding/vector DB** — embedding/retrieval demoted to Layer 1+; `support` vs
 > **A/B validation** corrected; **T2 = no-delete LOCKED** as the A/B replay corpus; shared
 > **base record** across T3–T6; authored **dynamic trust**; **three north-star goals** recorded).
-> **Design phase fully done. Next task = coding (B3/B4), needs user go-ahead on a TASKS breakdown.**
+> **Design phase fully done. D18 consistency pass committed (`d68fb6c`, 2026-06-12). IMMEDIATE next
+> = a one-off throwaway roadmap + teammate-allocation review (do NOT persist to md). Then STEP 2 =
+> Enhancer design; coding (B3/B4) needs user go-ahead on a TASKS breakdown.**
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to
@@ -143,12 +145,14 @@ upstream.** Operating rules → `CLAUDE.md`. Settled decisions → `DECISIONS.md
   TODO, and their roadmap (collision-avoidance). Sender = master's-capstone collaborator.
 
 ## ▶ Next action
-- **STEP 1 (user will ask first): verify the docs are clean & correct.** D18 just landed across 7
-  files (DECISIONS, tier6 core rewrite, tier2, tier4, BACKLOG, code-vs-6tier-mapping, RESUME). On
-  resume the user wants a consistency pass — check no stale "T6 v1 = embedding/trajectory-RAG"
-  claims survive, `support`/A-B/sextuple/no-delete are coherent across files, no dangling pointers.
-  *(Nothing committed yet — all 7 are unstaged working-tree edits; `git diff` to review.)*
-- **STEP 2 (the actual next discussion): how to design the ENHANCER.** This is the next
+- **STEP 1 — DONE (commit `d68fb6c`).** D18 consistency pass complete; also fixed stale "no-delete
+  lean" + pre-D18 quadruplet survivors in `system_architecture.md` / tier5 / BACKLOG. Docs coherent.
+- **IMMEDIATE next (one-off, do NOT persist): roadmap + teammate-allocation review.** The user wants
+  to talk through their go-forward plan/roadmap and how to split work across teammates. **This is a
+  throwaway planning chat — its content must NOT be written into any design md (no DECISIONS/spec/
+  BACKLOG entry); discard after.** Only this pointer is recorded. The design thread (STEP 2) resumes
+  after.
+- **STEP 2 (the actual next *design* discussion): how to design the ENHANCER.** This is the next
   architecture topic the user wants to drill. The Enhancer is the **background synthesizer** that
   reads T2 and writes T3–T6; the design phase already pinned much of its *behaviour* — pull these
   together as the starting material:
