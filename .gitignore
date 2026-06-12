@@ -9,3 +9,10 @@ temp
 .vscode
 .DS_Store
 pneuma-seeker-ui
+
+# Local-only Word docs (team-facing; living copies are the .md specs) — not tracked
+docs_memory/*.docx
+~$*.docx
+
+# RESUME = live-state scratch (我看了就丟) — local only, never to remote
+docs_memory/RESUME.md

@@ -1,0 +1,31 @@
+physician_id,name,specialty,department,npi
+1,Dr. James Wilson,Cardiology,Cardiovascular,2051802512
+2,Dr. Patricia Thompson,Nephrology,Internal Medicine,9963334018
+3,Dr. Mary Smith,Surgery,Surgical,1402418010
+4,Dr. Christopher Robinson,Oncology,Oncology,9703905715
+5,Dr. Amanda Jackson,Oncology,Oncology,6241752544
+6,Dr. David Smith,Infectious Disease,Internal Medicine,7110082321
+7,Dr. John Miller,Pulmonology,Internal Medicine,2445662585
+8,Dr. Daniel Brown,Cardiology,Cardiovascular,9776552803
+9,Dr. Amanda Brown,Neurology,Neurosciences,2625792787
+10,Dr. Barbara Robinson,Hospitalist,Internal Medicine,1298737106
+11,Dr. Barbara Williams,Oncology,Oncology,4673561638
+12,Dr. Daniel Wilson,Cardiology,Cardiovascular,8877444318
+13,Dr. Emily Anderson,Nephrology,Internal Medicine,3783290795
+14,Dr. Jennifer Thompson,Infectious Disease,Internal Medicine,4131575764
+15,Dr. Matthew Thomas,Nephrology,Internal Medicine,1240251661
+16,Dr. Sarah Thomas,Endocrinology,Internal Medicine,2149938334
+17,Dr. Ethan Taylor,Oncology,Oncology,7439149233
+18,Dr. John Wilson,Neurology,Neurosciences,1599707677
+19,Dr. Amanda Wilson,Hospitalist,Internal Medicine,7801222128
+20,Dr. Linda Jones,Emergency Medicine,Emergency,7483366056
+21,Dr. Mary Brown,Cardiology,Cardiovascular,8217611860
+22,Dr. Robert Thomas,Infectious Disease,Internal Medicine,9573276057
+23,Dr. David Thompson,Hospitalist,Internal Medicine,9639245200
+24,Dr. Amanda Wilson,Cardiology,Cardiovascular,2461042543
+25,Dr. Jessica Garcia,Pulmonology,Internal Medicine,2948728483
+26,Dr. Christopher Garcia,Pulmonology,Internal Medicine,7980611182
+27,Dr. Olivia Miller,Hospitalist,Internal Medicine,5951406973
+28,Dr. Amanda Martin,Nephrology,Internal Medicine,4944899549
+29,Dr. Sarah Harris,Infectious Disease,Internal Medicine,1083651970
+30,Dr. Barbara Davis,Emergency Medicine,Emergency,1248786714
