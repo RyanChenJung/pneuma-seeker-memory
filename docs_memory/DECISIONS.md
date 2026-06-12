@@ -554,3 +554,33 @@ and **locks** the D16 "T2 no-delete" lean. Folds the `system_architecture.md` §
   authored trust erodes → the system learns the org's real practice diverges from its docs (the
   "learned > authored" goal made operational). Conflict-resolution formula → BACKLOG (does not
   block B3/B4).
+
+## D19 — Persona identity rides the existing `user_id` (principal → profile via T3), no new field
+Decided 2026-06-12, before the walking-skeleton build. Answers "Pneuma has no department/role —
+does using `user_id` for persona break the original design?" **No.** Cross-refs:
+`scenario-spec-v1.md` §5, `ROADMAP.md` (context model), BACKLOG (real-user/role separation).
+
+- **What `user_id` is in Pneuma (verified):** an **opaque namespace key**, never interpreted
+  semantically. Used only as (1) session key `chat_sessions[(user_id, chat_id)]`, (2) the
+  **workspace-DB directory name** `workspace_db_path / user_id` (`services/db/main.py:365`), and
+  (3) persistence/provenance namespace. **No validation/whitelist anywhere**; `"default_user"` is
+  just a default value, not special.
+- **Decision:** the M1 asking-user persona **is the existing `user_id`**. The map
+  `user_id → (dept, role)` lives entirely in **our T3 provisioned map, outside Pneuma**. We only
+  **read** `user_id`; we never change how Pneuma uses it.
+- **Why this does not break the design:** (1) read-only + external mapping → fully **removable**,
+  Pneuma's `user_id` semantics unchanged; (2) it is the **real-world principal→profile pattern**
+  (logged-in user → look up their dept/role), the *legitimate* identity setup, not the "cheating"
+  line of pre-supplying the resolved formula/answer; (3) **zero endpoint change** — conductor
+  already holds `self.user_id`, so the injection point needs no plumbing.
+- **Rejected alternative — new `department`/`role` fields in the `/chat` body:** bigger surgical
+  footprint (must edit upstream request parsing) **and** less realistic (real clients don't send
+  "I'm Finance" as a parameter; it drifts toward pre-supplying context). Overloading `user_id` is
+  smaller *and* more faithful.
+- **The one simplification (honest):** one persona = one `user_id` collapses "a human" and "a
+  (dept, role)". Fine for M1 (each persona is a fixed (dept, role)); it cannot model **one real
+  human switching dept/role within a session** (that reads as a different user → different
+  workspace namespace). → BACKLOG. The overload is **not silent**: T3 is the explicit, named layer
+  that owns `user_id → (dept, role)`.
+- **Safety:** persona keys (e.g. `u_adm_analyst`) are path-safe (no slashes), so the workspace-dir
+  usage is unaffected; no validation to trip.

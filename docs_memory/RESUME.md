@@ -17,8 +17,12 @@
 > rules; 3 traps; canonical schema; personas via `user_id`→(dept,role); 3 contracts written
 > "ready-to-build" (Sola data / Juan 2 JSONs / Lawrence `/chat`). Contract 3 verified against
 > live `main.py` (persona=`user_id`, A/B=server-env flag, no `data_source`). Two old planning
-> `.docx` deleted; surviving contract `.docx` is git-ignored (local-only export). **IMMEDIATE
-> next = STEP 2: Enhancer design. Coding (B3/B4) needs user go-ahead.**
+> `.docx` deleted; surviving contract `.docx` is git-ignored (local-only export).**
+> **WALKING SKELETON (Goal WS) approved & broken down (2026-06-12)** — D19 locked (persona rides
+> existing `user_id`, principal→profile via T3, does NOT break Pneuma); `TASKS.md` Goal WS = WS1–WS6;
+> surgical footprint logged in new `surgical-changes.md` (SC-1 config flag + SC-2 conductor hook,
+> both `planned`, flag-guarded, 0 🔴). **IMMEDIATE next = execute Goal WS inline (WS1→WS6), one
+> focused pass.** STEP 2 (Enhancer design) follows after WS lands.
 
 ## Project in one line
 A memory-layer plugin (6-tier design) on a **fork** of pneuma-seeker. **Never PR/push to

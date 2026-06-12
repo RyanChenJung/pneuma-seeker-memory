@@ -32,6 +32,12 @@
   layer). Revisit in the multi-user phase. *(D14)*
 - **Multi-user T3 backend** — v1 is single-user (one profile file). Multi-user = a company
   DB keyed by `user_id`; pure backend swap behind the `UserMemory` interface. *(D13, D14)*
+- **Real-user vs (dept, role) separation** — M1 collapses persona = `user_id` (one `user_id`
+  = one fixed `(dept, role)`; D19). This models the logged-in-principal→profile pattern fine,
+  but cannot represent **one real human switching department/role within a session** (that
+  reads as a different user → different workspace namespace). When a genuine multi-role user
+  appears, split the principal (`user_id`) from the profile: a `user → roles[]` map with an
+  active-role selector, or a session-level `(dept, role)` override. *(D19)*
 - **User-similarity space + emergent departments (the "circles" idea)** — embed each user's
   derived focus-profile as a vector → users become points in a space → cluster by behavioral
   proximity → **departments emerge from behavior, not the HR `department` label** (a user in

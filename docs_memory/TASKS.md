@@ -41,15 +41,37 @@ page. Agents produce only their HTML page; **I update `CHECKPOINT.md` centrally*
 Plan: batch 1 runs now → user eyeballs ONE page to lock tone/depth → fan out batches
 2–4 unsupervised → batch 5 last (synthesis).
 
+## Goal WS — Walking Skeleton (knowledge injection wired into Pneuma, flag-gated)
+
+Approved 2026-06-12 (user: "先做 walking skeleton"). **Goal:** `POST /chat` with a known
+persona `user_id` + flag ON → a dept/role + tribal-knowledge SYSTEM message is injected into
+the prompt; flag OFF → byte-identical to baseline; plugin fully removable. De-risks the
+project's #1 unknown (clean injection into Pneuma). **NOT in scope:** retrieval/embedding
+(inject-whole), T2/Enhancer, Sola's real datasets, role-presentation logic, token tuning.
+Design rationale: `DECISIONS.md` D19 (`user_id` persona) + `scenario-spec-v1.md` §4–6.
+**Execution:** one inline focused pass (not parallel sub-agents — ~150 LOC, interdependent).
+
+Surgical footprint (🟡, additive + flag-guarded, ~5 lines total): `shared/config.py`
+(`ENABLE_MEMORY_INJECTION`, default off) + `services/core/conductor/main.py` (one block after
+`self.llm_messages = [sys_prompt]`). Everything else is 🟢 in `services/memory/`.
+
+| ID | Task | Status | Agent | Commit | Notes |
+|----|------|--------|-------|--------|-------|
+| WS1 | Scaffold `services/memory/` pkg + `ENABLE_MEMORY_INJECTION` flag in `shared/config.py` (default off, mirrors `ENABLE_MEMORY_PROFILING`) | todo | — | — | flag OFF must be a no-op |
+| WS2 | T3 identity: `t3_identity.py` + `_config/identity_map.json` (4 personas, spec §5); `lookup(user_id) -> (dept, role) \| None` | todo | — | — | unknown user → None |
+| WS3 | T4-authored loader: `t4_authored.py` + `_config/tribal_knowledge.sample.json` (seed spec §B 4 entries, Juan's format); `get_dept_knowledge(dept) -> list[entry]` | todo | — | — | swap sample for Juan's real JSON later |
+| WS4 | `injector.py`: `MemoryInjector.get_injection(user_id, query) -> str \| None` — compose SYSTEM text from T3+T4 (inject-whole) | todo | — | — | None when persona unknown |
+| WS5 | Surgical hook in `conductor/main.py`: build `self.memory_injector` once + flag-guarded append after sys prompt | todo | — | — | tiny, additive, removable |
+| WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | todo | — | — | + removability check |
+
 ## Backlog (proposed — not yet approved)
 
 These came up in discussion. They need the user's go-ahead (workflow step 3) before
 moving to `todo`/`in-progress`:
 
-- **B3** — Scaffold the `src/pneuma_seeker/services/memory/` package skeleton (empty
-  structure + `ENABLE_MEMORY_*` flags in `shared/config.py`, default off).
+- **B3** — superseded by **Goal WS** above (the package scaffold + flag is WS1).
 - **B4** — (implied by gap analysis) Tier 2 append-only **episodic log** is the
-  foundation the Enhancer + Tiers 3/5/6 depend on. Likely the first *coding* goal.
+  foundation the Enhancer + Tiers 3/5/6 depend on. Likely the next *coding* goal after WS.
 
 > B2 (merge/cross-link system_architecture into the map) is resolved by
 > `code-vs-6tier-mapping.md`, which documents where each tier attaches.
