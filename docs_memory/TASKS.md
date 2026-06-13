@@ -62,7 +62,7 @@ Surgical footprint (🟡, additive + flag-guarded, ~5 lines total): `shared/conf
 | WS3 | T4-authored loader: `t4_authored.py` + `_config/tribal_knowledge.sample.json` (seed spec §B 4 entries, Juan's format); `get_dept_knowledge(dept) -> list[entry]` | done | — | — | swap sample for Juan's real JSON later ✓ |
 | WS4 | `injector.py`: `MemoryInjector.get_injection(user_id, query) -> str \| None` — compose SYSTEM text from T3+T4 (inject-whole) | done | — | — | None when persona unknown ✓; output eyeballed |
 | WS5 | Surgical hook in `conductor/main.py`: build `self.memory_injector` once + `_inject_memory()` helper called after sys prompt | done | — | — | SC-2; 3 edits, all flag-guarded |
-| WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | done | — | — | 8 pass; 3 conductor tests skip when full runtime (duckdb…) absent |
+| WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | done | — | — | 8 pass; 3 conductor tests skip when full runtime absent — all 11 (incl. the 3 vs the real Conductor) confirmed passing in an isolated venv 2026-06-13 |
 
 ## Backlog (proposed — not yet approved)
 

@@ -16,3 +16,4 @@ docs_memory/*.docx
 
 # RESUME = live-state scratch (我看了就丟) — local only, never to remote
 docs_memory/RESUME.md
+.venv/
