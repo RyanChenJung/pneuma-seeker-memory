@@ -1,0 +1,42 @@
+[
+  {
+    "department": "Admissions",
+    "term": "retention",
+    "definition": "First-year cohort re-enrollment rate the following fall.",
+    "formula": "count(cohort enrolled in Y+1) / count(first-time first-year in cohort Y)",
+    "target_tables": ["students", "enrollments"],
+    "target_columns": ["students.cohort_year", "students.is_transfer", "enrollments.is_enrolled"],
+    "hidden_rule": "Exclude transfer students (is_transfer = true) from the cohort denominator.",
+    "trap_type": "both"
+  },
+  {
+    "department": "Admissions",
+    "term": "yield",
+    "definition": "Of admitted applicants, the share who matriculate (enroll).",
+    "formula": "count(applications where enrolled = true) / count(applications where decision = 'admitted')",
+    "target_tables": ["applications"],
+    "target_columns": ["applications.decision", "applications.enrolled", "applications.is_degree_seeking"],
+    "hidden_rule": "Count only degree-seeking applicants (is_degree_seeking = true).",
+    "trap_type": "both"
+  },
+  {
+    "department": "Finance",
+    "term": "retention",
+    "definition": "Of funds received in a fiscal year, the share retained (not disbursed).",
+    "formula": "sum(amount where txn_type = 'retained') / sum(amount where txn_type = 'inflow') over the fiscal year",
+    "target_tables": ["transactions", "funds"],
+    "target_columns": ["transactions.txn_type", "transactions.txn_date", "transactions.amount"],
+    "hidden_rule": "The fiscal year is July 1 - June 30, not the calendar year; filter by the fiscal calendar.",
+    "trap_type": "both"
+  },
+  {
+    "department": "Finance",
+    "term": "yield",
+    "definition": "Return rate on invested principal over a period.",
+    "formula": "sum(return_amount) / sum(principal) over the period",
+    "target_tables": ["investments"],
+    "target_columns": ["investments.return_amount", "investments.principal", "investments.is_realized"],
+    "hidden_rule": "Only realized returns count (is_realized = true); exclude unrealized gains.",
+    "trap_type": "both"
+  }
+]

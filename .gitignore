@@ -16,3 +16,7 @@ docs_memory/*.docx
 
 # RESUME = live-state scratch (我看了就丟) — local only, never to remote
 docs_memory/RESUME.md
+.venv/
+
+# Local-only temp/handoff drafts (hand off then delete) — never tracked
+docs_memory/_*.md

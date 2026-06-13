@@ -57,12 +57,12 @@ Surgical footprint (🟡, additive + flag-guarded, ~5 lines total): `shared/conf
 
 | ID | Task | Status | Agent | Commit | Notes |
 |----|------|--------|-------|--------|-------|
-| WS1 | Scaffold `services/memory/` pkg + `ENABLE_MEMORY_INJECTION` flag in `shared/config.py` (default off, mirrors `ENABLE_MEMORY_PROFILING`) | todo | — | — | flag OFF must be a no-op |
-| WS2 | T3 identity: `t3_identity.py` + `_config/identity_map.json` (4 personas, spec §5); `lookup(user_id) -> (dept, role) \| None` | todo | — | — | unknown user → None |
-| WS3 | T4-authored loader: `t4_authored.py` + `_config/tribal_knowledge.sample.json` (seed spec §B 4 entries, Juan's format); `get_dept_knowledge(dept) -> list[entry]` | todo | — | — | swap sample for Juan's real JSON later |
-| WS4 | `injector.py`: `MemoryInjector.get_injection(user_id, query) -> str \| None` — compose SYSTEM text from T3+T4 (inject-whole) | todo | — | — | None when persona unknown |
-| WS5 | Surgical hook in `conductor/main.py`: build `self.memory_injector` once + flag-guarded append after sys prompt | todo | — | — | tiny, additive, removable |
-| WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | todo | — | — | + removability check |
+| WS1 | Scaffold `services/memory/` pkg + `ENABLE_MEMORY_INJECTION` flag in `shared/config.py` (default off, mirrors `ENABLE_MEMORY_PROFILING`) | done | — | — | SC-1; flag OFF = no-op (test `test_default_off`) |
+| WS2 | T3 identity: `t3_identity.py` + `_config/identity_map.json` (4 personas, spec §5); `lookup(user_id) -> (dept, role) \| None` | done | — | — | unknown user → None ✓ |
+| WS3 | T4-authored loader: `t4_authored.py` + `_config/tribal_knowledge.sample.json` (seed spec §B 4 entries, Juan's format); `get_dept_knowledge(dept) -> list[entry]` | done | — | — | swap sample for Juan's real JSON later ✓ |
+| WS4 | `injector.py`: `MemoryInjector.get_injection(user_id, query) -> str \| None` — compose SYSTEM text from T3+T4 (inject-whole) | done | — | — | None when persona unknown ✓; output eyeballed |
+| WS5 | Surgical hook in `conductor/main.py`: build `self.memory_injector` once + `_inject_memory()` helper called after sys prompt | done | — | — | SC-2; 3 edits, all flag-guarded |
+| WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | done | — | — | 8 pass; 3 conductor tests skip when full runtime absent — all 11 (incl. the 3 vs the real Conductor) confirmed passing in an isolated venv 2026-06-13 |
 
 ## Backlog (proposed — not yet approved)
 
