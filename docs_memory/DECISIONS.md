@@ -663,6 +663,55 @@ LLM distill → route by subject → 4-branch update → write.**
 - **Incremental, never re-scan.** The Enhancer processes only new episodes since `processed_at` and
   carries the count forward on the persistent records; it never re-reads consumed T2. (The lone
   exception is A/B replay, which re-reads T2 — mechanism still open, see below.)
-- **Still open (next):** #8 A/B-replay mechanism + the 4-branch naming (parked from this session);
-  #9 LLM budget / distill-prompt design; #10 full per-tier pass ordering (**T3→T4 already locked by
-  the D20 dependency**; the T5/T6 "shared-DB" axis still to settle).
+- **Still open (next):** #9 LLM budget / distill-prompt design; #10 full per-tier pass ordering
+  (**T3→T4 already locked by the D20 dependency**; the T5/T6 "shared-DB" axis still to settle).
+  (#8 A/B-replay + the 4-branch naming are now closed → **D22**.)
+
+## D22 — A/B conflict resolution: per-subject, graded against recorded reality (never a from-scratch judge)
+Decided 2026-06-13 (one-at-a-time with user). Closes #8. Makes D18-5's "A/B validation" concrete
+and names the 4 update branches. The Enhancer's `ARBITRATE` branch (contradiction) and the A/B step
+inside `MERGE` (partial overlap) use this.
+
+- **4-branch update names (LOCKED, closes #2):** candidate vs stored record →
+  **INSERT** (no match → add) · **REINFORCE** (exact match → `support`++, = the recurrence
+  increment, D21 — *not* "skip", a duplicate is the signal) · **MERGE** (partial overlap → LLM
+  merge/split, then A/B the result) · **ARBITRATE** (direct contradiction → run A/B; outcomes:
+  replace / keep-old / `contested`).
+- **The honesty criterion (the core principle).** A resolution method is *honest* iff its winner is
+  decided by comparison against an **already-recorded human reaction** (or an objective oracle), and
+  **never** against a model's **from-scratch judgement of "which answer is correct"**. The key is
+  *what you grade against*, not whether you touch the DB.
+- **`support`-only is NOT A/B (confirmed).** A brand-new correct lesson naturally has little
+  `support`; deciding conflicts by evidence *volume* would always favour the incumbent. A/B is
+  separate from `support` (restates D18-5) and must be **time-weighted** (recent-dominant evidence
+  can win on less volume → handles a genuine regime change vs noise).
+- **A/B is per-subject (mirrors the D6-4 routing principle) — two mechanisms:**
+  - **Meaning / definition / method (T3 / T4 / T6) → Option B (re-READ, not re-run).** Gather the
+    relevant T2 slice (both records' `source_episode` ∪ same-feature recent episodes), and for each
+    episode mine the recorded `(method actually used → human reaction)` pair; the **human reaction
+    is the ground truth**. Time-weight; **abstain** on ambiguous / non-discriminating episodes;
+    unresolved → mark **`contested`** and wait (or, if both versions were independently accepted in
+    different contexts, that *reveals a hidden context split* → route back to MERGE). A cheap
+    deterministic recompute of A-vs-B on an episode's data is allowed *only* to test whether the
+    episode discriminates the two — it is graded against the recorded reaction, not judged.
+  - **Execution / join (T5) → objective DB re-test.** Actually run the candidate joins against the
+    DB and grade by deterministic validity (executes / non-empty / no fan-out / referential
+    consistency). The DB is the oracle — no human, no correctness judge. This is the natural
+    extension of D16's `success`/`fail` counting.
+- **Why B is honest (the reframe).** B does **not** claim "A is correct"; it claims "A is what this
+  user/org **operatively means**" — and operative meaning is *constituted by* human reactions, so
+  reactions cannot be "wrong" about it. (C's target, correctness, is independent of the answers C
+  generates, so grading them needs an external truth that doesn't exist → C is dishonest for
+  meaning.) This is the latent-intent-convergence goal, not a correctness oracle.
+- **Option C (full agent re-execution) rejected for meaning → permanent BACKLOG.** Re-running the
+  Conductor with A vs B injected makes *new* answers no human ever reacted to → forces a from-scratch
+  correctness judge with no oracle (e.g. re-running "what's our yield?" yields 62% vs 65% and nothing
+  can grade which is right). The only legitimate re-execution is the T5 objective re-test above.
+- **B's honest blind spot = silent collective error.** If a whole org consistently uses a
+  wrong-but-operative definition, B faithfully encodes it and cannot see the error (no reaction
+  reveals it). B is honest *because* it never pretends to catch this (C would pretend and fail). The
+  mitigation is a separate **memory-transparency / alignment surface** (surface the operative
+  assumption to the user via the T1 notebook → the human catches it / owns the outcome) → BACKLOG.
+- **MVP scope.** Option B is the **first learning loop** (T3 meaning). The T5 objective re-test is
+  designed now, **built when T5 learning is built** (it needs offline DB access). Full re-execution
+  is never built for meaning.

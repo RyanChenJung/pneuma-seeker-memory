@@ -118,11 +118,28 @@
 
 ## Cross-tier
 
-- **A/B-validation replay cost / sampled replay** — the Enhancer validates a conflicting new
-  lesson by **replaying it (and the stored one) against the never-deleted Tier 2** (D18-5/6). This
-  can re-run historical episodes (incl. EHR DB). Runs offline so volume is tolerable, but if it
-  gets too large the reserved fallback is **sampled replay** (only a few past episodes, not full).
-  Cost to be measured before adding the limit. *(D18)*
+- **A/B-validation replay cost / sampled replay** — the Enhancer resolves a conflicting new
+  lesson against the never-deleted Tier 2 (D18-5/6, mechanism in **D22**). For meaning tiers
+  (T3/T4/T6) v1 only **re-reads** a relevant T2 slice (cheap); for T5 it objectively **re-tests**
+  joins against the DB. Runs offline so volume is tolerable, but if the relevant slice gets too
+  large the reserved fallback is **sampled replay** (a few past/recent episodes, not the full
+  slice). Cost to be measured before adding the limit. *(D18, D22)*
+- **Full agent re-execution for meaning conflicts — rejected by design, not deferred (D22):**
+  re-running the whole Conductor with version A vs B injected (Option C) produces *new* answers
+  no human ever reacted to, so picking a winner needs a from-scratch correctness judge with no
+  oracle. Listed here so it is not re-litigated; the objective DB re-test for T5 is the only
+  legitimate re-execution. *(D22)*
+- **Memory transparency / alignment surface (surface operative assumptions to the user)** —
+  original Pneuma already shows, in the sidebar, the actual tables it ended up retrieving — a
+  human↔LLM alignment point. Extend this: surface the **memory-injected operative assumptions**
+  (e.g. "assumed yield = enrolled/admitted, per Admissions convention"; which join; which
+  definition), fed largely from the curated **Tier 1** notebook (D9/D11), into the UI sidebar.
+  Two payoffs: (1) it lets the human catch the **silent collective error** that Option B
+  structurally cannot (an org-wide wrong-but-operative definition) — shrinking that gap; (2) it
+  **shifts responsibility** — once an assumption is shown and not challenged, the user owns the
+  outcome, not the system. Connects: T1 (the surface), B's blind spot (D22), the "human is the
+  ground truth" principle. Future UI work (touches `pneuma-seeker-ui`). *(D22; mitigates the B
+  blind spot)*
 
 > **Resolved (no longer deferred):** *Tier 2 = no-delete* was a lean here; **LOCKED in D18-6**
 > (T2 is the A/B replay corpus). `processed_at` → pure progress marker. The old "Episodic-log
