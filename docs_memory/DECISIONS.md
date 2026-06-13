@@ -715,3 +715,69 @@ inside `MERGE` (partial overlap) use this.
 - **MVP scope.** Option B is the **first learning loop** (T3 meaning). The T5 objective re-test is
   designed now, **built when T5 learning is built** (it needs offline DB access). Full re-execution
   is never built for meaning.
+
+## D23 — Enhancer LLM budget + pipeline: LLM understands, code decides; tier folds into distill
+Decided 2026-06-13 (one-at-a-time with user). Closes the last two STEP-2 open items (#9 LLM budget /
+distill-prompt design, #5 chunking). Completes the Enhancer design (D20 architecture · D21 mechanism ·
+D22 A/B). **Consolidated build spec:** [`enhancer-design.md`](enhancer-design.md). The unifying
+principle below settles where every LLM call sits in the per-run pipeline:
+
+> **The LLM only does language understanding (cluster / distill / judge relation / read reactions /
+> restructure); the program does everything mechanical (count, look up neighbours, tally votes,
+> write); the final verdict is always a program tally so the LLM can never sneak a from-scratch
+> correctness judgement (the D22 honesty red line, made mechanical).**
+
+- **Pipeline (per User-Enhancer run):** `eligibility (Stage 1) → cluster → distill → 4-branch update
+  → write`.
+- **Call granularity (#1).** **Cluster = one batched LLM pass** (the LLM forms the groups, D21 — it
+  must see all candidates at once, so clustering is inherently a global/batched view; affordable
+  because User-level volume is small). **Distill = one focused LLM call per cluster** (one lesson per
+  call → cleanest output). The earlier "批次多群 (one all-in pass)" lean was a wobble; we chose split
+  for quality, consistent with #2 — **this refines D21's "cluster + distill in one pass"** (now
+  effectiveness-first, not cost-first). Bounded by the context cap (#5).
+- **Routing folded into distill (#2).** "Which tier (T3/T4/T5/T6)?" is **not** a separate routing
+  step/call — it is an **output field** the distill call emits alongside the record. Folding it in
+  removes a whole routing pass; the cross-tier association is preserved by `source_episode` + the
+  no-delete T2 (D18-6/7), **not** by keeping tiers in one call (and mixing tiers in one call would
+  risk bleeding meaning into a T5 join record, violating the D16 boundary).
+- **Pure distill (#3).** The distill call **only** produces the three semantic fields
+  `{tier, intent, associated_experience}`. The **program** fills the mechanical fields
+  `{support = cluster size, last_seen = max ts, source_episode = member ids}`; `type` (positive/
+  negative) is **inherited from the Stage-1 polarity tag**, not re-judged. The verb = *"summarise the
+  recurring lesson, grounded in the recorded human reactions; never judge whether the answer was
+  correct"* (D6-3/D22). Distill is **pure** (sees only the new cluster, emits one candidate); the
+  4-branch comparison against stored records is a **separate** step.
+- **4-branch update (#4).** Cheap similarity acts **only as a neighbour detector**:
+  - **No neighbour → INSERT** (program, no LLM).
+  - **Has neighbour → an LLM judges the relation** → REINFORCE / MERGE / ARBITRATE. **REINFORCE is
+    also an LLM verdict, NOT a similarity threshold** — embedding measures *topical* closeness, so a
+    direct contradiction ("retention = fall-to-fall" vs "= spring-to-spring") scores ~0.95 and a
+    similarity gate would mis-fire it as REINFORCE; mis-reinforcing a stale definition instead of
+    arbitrating the correction is the worst error for the T3 meaning loop. (Cheap near-exact-text
+    REINFORCE shortcut → BACKLOG.)
+  - **ARBITRATE (contradiction):** program gathers the T2 slice → **one batched LLM call** reads each
+    episode's `(method used → human reaction)` and votes `favours-A / favours-B / abstain` → **program
+    does the time-weighted tally** → `replace / keep-old / contested` (a context split → route to
+    MERGE). The honesty red line is enforced *mechanically*: the LLM only votes, the program only
+    counts. The D22 **deterministic discrimination pre-filter is CUT for MVP** — it is only a cheap
+    pre-filter (drop episodes where A and B compute the same result), only possible for
+    *operationalisable* meaning (executable), never applies to pure-text meaning, and is fully covered
+    by the LLM's `abstain` vote anyway → BACKLOG (cost optimisation for executable cases).
+  - **MERGE (partial overlap, or an ARBITRATE bounce-back):** an LLM **restructures** (merge into one
+    richer record / split into two context-scoped records; the distinguishing context is **read from
+    the episodes**, not invented; no correctness judgement) → **always run the A/B validation** (reuse
+    the ARBITRATE Option-B machinery; for an additive merge it harmlessly abstains; for a split it
+    confirms each branch holds in its own context) → program writes (one / two / `contested`).
+    (Conditional-skip of the additive-merge A/B → BACKLOG.)
+- **Context cap / chunking (#5).** The **cost** cap (limit calls to save money) is deferred
+  (effectiveness-first). The **input** cap is a hard physical limit (the cluster pass must fit the
+  context window) and cannot be deferred in principle — but **MVP does not implement chunking** (D21:
+  User-level volume is small, so it is not on the hot path). **Reserved fallback when it is ever hit:**
+  cheap embedding **pre-bucketing** (keep likely-same fragments together) → LLM does the final
+  clustering **within each bucket** (this does *not* violate D21, which only forbids embedding
+  *replacing* LLM clustering) → BACKLOG.
+- **Amends D21's "Stage-1 = no LLM" (stage decision, not a reversal of the design).** For the current
+  **validation stage**, implicit-pushback detection in the Stage-1 eligibility gate **uses an LLM**
+  (prove it works first; cheap no-LLM heuristics — behavioural signals + a negation lexicon + a small
+  local classifier — are the **cost-optimisation BACKLOG** for later). Rationale: efficacy before
+  cost at this stage.

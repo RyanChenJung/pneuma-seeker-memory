@@ -116,6 +116,32 @@
   negative entries; a lower bar for negative anti-patterns (a repeatedly-made mistake should
   promote faster) is a noted future direction. *(D17)*
 
+## Enhancer (background synthesizer)
+
+> Full build spec: `enhancer-design.md`. These are the cost/scale optimisations deliberately
+> cut from v1 because the current stage is **effectiveness-first** (prove it works, optimise later).
+
+- **Cheap no-LLM implicit-pushback detection** — v1 uses an LLM in the Stage-1 eligibility gate to
+  read implicit pushback (D23 amends D21's "Stage-1 = no LLM"). The cost-optimised path: behavioural
+  signals ("no positive ack + immediate near-duplicate re-ask"), a negation/correction lexicon, and
+  optionally a small **local** classifier (not a generative LLM call). Add when cost matters. *(D23)*
+- **Per-run cost cap** — limit the number of LLM calls per Enhancer run to bound spend. Deferred
+  (effectiveness-first); distinct from the *input* (context) cap, which is physical. *(D23)*
+- **Context-cap chunking (embedding pre-bucketing)** — when candidates exceed the cluster pass's
+  context window, pre-bucket likely-same fragments cheaply (embedding) → LLM does the **final**
+  clustering within each bucket. Does NOT violate D21 (embedding only pre-buckets, never *replaces*
+  LLM clustering). MVP never hits this (User-level volume small). *(D23)*
+- **Near-exact-text REINFORCE shortcut** — v1 routes even REINFORCE through the LLM (embedding can't
+  separate same-lesson from contradiction). A strict near-exact-text match on `intent` could shortcut
+  the high-frequency duplicate case without an LLM call. *(D23)*
+- **Conditional-skip of the additive-merge A/B** — v1 always runs the A/B validation after a MERGE
+  (it harmlessly abstains for an additive merge). Detecting "this is purely additive → skip A/B"
+  saves calls but adds branching logic. *(D23)*
+- **Deterministic A/B discrimination pre-filter** — for *operationalisable* (executable) meaning,
+  cheaply drop episodes where A and B compute the same result before the LLM reads them. CUT from MVP
+  (only works for executable meaning, never pure-text, and the LLM's `abstain` already covers it).
+  *(D22, D23)*
+
 ## Cross-tier
 
 - **A/B-validation replay cost / sampled replay** — the Enhancer resolves a conflicting new
