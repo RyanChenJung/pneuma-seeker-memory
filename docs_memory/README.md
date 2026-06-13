@@ -6,7 +6,7 @@
 
 ## Design specs (stable)
 - `system_architecture.md` — the 6-tier north-star design target
-- `memory-architecture-levels.md` — Level × Tier architecture (LOCKED D20; Dept/Inst deferred)
+- `level-tier-design.md` — Level × Tier architecture (LOCKED D20; Dept/Inst deferred)
 - `tier1..tier6-*-design.md` — per-tier build specs (LOCKED v1)
 - `enhancer-design.md` — the **WRITE** path: the Enhancer / background synthesizer (D20–D23)
 - `injection-design.md` — the **READ** path *(planned, not yet written — see RESUME)*

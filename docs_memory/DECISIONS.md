@@ -587,7 +587,7 @@ does using `user_id` for persona break the original design?" **No.** Cross-refs:
 
 ## D20 — Recursive Level × Tier memory architecture (refines D13/D14/D15)
 Decided 2026-06-13 (high-level reframe, one-at-a-time with user). Full explainer + diagram:
-[`memory-architecture-levels.md`](memory-architecture-levels.md). This unifies the overlay (D14)
+[`level-tier-design.md`](level-tier-design.md). This unifies the overlay (D14)
 and promotion-ladder (D13/D15) ideas into one clean structure and **fixes the "memory vs Enhancer
 got mixed up" confusion** by separating the *stores* (nouns) from the *writer* (verb).
 

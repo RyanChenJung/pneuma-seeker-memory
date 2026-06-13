@@ -3,7 +3,7 @@
 > Status: **LOCKED 2026-06-13.** Trail: `DECISIONS.md` **D20** (Level × Tier architecture, the
 > Enhancer's place in it) → **D21** (success gate, recurrence = `support`, self-correction) →
 > **D22** (A/B conflict resolution, the honesty criterion) → **D23** (LLM budget + pipeline). Big
-> picture & diagram: `memory-architecture-levels.md`. Per-tier specs it writes into:
+> picture & diagram: `level-tier-design.md`. Per-tier specs it writes into:
 > `tier3..tier6-*-design.md`; its input log: `tier2-episodic-log-design.md`. Deferred items:
 > `BACKLOG.md`.
 >
