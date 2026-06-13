@@ -584,3 +584,200 @@ does using `user_id` for persona break the original design?" **No.** Cross-refs:
   that owns `user_id → (dept, role)`.
 - **Safety:** persona keys (e.g. `u_adm_analyst`) are path-safe (no slashes), so the workspace-dir
   usage is unaffected; no validation to trip.
+
+## D20 — Recursive Level × Tier memory architecture (refines D13/D14/D15)
+Decided 2026-06-13 (high-level reframe, one-at-a-time with user). Full explainer + diagram:
+[`level-tier-design.md`](level-tier-design.md). This unifies the overlay (D14)
+and promotion-ladder (D13/D15) ideas into one clean structure and **fixes the "memory vs Enhancer
+got mixed up" confusion** by separating the *stores* (nouns) from the *writer* (verb).
+
+- **Two orthogonal axes.** **Tier (T1–T6) = the *kind* of knowledge** (T1 buffer / T2 raw episodes
+  / T3 about-a-person / T4 conventions / T5 schema·join / T6 method). **Level = *whose / what scope***
+  (User / Department / Institution). A store = one **(Level, Tier)** cell. **"Tier" is reserved for
+  T1–T6 only** — never call a level a "tier". This split dissolves "why does a user have a T4?"
+  (tier = kind, level = scope = the user's own version).
+- **Holders + matrix.** Three memory holders, each owns its memory **and** its own Enhancer.
+  **T2 and T3 exist only at the User level** (only users converse → only they make raw episodes;
+  a dept/institution is not a person). **T4/T5/T6 exist at every level**, each level keeping its
+  own version. (Dept/Inst scratchpad "T1" = **shelved**, not built now — revisit later.)
+- **Enhancer = one algorithm, two modes** (the *writer*; frontline agents stay read-only):
+  **DISTILL mode** (User-Enhancer) reads **raw T2** → needs the eligibility gate + LLM distillation
+  → writes the user's own T3–T6. **AGGREGATE/PROMOTE mode** (Dept- & Inst-Enhancer) reads the
+  level-below's **already-distilled** memory → **no eligibility gate** → finds what enough members
+  share and **promotes** it. "Common enough" is the same idea; only the counting unit changes
+  (User = one person repeats; Dept = how many users share; Inst = how many depts share). See D21.
+- **Data flow.** **UP = promote**: a lesson is born local (User), pulled to Dept when shared across
+  users, to Inst when shared across depts. **Authored/authoritative KB (D15) is the exception** —
+  ingested directly at Dept/Inst, never born at User. **DOWN = copy on bootstrap**: a new user
+  **copies** its department's memory as a starting brain (snapshot), then evolves independently.
+  **READ = User-level only**: because of copy semantics the Conductor reads just the user's own
+  tiers (they already contain the copied parent knowledge) — **no live cross-level composition at
+  read time**.
+- **Copy, NOT overlay (user choice).** New-holder bootstrap is a real **copy/snapshot**, not a
+  read-time overlay. Rationale: users **own** their memory (fits "each user maintains its own
+  T1–T6" and the on/off switch below — overlay can't survive turning a level off). **Tradeoff
+  (accepted):** a copy goes stale when the parent later improves; re-sync → BACKLOG.
+- **Dept/Inst = on/off switch; User = always-on base.** The **User level is always on and equals
+  today's single-user Pneuma + a personal memory.** Department & Institution are **additive,
+  flag-gated** layers (same `ENABLE_MEMORY_*` pattern, default off). **Off** → no aggregate
+  Enhancer, no bootstrap copy → identical to current Pneuma (answers the "multi-user adaptation"
+  worry: it degrades gracefully). **The flag boundary = the milestone boundary.**
+- **MVP = User level only (Dept/Inst OFF).** Close the smallest learning loop end-to-end for **one
+  persona**: `conversation → T2 capture → User-Enhancer (distill) → write a User T3 record → next
+  conversation injects it → observable behaviour change`. Dept/Inst levels + AGGREGATE Enhancer are
+  **deferred** (their input = user memory, which doesn't exist until the User level works).
+- **Refines prior locks (not contradicts):** D13 ("Tiers 3–6 distilled from T2") → only *User-level*
+  tiers come straight from T2; higher levels consume distilled memory. D14 overlay/promotion → now
+  structurally housed; but read = **copy**, not live overlay. D15 authored T4 → lives at **Dept/Inst**;
+  the promotion ladder = exactly what the Dept/Inst-Enhancer does.
+
+## D21 — Enhancer mechanism v1: success gate, recurrence = support, self-correction
+Decided 2026-06-13 (one-at-a-time with user). Refines D6-3 (success gate) and D18-5 (4-branch
+update). The Enhancer's internal pipeline per run: **eligibility → cluster + recurrence-gate →
+LLM distill → route by subject → 4-branch update → write.**
+
+- **Success gate = the filter for "which raw T2 material may become persistent memory"** — it
+  decides *worth-learning + common-enough*, **never judges answer-correctness**. Two stages:
+  - **Stage 1 — per-trajectory eligibility (cheap, NO LLM, from existing T2 fields).** Positive =
+    clean terminal success (executed, returned, no error, few/no self-overturns). Negative =
+    **SQL/exec error** OR **ReAct self-overturn** OR **implicit user pushback** (next-turn tone).
+    **All three negative sources kept** (user-confirmed).
+  - **Stage 2 — cluster + recurrence threshold + LLM distill.**
+- **Recurrence threshold N = 3 (LOCKED).** A lesson must recur ≥3× before it solidifies. (Exact N
+  + asymmetry = tunable knobs → BACKLOG.)
+- **Recurrence count = the record's own `support`, NOT a separate fingerprint sidecar.** Each
+  learned record carries `support` (D18-7); the 4-branch **"exact match → `support`++"** branch
+  **is** the recurrence increment. A record **solidifies (becomes injectable) at `support` ≥ 3**;
+  `support` < 3 = pending/observing (not yet injected). Counting unit changes per level (D20).
+- **Clustering at the User level = LLM does it directly** (cluster + distill in one pass).
+  **Feasible because per-user candidate volume is small** → affordable. This **replaces the earlier
+  hand-tuned structural-fingerprint idea** (dept/term/join-pair/operator-sequence), which was
+  over-engineering once the scope is per-user and which baked `department` in too rigidly. The LLM
+  is the "same-lesson?" judge; **Stage 1 eligibility stays cheap heuristic (no LLM).**
+- **Self-correction (ReAct self-overturn) yields TWO records, not one.** The abandoned path →
+  **negative anti-pattern**; the recovery path → **positive exemplar**; the *capability* to
+  self-correct is **not** recorded (not reusable domain knowledge). **Mint the negative ONLY when
+  there is an objective failure signal** (error / empty result / validation fail). A pure
+  preference-switch (no objective failure) → only a **weak positive**, **no** negative — don't
+  manufacture an anti-pattern. Recurrence is the backstop either way.
+- **Incremental, never re-scan.** The Enhancer processes only new episodes since `processed_at` and
+  carries the count forward on the persistent records; it never re-reads consumed T2. (The lone
+  exception is A/B replay, which re-reads T2 — mechanism still open, see below.)
+- **Still open (next):** #9 LLM budget / distill-prompt design; #10 full per-tier pass ordering
+  (**T3→T4 already locked by the D20 dependency**; the T5/T6 "shared-DB" axis still to settle).
+  (#8 A/B-replay + the 4-branch naming are now closed → **D22**.)
+
+## D22 — A/B conflict resolution: per-subject, graded against recorded reality (never a from-scratch judge)
+Decided 2026-06-13 (one-at-a-time with user). Closes #8. Makes D18-5's "A/B validation" concrete
+and names the 4 update branches. The Enhancer's `ARBITRATE` branch (contradiction) and the A/B step
+inside `MERGE` (partial overlap) use this.
+
+- **4-branch update names (LOCKED, closes #2):** candidate vs stored record →
+  **INSERT** (no match → add) · **REINFORCE** (exact match → `support`++, = the recurrence
+  increment, D21 — *not* "skip", a duplicate is the signal) · **MERGE** (partial overlap → LLM
+  merge/split, then A/B the result) · **ARBITRATE** (direct contradiction → run A/B; outcomes:
+  replace / keep-old / `contested`).
+- **The honesty criterion (the core principle).** A resolution method is *honest* iff its winner is
+  decided by comparison against an **already-recorded human reaction** (or an objective oracle), and
+  **never** against a model's **from-scratch judgement of "which answer is correct"**. The key is
+  *what you grade against*, not whether you touch the DB.
+- **`support`-only is NOT A/B (confirmed).** A brand-new correct lesson naturally has little
+  `support`; deciding conflicts by evidence *volume* would always favour the incumbent. A/B is
+  separate from `support` (restates D18-5) and must be **time-weighted** (recent-dominant evidence
+  can win on less volume → handles a genuine regime change vs noise).
+- **A/B is per-subject (mirrors the D6-4 routing principle) — two mechanisms:**
+  - **Meaning / definition / method (T3 / T4 / T6) → Option B (re-READ, not re-run).** Gather the
+    relevant T2 slice (both records' `source_episode` ∪ same-feature recent episodes), and for each
+    episode mine the recorded `(method actually used → human reaction)` pair; the **human reaction
+    is the ground truth**. Time-weight; **abstain** on ambiguous / non-discriminating episodes;
+    unresolved → mark **`contested`** and wait (or, if both versions were independently accepted in
+    different contexts, that *reveals a hidden context split* → route back to MERGE). A cheap
+    deterministic recompute of A-vs-B on an episode's data is allowed *only* to test whether the
+    episode discriminates the two — it is graded against the recorded reaction, not judged.
+  - **Execution / join (T5) → objective DB re-test.** Actually run the candidate joins against the
+    DB and grade by deterministic validity (executes / non-empty / no fan-out / referential
+    consistency). The DB is the oracle — no human, no correctness judge. This is the natural
+    extension of D16's `success`/`fail` counting.
+- **Why B is honest (the reframe).** B does **not** claim "A is correct"; it claims "A is what this
+  user/org **operatively means**" — and operative meaning is *constituted by* human reactions, so
+  reactions cannot be "wrong" about it. (C's target, correctness, is independent of the answers C
+  generates, so grading them needs an external truth that doesn't exist → C is dishonest for
+  meaning.) This is the latent-intent-convergence goal, not a correctness oracle.
+- **Option C (full agent re-execution) rejected for meaning → permanent BACKLOG.** Re-running the
+  Conductor with A vs B injected makes *new* answers no human ever reacted to → forces a from-scratch
+  correctness judge with no oracle (e.g. re-running "what's our yield?" yields 62% vs 65% and nothing
+  can grade which is right). The only legitimate re-execution is the T5 objective re-test above.
+- **B's honest blind spot = silent collective error.** If a whole org consistently uses a
+  wrong-but-operative definition, B faithfully encodes it and cannot see the error (no reaction
+  reveals it). B is honest *because* it never pretends to catch this (C would pretend and fail). The
+  mitigation is a separate **memory-transparency / alignment surface** (surface the operative
+  assumption to the user via the T1 notebook → the human catches it / owns the outcome) → BACKLOG.
+- **MVP scope.** Option B is the **first learning loop** (T3 meaning). The T5 objective re-test is
+  designed now, **built when T5 learning is built** (it needs offline DB access). Full re-execution
+  is never built for meaning.
+
+## D23 — Enhancer LLM budget + pipeline: LLM understands, code decides; tier folds into distill
+Decided 2026-06-13 (one-at-a-time with user). Closes the last two STEP-2 open items (#9 LLM budget /
+distill-prompt design, #5 chunking). Completes the Enhancer design (D20 architecture · D21 mechanism ·
+D22 A/B). **Consolidated build spec:** [`enhancer-design.md`](enhancer-design.md). The unifying
+principle below settles where every LLM call sits in the per-run pipeline:
+
+> **The LLM only does language understanding (cluster / distill / judge relation / read reactions /
+> restructure); the program does everything mechanical (count, look up neighbours, tally votes,
+> write); the final verdict is always a program tally so the LLM can never sneak a from-scratch
+> correctness judgement (the D22 honesty red line, made mechanical).**
+
+- **Pipeline (per User-Enhancer run):** `eligibility (Stage 1) → cluster → distill → 4-branch update
+  → write`.
+- **Call granularity (#1).** **Cluster = one batched LLM pass** (the LLM forms the groups, D21 — it
+  must see all candidates at once, so clustering is inherently a global/batched view; affordable
+  because User-level volume is small). **Distill = one focused LLM call per cluster** (one lesson per
+  call → cleanest output). The earlier "批次多群 (one all-in pass)" lean was a wobble; we chose split
+  for quality, consistent with #2 — **this refines D21's "cluster + distill in one pass"** (now
+  effectiveness-first, not cost-first). Bounded by the context cap (#5).
+- **Routing folded into distill (#2).** "Which tier (T3/T4/T5/T6)?" is **not** a separate routing
+  step/call — it is an **output field** the distill call emits alongside the record. Folding it in
+  removes a whole routing pass; the cross-tier association is preserved by `source_episode` + the
+  no-delete T2 (D18-6/7), **not** by keeping tiers in one call (and mixing tiers in one call would
+  risk bleeding meaning into a T5 join record, violating the D16 boundary).
+- **Pure distill (#3).** The distill call **only** produces the three semantic fields
+  `{tier, intent, associated_experience}`. The **program** fills the mechanical fields
+  `{support = cluster size, last_seen = max ts, source_episode = member ids}`; `type` (positive/
+  negative) is **inherited from the Stage-1 polarity tag**, not re-judged. The verb = *"summarise the
+  recurring lesson, grounded in the recorded human reactions; never judge whether the answer was
+  correct"* (D6-3/D22). Distill is **pure** (sees only the new cluster, emits one candidate); the
+  4-branch comparison against stored records is a **separate** step.
+- **4-branch update (#4).** Cheap similarity acts **only as a neighbour detector**:
+  - **No neighbour → INSERT** (program, no LLM).
+  - **Has neighbour → an LLM judges the relation** → REINFORCE / MERGE / ARBITRATE. **REINFORCE is
+    also an LLM verdict, NOT a similarity threshold** — embedding measures *topical* closeness, so a
+    direct contradiction ("retention = fall-to-fall" vs "= spring-to-spring") scores ~0.95 and a
+    similarity gate would mis-fire it as REINFORCE; mis-reinforcing a stale definition instead of
+    arbitrating the correction is the worst error for the T3 meaning loop. (Cheap near-exact-text
+    REINFORCE shortcut → BACKLOG.)
+  - **ARBITRATE (contradiction):** program gathers the T2 slice → **one batched LLM call** reads each
+    episode's `(method used → human reaction)` and votes `favours-A / favours-B / abstain` → **program
+    does the time-weighted tally** → `replace / keep-old / contested` (a context split → route to
+    MERGE). The honesty red line is enforced *mechanically*: the LLM only votes, the program only
+    counts. The D22 **deterministic discrimination pre-filter is CUT for MVP** — it is only a cheap
+    pre-filter (drop episodes where A and B compute the same result), only possible for
+    *operationalisable* meaning (executable), never applies to pure-text meaning, and is fully covered
+    by the LLM's `abstain` vote anyway → BACKLOG (cost optimisation for executable cases).
+  - **MERGE (partial overlap, or an ARBITRATE bounce-back):** an LLM **restructures** (merge into one
+    richer record / split into two context-scoped records; the distinguishing context is **read from
+    the episodes**, not invented; no correctness judgement) → **always run the A/B validation** (reuse
+    the ARBITRATE Option-B machinery; for an additive merge it harmlessly abstains; for a split it
+    confirms each branch holds in its own context) → program writes (one / two / `contested`).
+    (Conditional-skip of the additive-merge A/B → BACKLOG.)
+- **Context cap / chunking (#5).** The **cost** cap (limit calls to save money) is deferred
+  (effectiveness-first). The **input** cap is a hard physical limit (the cluster pass must fit the
+  context window) and cannot be deferred in principle — but **MVP does not implement chunking** (D21:
+  User-level volume is small, so it is not on the hot path). **Reserved fallback when it is ever hit:**
+  cheap embedding **pre-bucketing** (keep likely-same fragments together) → LLM does the final
+  clustering **within each bucket** (this does *not* violate D21, which only forbids embedding
+  *replacing* LLM clustering) → BACKLOG.
+- **Amends D21's "Stage-1 = no LLM" (stage decision, not a reversal of the design).** For the current
+  **validation stage**, implicit-pushback detection in the Stage-1 eligibility gate **uses an LLM**
+  (prove it works first; cheap no-LLM heuristics — behavioural signals + a negation lexicon + a small
+  local classifier — are the **cost-optimisation BACKLOG** for later). Rationale: efficacy before
+  cost at this stage.
