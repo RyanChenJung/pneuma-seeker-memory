@@ -1,9 +1,16 @@
-# Memory Architecture — Levels × Tiers (high-level explainer)
+# Memory Architecture — Levels × Tiers — Design (LOCKED v1)
 
-> Audience: anyone who needs the big picture of the memory layer (teammates, reviewers).
-> This is an **explainer**, not a build spec — for build detail see the per-tier
-> `tierN-*-design.md` and `DECISIONS.md`. Status: agreed 2026-06-13 (refines D13/D14/D15;
-> a `DECISIONS.md` entry will point here).
+> Status: **LOCKED 2026-06-13 (DECISIONS D20).** This is the **architecture-level design** for the
+> memory layer — the *third axis* of the design, parallel to the per-tier specs (`tierN-*-design.md`,
+> the *kinds* of knowledge) and the writer spec (`enhancer-design.md`, the *verb*). This doc owns the
+> **Level × Tier matrix** and the holder/promotion/copy/flag semantics. Refines D13/D14/D15.
+>
+> **Build status (important):** only the **User level** is on the build path — its cells are built
+> per the `tierN-*-design.md` + `enhancer-design.md` specs. The **Department / Institution** levels
+> and the **AGGREGATE/PROMOTE** Enhancer mode are the **design target but DEFERRED** (MVP = User
+> level only, D20); the per-level mechanics below (bootstrap-copy, promotion counting, re-sync) are
+> specified at *architecture* granularity here, **not** as a v1 build spec, and several details live
+> in `BACKLOG.md`. Audience: teammates / reviewers needing the big picture.
 
 ## One paragraph
 
