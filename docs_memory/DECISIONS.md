@@ -584,3 +584,85 @@ does using `user_id` for persona break the original design?" **No.** Cross-refs:
   that owns `user_id → (dept, role)`.
 - **Safety:** persona keys (e.g. `u_adm_analyst`) are path-safe (no slashes), so the workspace-dir
   usage is unaffected; no validation to trip.
+
+## D20 — Recursive Level × Tier memory architecture (refines D13/D14/D15)
+Decided 2026-06-13 (high-level reframe, one-at-a-time with user). Full explainer + diagram:
+[`memory-architecture-levels.md`](memory-architecture-levels.md). This unifies the overlay (D14)
+and promotion-ladder (D13/D15) ideas into one clean structure and **fixes the "memory vs Enhancer
+got mixed up" confusion** by separating the *stores* (nouns) from the *writer* (verb).
+
+- **Two orthogonal axes.** **Tier (T1–T6) = the *kind* of knowledge** (T1 buffer / T2 raw episodes
+  / T3 about-a-person / T4 conventions / T5 schema·join / T6 method). **Level = *whose / what scope***
+  (User / Department / Institution). A store = one **(Level, Tier)** cell. **"Tier" is reserved for
+  T1–T6 only** — never call a level a "tier". This split dissolves "why does a user have a T4?"
+  (tier = kind, level = scope = the user's own version).
+- **Holders + matrix.** Three memory holders, each owns its memory **and** its own Enhancer.
+  **T2 and T3 exist only at the User level** (only users converse → only they make raw episodes;
+  a dept/institution is not a person). **T4/T5/T6 exist at every level**, each level keeping its
+  own version. (Dept/Inst scratchpad "T1" = **shelved**, not built now — revisit later.)
+- **Enhancer = one algorithm, two modes** (the *writer*; frontline agents stay read-only):
+  **DISTILL mode** (User-Enhancer) reads **raw T2** → needs the eligibility gate + LLM distillation
+  → writes the user's own T3–T6. **AGGREGATE/PROMOTE mode** (Dept- & Inst-Enhancer) reads the
+  level-below's **already-distilled** memory → **no eligibility gate** → finds what enough members
+  share and **promotes** it. "Common enough" is the same idea; only the counting unit changes
+  (User = one person repeats; Dept = how many users share; Inst = how many depts share). See D21.
+- **Data flow.** **UP = promote**: a lesson is born local (User), pulled to Dept when shared across
+  users, to Inst when shared across depts. **Authored/authoritative KB (D15) is the exception** —
+  ingested directly at Dept/Inst, never born at User. **DOWN = copy on bootstrap**: a new user
+  **copies** its department's memory as a starting brain (snapshot), then evolves independently.
+  **READ = User-level only**: because of copy semantics the Conductor reads just the user's own
+  tiers (they already contain the copied parent knowledge) — **no live cross-level composition at
+  read time**.
+- **Copy, NOT overlay (user choice).** New-holder bootstrap is a real **copy/snapshot**, not a
+  read-time overlay. Rationale: users **own** their memory (fits "each user maintains its own
+  T1–T6" and the on/off switch below — overlay can't survive turning a level off). **Tradeoff
+  (accepted):** a copy goes stale when the parent later improves; re-sync → BACKLOG.
+- **Dept/Inst = on/off switch; User = always-on base.** The **User level is always on and equals
+  today's single-user Pneuma + a personal memory.** Department & Institution are **additive,
+  flag-gated** layers (same `ENABLE_MEMORY_*` pattern, default off). **Off** → no aggregate
+  Enhancer, no bootstrap copy → identical to current Pneuma (answers the "multi-user adaptation"
+  worry: it degrades gracefully). **The flag boundary = the milestone boundary.**
+- **MVP = User level only (Dept/Inst OFF).** Close the smallest learning loop end-to-end for **one
+  persona**: `conversation → T2 capture → User-Enhancer (distill) → write a User T3 record → next
+  conversation injects it → observable behaviour change`. Dept/Inst levels + AGGREGATE Enhancer are
+  **deferred** (their input = user memory, which doesn't exist until the User level works).
+- **Refines prior locks (not contradicts):** D13 ("Tiers 3–6 distilled from T2") → only *User-level*
+  tiers come straight from T2; higher levels consume distilled memory. D14 overlay/promotion → now
+  structurally housed; but read = **copy**, not live overlay. D15 authored T4 → lives at **Dept/Inst**;
+  the promotion ladder = exactly what the Dept/Inst-Enhancer does.
+
+## D21 — Enhancer mechanism v1: success gate, recurrence = support, self-correction
+Decided 2026-06-13 (one-at-a-time with user). Refines D6-3 (success gate) and D18-5 (4-branch
+update). The Enhancer's internal pipeline per run: **eligibility → cluster + recurrence-gate →
+LLM distill → route by subject → 4-branch update → write.**
+
+- **Success gate = the filter for "which raw T2 material may become persistent memory"** — it
+  decides *worth-learning + common-enough*, **never judges answer-correctness**. Two stages:
+  - **Stage 1 — per-trajectory eligibility (cheap, NO LLM, from existing T2 fields).** Positive =
+    clean terminal success (executed, returned, no error, few/no self-overturns). Negative =
+    **SQL/exec error** OR **ReAct self-overturn** OR **implicit user pushback** (next-turn tone).
+    **All three negative sources kept** (user-confirmed).
+  - **Stage 2 — cluster + recurrence threshold + LLM distill.**
+- **Recurrence threshold N = 3 (LOCKED).** A lesson must recur ≥3× before it solidifies. (Exact N
+  + asymmetry = tunable knobs → BACKLOG.)
+- **Recurrence count = the record's own `support`, NOT a separate fingerprint sidecar.** Each
+  learned record carries `support` (D18-7); the 4-branch **"exact match → `support`++"** branch
+  **is** the recurrence increment. A record **solidifies (becomes injectable) at `support` ≥ 3**;
+  `support` < 3 = pending/observing (not yet injected). Counting unit changes per level (D20).
+- **Clustering at the User level = LLM does it directly** (cluster + distill in one pass).
+  **Feasible because per-user candidate volume is small** → affordable. This **replaces the earlier
+  hand-tuned structural-fingerprint idea** (dept/term/join-pair/operator-sequence), which was
+  over-engineering once the scope is per-user and which baked `department` in too rigidly. The LLM
+  is the "same-lesson?" judge; **Stage 1 eligibility stays cheap heuristic (no LLM).**
+- **Self-correction (ReAct self-overturn) yields TWO records, not one.** The abandoned path →
+  **negative anti-pattern**; the recovery path → **positive exemplar**; the *capability* to
+  self-correct is **not** recorded (not reusable domain knowledge). **Mint the negative ONLY when
+  there is an objective failure signal** (error / empty result / validation fail). A pure
+  preference-switch (no objective failure) → only a **weak positive**, **no** negative — don't
+  manufacture an anti-pattern. Recurrence is the backstop either way.
+- **Incremental, never re-scan.** The Enhancer processes only new episodes since `processed_at` and
+  carries the count forward on the persistent records; it never re-reads consumed T2. (The lone
+  exception is A/B replay, which re-reads T2 — mechanism still open, see below.)
+- **Still open (next):** #8 A/B-replay mechanism + the 4-branch naming (parked from this session);
+  #9 LLM budget / distill-prompt design; #10 full per-tier pass ordering (**T3→T4 already locked by
+  the D20 dependency**; the T5/T6 "shared-DB" axis still to settle).
