@@ -1,0 +1,7 @@
+case_id,persona,run_mode,success,table_match,rule_matched,latency_seconds,input_tokens,output_tokens,total_tokens,clarifying_turns,expected_tables,tables_extracted,error
+TC001,u_adm_analyst,memory_off,True,True,,1.158,312,95,407,0,students|enrollments,students|enrollments,
+TC002,u_fin_analyst,memory_off,False,False,,0.912,298,88,386,0,transactions|funds,transactions,
+TC003,u_adm_analyst,memory_off,False,False,,1.091,312,95,407,0,applications,students|enrollments,
+TC004,u_fin_analyst,memory_off,False,False,,1.02,298,88,386,0,investments,transactions,
+TC005,u_adm_analyst,memory_off,True,True,,0.418,312,95,407,0,students|enrollments,students|enrollments,
+TC006,u_adm_director,memory_off,True,True,,1.051,340,120,460,0,students|enrollments,students|enrollments,

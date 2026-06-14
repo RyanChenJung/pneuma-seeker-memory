@@ -1,0 +1,76 @@
+[
+  {
+    "case_id": "TC001",
+    "description": "Admissions analyst asks about retention rate — ambiguous term, must resolve to students+enrollments, must exclude transfers",
+    "persona": "u_adm_analyst",
+    "turns": [
+      {"role": "user", "content": "What is our retention rate this year?"}
+    ],
+    "ground_truth": {
+      "target_tables": ["students", "enrollments"],
+      "rule_applied": "exclude transfer students (is_transfer = true) from denominator"
+    }
+  },
+  {
+    "case_id": "TC002",
+    "description": "Finance analyst asks about retention rate — same term, must resolve to transactions+funds, must use fiscal year (Jul 1 – Jun 30)",
+    "persona": "u_fin_analyst",
+    "turns": [
+      {"role": "user", "content": "What is our retention rate this year?"}
+    ],
+    "ground_truth": {
+      "target_tables": ["transactions", "funds"],
+      "rule_applied": "fiscal year is July 1 – June 30, NOT calendar year"
+    }
+  },
+  {
+    "case_id": "TC003",
+    "description": "Admissions analyst asks about yield — must resolve to applications, must filter degree-seeking only",
+    "persona": "u_adm_analyst",
+    "turns": [
+      {"role": "user", "content": "Can you show me our yield for the last admissions cycle?"}
+    ],
+    "ground_truth": {
+      "target_tables": ["applications"],
+      "rule_applied": "degree-seeking applicants only (is_degree_seeking = true)"
+    }
+  },
+  {
+    "case_id": "TC004",
+    "description": "Finance analyst asks about yield — must resolve to investments, must filter realized returns only",
+    "persona": "u_fin_analyst",
+    "turns": [
+      {"role": "user", "content": "What's our yield on the endowment this year?"}
+    ],
+    "ground_truth": {
+      "target_tables": ["investments"],
+      "rule_applied": "realized returns only (is_realized = true); exclude unrealized gains"
+    }
+  },
+  {
+    "case_id": "TC005",
+    "description": "Multi-turn: Admissions analyst starts vague, clarifies to retention — tests clarifying-turn count metric",
+    "persona": "u_adm_analyst",
+    "turns": [
+      {"role": "user", "content": "I need some numbers on how we're doing with students."},
+      {"role": "assistant", "content": "Could you clarify — are you asking about enrollment, retention, or yield?"},
+      {"role": "user", "content": "Retention, specifically for first-year students."}
+    ],
+    "ground_truth": {
+      "target_tables": ["students", "enrollments"],
+      "rule_applied": "exclude transfer students (is_transfer = true) from denominator"
+    }
+  },
+  {
+    "case_id": "TC006",
+    "description": "Role teaser: Admissions director asks retention — same table as analyst but expects summary-level output",
+    "persona": "u_adm_director",
+    "turns": [
+      {"role": "user", "content": "Give me the retention overview for this academic year."}
+    ],
+    "ground_truth": {
+      "target_tables": ["students", "enrollments"],
+      "rule_applied": "exclude transfer students (is_transfer = true) from denominator"
+    }
+  }
+]
