@@ -1,11 +1,12 @@
 # services/core/api/db.py
 from logging import Logger
+from typing import Any
 
 from pandas import DataFrame
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph
 from pneuma_seeker.services.core.conductor.state import ConductorState
-from pneuma_seeker.services.db.main import PneumaDB
+from pneuma_seeker.services.db.pneuma_db import PneumaDB
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import AbstractDocument
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
@@ -22,12 +23,16 @@ class DBAPI:
         logger: Logger,
         dataset_db_path: str | None = None,
         workspace_db_path: str | None = None,
+        pneuma_db: PneumaDB | None = None,
     ) -> None:
         self.config = config
         self.logger = logger
-        self.pneuma_db = PneumaDB(
-            self.config, self.logger, dataset_db_path, workspace_db_path
-        )
+        if pneuma_db:
+            self.pneuma_db = pneuma_db
+        else:
+            self.pneuma_db = PneumaDB(
+                self.config, self.logger, dataset_db_path, workspace_db_path
+            )
 
     # ------------------------------------------------------------------
     # Dataset Management (one .db per dataset)
@@ -107,6 +112,7 @@ class DBAPI:
         self,
         user_id: str,
         chat_id: str,
+        dataset_name: str,
         new_user_input: str,
         new_system_response: str,
         conductor_state: ConductorState,
@@ -123,6 +129,7 @@ class DBAPI:
         self.pneuma_db.persist_session(
             user_id,
             chat_id,
+            dataset_name,
             new_user_input,
             new_system_response,
             conductor_state,
@@ -133,6 +140,10 @@ class DBAPI:
             web_crawl_result,
             join_paths,
         )
+
+    def load_chat_history(self, user_id: str, chat_id: str) -> list[LLMMessage]:
+        """Loads persisted chat messages for the workspace."""
+        return self.pneuma_db.load_chat_history(user_id, chat_id)
 
     def load_session(
         self,
@@ -147,9 +158,16 @@ class DBAPI:
         AbstractDocument | None,
         AbstractDocument | None,
         str | None,
+        str | None,
     ]:
         """
         Loads the latest chat session from the chat_session table.
         If no session is found, returns empty structures.
         """
         return self.pneuma_db.load_session(user_id, chat_id)
+    
+    def get_user_chat_sessions(
+        self, user_id: str, limit: int = 10, offset: int = 0
+    ) -> dict[str, Any]:
+        """Gets a list of chat sessions for the specified user, returning a list of tuples containing chat IDs and their corresponding creation timestamps."""
+        return self.pneuma_db.get_user_chat_sessions(user_id, limit, offset)
