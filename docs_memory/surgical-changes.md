@@ -11,7 +11,8 @@
 
 Edits are permitted **only** to these upstream files, and only under the discipline below:
 `services/core/conductor/` (+ prompt factories) · `services/core/ir_system/` ·
-`services/db/main.py` · `shared/config.py` · `main.py`.
+`services/db/workspaces/manager.py` (renamed from `db/main.py` in the 2026-06-15 sync) ·
+`shared/config.py` · `routers/chat.py` (the `/chat` endpoint, moved out of `main.py`).
 Everything in `services/memory/`, `tests/memory/`, `docs_memory/` is 🟢 ours (not logged here).
 `docs/`, `README.md`, `LICENSE`, `baselines/`, upstream `data_src/` are 🔴 never touched.
 

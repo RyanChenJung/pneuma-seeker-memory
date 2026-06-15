@@ -29,7 +29,10 @@
   allowed to see" hint (PII / department / row-column scope). Important, but a separate
   governance system and NOT what the MVP tests. v1 stores only "where the user *focuses*"
   (for intent convergence), never "what they're *permitted* to see" (stays at the execution
-  layer). Revisit in the multi-user phase. *(D14)*
+  layer). Revisit in the multi-user phase. **Reuse opportunity (D26):** the 2026-06-15
+  upstream sync added a real **group-permission RBAC** (`UserDB.get_effective_group_permissions`,
+  `dataset:access:*`, hierarchical `parent_group_id`) — a candidate substrate to ride instead
+  of building our own; wiring it in is a separate (not-yet-taken) decision. *(D14, D26)*
 - **Multi-user T3 backend** — v1 is single-user (one profile file). Multi-user = a company
   DB keyed by `user_id`; pure backend swap behind the `UserMemory` interface. *(D13, D14)*
 - **Real-user vs (dept, role) separation** — M1 collapses persona = `user_id` (one `user_id`

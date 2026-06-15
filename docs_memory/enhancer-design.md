@@ -13,6 +13,16 @@
 > up" confusion (D20). Frontline agents (Conductor/Materializer) stay **read-only**; only the
 > Enhancer writes T3–T6.
 
+> **Impl note (post-2026-06-15 sync) — LLM/embedding backend.** The Enhancer's LLM calls
+> (cluster / distill / relation-judge / reaction-vote) can reuse upstream's `model_factory`,
+> which now ships a first-party **Claude backend** (`claude_llm.py`, via `ANTHROPIC_API_KEY`)
+> alongside OpenAI/Azure/Gemini. **Two caveats for the batched stages:** (1) `claude_llm.batch_chat`
+> is a *sequential loop*, not the Anthropic Batches API — the "one batched LLM pass" cost-saving
+> (Stage 2a, ARBITRATE vote) needs the real batch API if/when cost matters (BACKLOG, consistent
+> with D23's deferred cost cap); (2) `claude_llm.encode` raises `NotImplementedError` — the
+> embedding-based neighbour detector / fallback pre-bucketing must use an embedding provider
+> (OpenAI/Azure), not Claude.
+
 ## Purpose (confirmed)
 Turn the raw, messy **Tier 2 episodic log** into clean, reusable, persistent memory (T3–T6),
 **offline** and **incrementally**. It is where learning happens: `conversation → T2 capture →

@@ -10,6 +10,15 @@
 > Cross-refs: [`ROADMAP.md`](ROADMAP.md) (roles, milestones), [`DECISIONS.md`](DECISIONS.md)
 > (Glossary = the three north-star goals, D18-1).
 > **Status:** v1 draft for the 6/17 deliverables. Hard dependency for everyone's W1.
+>
+> **⚠️ 2026-06-15 — API drift flag (resolution PENDING, do not act on this yet).** This
+> contract's `/chat` request shape (§7: persona via `user_id`, **no `data_source`**, no
+> auth) was verified against our **pre-sync** fork `main.py`. The `upstream/prod` sync
+> changed the real API: **`/chat` now requires a Bearer token** (`user_id` comes from the
+> authenticated user, not the body) and a **`dataset_name`** field is now required. Whether
+> Lawrence's harness targets the old (pre-auth) or new (auth'd) API is an **open decision**
+> tied to the auth/group-substrate discussion — **not yet resolved**, so §7 is left as-is
+> until we decide. Treat §7's wire shape as provisional.
 
 ---
 

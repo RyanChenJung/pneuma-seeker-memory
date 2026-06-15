@@ -922,3 +922,49 @@ D23 ARBITRATE branch.
   C clean; revisit only with a principled reason); (2) finer authority-gap tolerance + tie-break
   heuristics; (3) the divergence-surface UI itself rides the existing **memory-transparency / alignment
   surface** BACKLOG (D22).
+
+## D26 — Upstream `prod` sync (backend refactor): impact + the authoritative path/interface remap
+Decided 2026-06-15. We synced `upstream/prod` (the "Polish backend to accommodate new UI" #23 +
+"Ensure resilience" commits) into `feat-memory-experiement` via a **merge** (only `.gitignore`
+conflicted; SC-1/SC-2 auto-merged cleanly into regions upstream didn't touch). This D anchors the
+impact so older decision records' code paths are read **through** it (this section supersedes any
+pre-sync path reference elsewhere in this log — they are not individually rewritten).
+
+- **D26-1 — Authoritative path/interface remap (what moved).**
+  - `services/db/main.py` → **`services/db/workspaces/manager.py`** (`WorkspaceManager`), now behind
+    a new **`services/db/pneuma_db.py` (`PneumaDB`) facade** that composes `DatasetManager`
+    (`datasets/manager.py`) + `WorkspaceManager` + `UserDB` (`users/manager.py`). Old `db/main.py:NNN`
+    line refs in D12/tier2 point at the renamed file (line numbers shifted; reference the method, not
+    the number): delete-and-replace lives in `WorkspaceManager.persist_session`; postgres-attach lives
+    in `DatasetManager`.
+  - `main.py` → split into **`routers/{auth,chat,indexing}.py`**; `main.py` is now app + lifespan
+    bootstrap only. **Our 🟡 `/chat` surgical seam is now `routers/chat.py`** (the SC-2 conductor hook
+    itself is unchanged and still valid).
+  - `model.py` → **`models.py`** (adds auth/user/group/permission request-response models +
+    `PermissionKey`/`EndpointTag`).
+  - `PERSIST_CHAT_SESSION` config flag **removed** — sessions always persist; `load_session` now also
+    returns `dataset_name`.
+  - LLM backends: **Claude (`claude_llm.py`) + Gemini** added to `model_factory` (+ `ANTHROPIC_API_KEY`/
+    `GEMINI_API_KEY`, `AUTH_*`, `POSTGRES_*` config).
+- **D26-2 — New substrate relevant to our design (validation, not yet wired).** A Postgres-backed
+  **identity/RBAC** layer now exists: `UserDB` with `UserRecord{user_id, group_id, …}`, **hierarchical
+  groups** (`GroupRecord.parent_group_id`, `list_group_ancestors`), and **inherited group permissions**
+  (`get_effective_group_permissions`: "parent first, child overrides" = CLAUDE.md-style overlay).
+  This is real backing for the **D20 Level axis** (User/Department/Institution ≈ group ancestry) and the
+  **authorization we deferred** (D14) + the **authority signal** (D15/D25). **Decision: record as a reuse
+  opportunity only; do NOT wire it into T3/T4 yet** — that is a separate design discussion (deliberately
+  deferred). Also: `dataset:access:*` group permissions can make datasets dept-private (our scenario keeps
+  them co-visible, so unused at MVP).
+- **D26-3 — SC seams after sync (verified).** SC-1 (`ENABLE_MEMORY_INJECTION` in `config.py`) and SC-2
+  (conductor memory hook) survived the merge intact; both seam files `py_compile`; the SC-2 call still
+  sits right after `get_sys_prompt()`. 8/11 memory tests pass; the 3 Conductor integration tests need the
+  full native runtime (couldn't stand up cleanly on the dev box — env issue, not a merge conflict).
+- **D26-4 — D24 confirmed, not changed.** `DocumentDB` (`ir_system/retriever/impl/document_db.py`) was
+  **not touched** by these commits — the D24 read (DocumentDB = backend index behind the `OrgMemory`
+  authored head) stands.
+- **D26-5 — New runtime + test dependencies (consequences).** The merged server now needs **Postgres +
+  `ADMIN_PASSWORD`** and **Bearer-token auth on `/chat`** (impacts the scenario-spec/Lawrence harness
+  contract — flagged in `scenario-spec-v1.md`, resolution deferred to the auth discussion). `tests/`
+  gained an upstream `conftest.py` that imports `testcontainers.postgres`, so **`pytest tests/` now
+  requires `testcontainers` (+ Docker)**; run our memory tests via `unittest` (or install testcontainers)
+  to bypass it. New deps: `psycopg[binary]`, `anthropic`, `google-genai`, `testcontainers[postgres]`.

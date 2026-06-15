@@ -32,9 +32,12 @@ code maps onto the 6-tier design (and where it falls short), see
   (our memory package), `tests/memory/`, and the hospital experiment files we added.
 - 🟡 **Surgical only** (upstream's; additive + feature-flagged + tiny diffs):
   `services/core/conductor/` (+ prompt factories), `services/core/ir_system/`,
-  `services/db/main.py`, `shared/config.py`, `main.py`. Every edit must be additive,
-  guarded by an `ENABLE_MEMORY_*` config flag (default off), and ideally a single call
-  into our own module — so upstream merges stay clean and the plugin is removable.
+  `services/db/workspaces/manager.py` (the renamed old `db/main.py`; the data layer was
+  split into `datasets/ + users/ + workspaces/ + pneuma_db.py` in the 2026-06-15 sync),
+  `shared/config.py`, and `routers/chat.py` (the `/chat` endpoint moved out of `main.py`
+  when it was split into `routers/`). Every edit must be additive, guarded by an
+  `ENABLE_MEMORY_*` config flag (default off), and ideally a single call into our own
+  module — so upstream merges stay clean and the plugin is removable.
 - 🔴 **Do not touch**: `docs/architecture.md`, `docs/figures/`, `README.md`, `LICENSE`,
   `CONTRIBUTING.md`, `baselines/`, upstream's original `data_src/`.
 
