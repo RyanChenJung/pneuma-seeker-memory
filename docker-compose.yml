@@ -5,6 +5,7 @@ services:
       dockerfile: src/pneuma_seeker/docker/postgres.dockerfile
     ports:
       - "5432:5432"
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-pneuma_users}
       POSTGRES_USER: ${POSTGRES_USER:-pneuma}
@@ -23,6 +24,7 @@ services:
     image: dpage/pgadmin4:latest
     ports:
       - "5050:80"
+    restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
