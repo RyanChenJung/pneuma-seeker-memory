@@ -1,12 +1,15 @@
 # Roadmap & Timeline — Memory Layer Project
 
+> 📄 **Doc version: v1** · last changed **2026-06-12** · *initial roles / milestones / weekly tasks.*
+> — **Team-facing.** See [`TEAM.md`](TEAM.md) for the team index + every doc's current version.
+>
 > The "where we are going and by when" doc. **Project definition + milestone backbone**
 > live here; per-tier *design* lives in the `tierN-*-design.md` specs and `DECISIONS.md`.
 > This roadmap is **adjusted dynamically as progress dictates** — milestones are targets,
 > not contracts. It superseded two outdated planning `.docx` files (now deleted). The one
 > surviving `.docx` — the team-facing **Team Contract & Tasks (v2)** (bumped 2026-06-15 for the
 > Option-B auth'd `/chat` contract, D27) — is a local-only export
-> (git-ignored); its living source of truth is this roadmap + `scenario-spec-v1.md`.
+> (git-ignored); its living source of truth is this roadmap + `scenario-spec.md`.
 > Cross-refs: [`CLAUDE.md`](../CLAUDE.md), [`DECISIONS.md`](DECISIONS.md) (Glossary = the
 > three north-star goals, D18-1), [`code-vs-6tier-mapping.md`](code-vs-6tier-mapping.md),
 > [`system_architecture.md`](system_architecture.md).
@@ -250,7 +253,7 @@ persona, how to toggle the flag). Does not need: memory internals, domain logic.
 > plug-and-play scale-out); Sept = judge of self-evolution. Sola/Lawrence keep their
 > milestone-driven rhythm. **The two outdated planning `.docx` were deleted** (2026-06-12, per
 > Ryan); only the team-facing **Team Contract & Tasks (v2).docx** survives as a local-only
-> (git-ignored) export of this roadmap + `scenario-spec-v1.md`.
+> (git-ignored) export of this roadmap + `scenario-spec.md`.
 
 ## Weekly task breakdown — next 4 weeks
 

@@ -1,7 +1,7 @@
 """Tier 4 (authored knowledge) loader — the authoritative tribal-knowledge KB.
 
 v1 reads a static JSON in the exact format teammate "Juan" delivers
-(``scenario-spec-v1.md`` §6.2); swapping in the real file needs no code change. Retrieval /
+(``scenario-spec.md`` §6.2); swapping in the real file needs no code change. Retrieval /
 embedding is deferred — the store is small, so callers inject the whole department block
 (DECISIONS D18).
 """

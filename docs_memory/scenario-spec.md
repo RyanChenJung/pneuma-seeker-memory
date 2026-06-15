@@ -1,5 +1,9 @@
-# Scenario Spec v1 — The Fake Campus World
+# Scenario Spec — The Fake Campus World
 
+> 📄 **Doc version: v2** · last changed **2026-06-15** · *§6.3 Lawrence `/chat` contract → auth'd
+> API (Option B, D27).* — **Team-facing.** See [`TEAM.md`](TEAM.md) for the team index + every
+> doc's current version. *(Version lives in this header, not the filename.)*
+>
 > **The single blueprint** every teammate builds against. Ryan owns this file.
 > It fixes the *skeleton* (canonical table/column **names**, ground-truth semantics,
 > which terms are ambiguous, which hidden rules must bite, the deliberate traps) so the
@@ -9,13 +13,11 @@
 >
 > Cross-refs: [`ROADMAP.md`](ROADMAP.md) (roles, milestones), [`DECISIONS.md`](DECISIONS.md)
 > (Glossary = the three north-star goals, D18-1).
-> **Status:** v1 draft for the 6/17 deliverables. Hard dependency for everyone's W1.
+> **Status:** validation blueprint for the 6/17 deliverables. Hard dependency for everyone's W1.
 >
-> **✅ 2026-06-15 — API drift RESOLVED (D27 = Option B).** The `upstream/prod` sync changed
-> `/chat` (Bearer-token auth; `user_id` from the authenticated user, not the body; `dataset_name`
-> required; server keeps history). **Decision: the harness targets the new auth'd API** (D27).
-> §6.3 Contract C below has been **rewritten to the B wire shape** (token header + `personas.json`
-> + `dataset_name:"campus"` + send-only-new-turn). The team `.docx` is bumped to **v2** to match.
+> **Changelog.** **v2 (2026-06-15):** §6.3 Lawrence `/chat` rewritten for the post-sync auth'd
+> API (Bearer token + `personas.json` + `dataset_name:"campus"` + send-only-new-turn), D27.
+> **v1 (2026-06-12):** initial campus world + 3 contracts.
 
 ---
 

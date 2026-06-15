@@ -41,7 +41,7 @@ Status values: `planned` → `applied` (with commit) → `reverted`.
   flag via `self.config.ENABLE_MEMORY_INJECTION`.
 - **Footprint:** ~3 added lines. No existing line changed.
 - **Removal:** delete the added attribute.
-- **Refs:** D19; `scenario-spec-v1.md` §6.3 (Lawrence A/B contract); TASKS WS1.
+- **Refs:** D19; `scenario-spec.md` §6.3 (Lawrence A/B contract); TASKS WS1.
 
 ### SC-2 — `services/core/conductor/main.py` — prompt-injection hook
 - **Status:** applied (Goal WS / WS5; on `feat-memory-experiement`).

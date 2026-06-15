@@ -48,7 +48,7 @@ persona `user_id` + flag ON → a dept/role + tribal-knowledge SYSTEM message is
 the prompt; flag OFF → byte-identical to baseline; plugin fully removable. De-risks the
 project's #1 unknown (clean injection into Pneuma). **NOT in scope:** retrieval/embedding
 (inject-whole), T2/Enhancer, Sola's real datasets, role-presentation logic, token tuning.
-Design rationale: `DECISIONS.md` D19 (`user_id` persona) + `scenario-spec-v1.md` §4–6.
+Design rationale: `DECISIONS.md` D19 (`user_id` persona) + `scenario-spec.md` §4–6.
 **Execution:** one inline focused pass (not parallel sub-agents — ~150 LOC, interdependent).
 
 Surgical footprint (🟡, additive + flag-guarded, ~5 lines total): `shared/config.py`

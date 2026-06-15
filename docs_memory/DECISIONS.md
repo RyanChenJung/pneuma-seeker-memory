@@ -558,7 +558,7 @@ and **locks** the D16 "T2 no-delete" lean. Folds the `system_architecture.md` §
 ## D19 — Persona identity rides the existing `user_id` (principal → profile via T3), no new field
 Decided 2026-06-12, before the walking-skeleton build. Answers "Pneuma has no department/role —
 does using `user_id` for persona break the original design?" **No.** Cross-refs:
-`scenario-spec-v1.md` §5, `ROADMAP.md` (context model), BACKLOG (real-user/role separation).
+`scenario-spec.md` §5, `ROADMAP.md` (context model), BACKLOG (real-user/role separation).
 
 - **What `user_id` is in Pneuma (verified):** an **opaque namespace key**, never interpreted
   semantically. Used only as (1) session key `chat_sessions[(user_id, chat_id)]`, (2) the
@@ -964,7 +964,7 @@ pre-sync path reference elsewhere in this log — they are not individually rewr
   authored head) stands.
 - **D26-5 — New runtime + test dependencies (consequences).** The merged server now needs **Postgres +
   `ADMIN_PASSWORD`** and **Bearer-token auth on `/chat`** (impacts the scenario-spec/Lawrence harness
-  contract — flagged in `scenario-spec-v1.md`, resolution deferred to the auth discussion). `tests/`
+  contract — flagged in `scenario-spec.md`, resolution deferred to the auth discussion). `tests/`
   gained an upstream `conftest.py` that imports `testcontainers.postgres`, so **`pytest tests/` now
   requires `testcontainers` (+ Docker)**; run our memory tests via `unittest` (or install testcontainers)
   to bypass it. New deps: `psycopg[binary]`, `anthropic`, `google-genai`, `testcontainers[postgres]`.
