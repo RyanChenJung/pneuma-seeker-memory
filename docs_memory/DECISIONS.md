@@ -968,3 +968,44 @@ pre-sync path reference elsewhere in this log — they are not individually rewr
   gained an upstream `conftest.py` that imports `testcontainers.postgres`, so **`pytest tests/` now
   requires `testcontainers` (+ Docker)**; run our memory tests via `unittest` (or install testcontainers)
   to bypass it. New deps: `psycopg[binary]`, `anthropic`, `google-genai`, `testcontainers[postgres]`.
+
+## D27 — Harness/auth = Option B (run the experiment on the synced auth'd API), and how the skeleton survives it
+Decided 2026-06-15 (user chose B over A/C). Resolves the D26-5 open harness/auth question: the 6/17
+A/B experiment will run against the **post-sync** `/chat` (Bearer-token auth, `dataset_name` required,
+server-side history) — not a pinned pre-auth fork. We PR the sync to `origin/prod` and adapt the
+team contract. Builds on D19 (persona rides an opaque `user_id`), D26 (the sync remap). Refines the
+scenario-spec/§6.3 Lawrence contract.
+
+- **D27-1 — Why B is feasible (upstream shipped the scaffolding).** `docker-compose.yml` +
+  `postgres.dockerfile` + `core-service.dockerfile` stand up Postgres **and** the core service in one
+  command (with a healthcheck) — so Postgres isn't fragile and the heavy native runtime (chromadb/torch)
+  runs in the provided `core` container. `/auth/register` is **open** (no admin needed). Crucially,
+  **`POST /chat` does NOT enforce dataset-access permission** (it only sets `config.DATA_SOURCES`), so
+  personas need no `dataset:access:*` grant — just to exist + hold a token.
+- **D27-2 — The skeleton survives with ZERO code change (the key insight).** `t3_identity.UserIdentity.
+  lookup(user_id)` already treats `user_id` as an **opaque** key into `_config/identity_map.json` (D19).
+  Under B, `user_id` becomes a real registered uuid (still opaque); only the *values* in `identity_map.json`
+  change. So the fix is **a one-time setup fixture that regenerates `identity_map.json` keyed on the real
+  registered user_ids** — the memory package (`injector.py`/`t3_identity.py`/`t4_authored.py`) is untouched.
+  persona→(department, role) stays our own Ryan-owned config file, **not** the group system → keeps the
+  coupling to the group/RBAC-reuse question (discussion (1)) minimal.
+- **D27-3 — Obstacle → overcome (summary).** (a) *auth per persona* → a Ryan-owned **setup fixture**:
+  admin (auto-created at boot from `ADMIN_PASSWORD`) → create 2 dept groups (Admissions/Finance, optionally
+  under a "University" parent → exercises `parent_group_id`) → `POST /auth/register` 4 personas → login →
+  emit **`personas.json`** {persona → token, user_id} + regenerate `identity_map.json`. Lawrence consumes
+  `personas.json`; he doesn't touch auth. (b) *body shape* → one **combined "campus" dataset** (both depts'
+  tables in one) preserves co-visibility via dataset design; body = `{chat_id, dataset_name:"campus",
+  message}`. (c) *multi-turn* → server keeps `(user_id,chat_id)` history → **send only the new turn**, reuse
+  chat_id (simpler than the old "resend full `messages[]`"). (d) *A/B switch* → **unchanged**
+  (`ENABLE_MEMORY_INJECTION` env, two boots).
+- **D27-4 — Migration sequence.** (1) PR synced `feat` → `origin/prod` (never upstream). (2) Sola: campus
+  combined dataset (both depts, one dataset). (3) Ryan: setup fixture + `identity_map.json` regen + rewrite
+  §6.3 Contract C. (4) Lawrence: token header + new body; A/B two boots unchanged. (5) Smoke `docker compose
+  up` (postgres+core) one OFF/ON case. **Needs a TASKS.md breakdown + user approval before sub-agent dispatch.**
+- **D27-5 — Scope guard.** B adopts only the **identity/account plumbing** (groups as persona containers,
+  tokens). The full RBAC-driven memory wiring (authorization, authority-precedence reading group permissions)
+  stays deferred = discussion (1). So choosing B does **not** pre-commit (1).
+- **Residual risks (honest):** full LLM backend must actually run (always needed, B adds nothing); the setup
+  fixture must be **idempotent** (skip-if-exists, no `UniqueViolation`); §6.3 + the team `.docx` must be
+  rewritten (done this session); the PR to prod is large (carries upstream's whole refactor — but into *our*
+  prod).

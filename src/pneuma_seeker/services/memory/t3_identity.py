@@ -4,6 +4,11 @@ This is the *only* place that interprets Pneuma's ``user_id`` as a persona (DECI
 ``user_id`` stays an opaque namespace key for Pneuma; the profile lookup lives entirely here.
 v1 is a static provisioned map loaded from JSON; multi-user and the *learned* half of Tier 3
 are deferred (see BACKLOG).
+
+Auth note (DECISIONS D27): because ``user_id`` is opaque here, the post-sync auth'd API needs
+**no code change** — the keys in ``identity_map.json`` just become the real registered user
+ids (uuids). A one-time setup fixture registers the personas and regenerates that file; the
+synthetic ``u_*`` keys in the v1 map are the pre-auth / dev placeholder.
 """
 
 from json import loads

@@ -11,14 +11,11 @@
 > (Glossary = the three north-star goals, D18-1).
 > **Status:** v1 draft for the 6/17 deliverables. Hard dependency for everyone's W1.
 >
-> **⚠️ 2026-06-15 — API drift flag (resolution PENDING, do not act on this yet).** This
-> contract's `/chat` request shape (§7: persona via `user_id`, **no `data_source`**, no
-> auth) was verified against our **pre-sync** fork `main.py`. The `upstream/prod` sync
-> changed the real API: **`/chat` now requires a Bearer token** (`user_id` comes from the
-> authenticated user, not the body) and a **`dataset_name`** field is now required. Whether
-> Lawrence's harness targets the old (pre-auth) or new (auth'd) API is an **open decision**
-> tied to the auth/group-substrate discussion — **not yet resolved**, so §7 is left as-is
-> until we decide. Treat §7's wire shape as provisional.
+> **✅ 2026-06-15 — API drift RESOLVED (D27 = Option B).** The `upstream/prod` sync changed
+> `/chat` (Bearer-token auth; `user_id` from the authenticated user, not the body; `dataset_name`
+> required; server keeps history). **Decision: the harness targets the new auth'd API** (D27).
+> §6.3 Contract C below has been **rewritten to the B wire shape** (token header + `personas.json`
+> + `dataset_name:"campus"` + send-only-new-turn). The team `.docx` is bumped to **v2** to match.
 
 ---
 
@@ -277,30 +274,36 @@ truth. **Exact format:**
 - 🎛️ Count (~20, more welcome), phrasing/variety, extra rules consistent with the spec.
 - *You need only: this spec + this format.* Not: memory internals, Sola's data.
 
-### 6.3 Contract C — Lawrence (`/chat` invocation)
+### 6.3 Contract C — Lawrence (`/chat` invocation) — **v2 (Option B, auth'd API, D27)**
 
-Drive Pneuma's **own** `/chat` (no separate service), black-box, OFF vs ON. **Verified against
-the current code** (`src/pneuma_seeker/main.py`):
+Drive Pneuma's **own** `/chat` (no separate service), black-box, OFF vs ON. **Updated for the
+post-sync auth'd API** (`src/pneuma_seeker/routers/chat.py`; the old pre-auth shape is retired).
 
 - **Endpoint:** `POST /chat`, response is an **NDJSON stream** (`application/x-ndjson`). Each line
   is a JSON payload with a `type` field: `log` (progress), `assistant` (model output incl. the
-  generated SQL/reasoning), `done` (terminal, carries elapsed seconds).
-- **Request body:**
+  generated SQL/reasoning), `done` (terminal, carries elapsed seconds). *(stream unchanged)*
+- **Auth (NEW):** every call needs `Authorization: Bearer <token>`. **Ryan provides `personas.json`**
+  mapping each persona → its `{token, user_id}` (produced by the setup fixture — see below). Lawrence
+  picks the case's persona token; **he does not register/login himself.**
+- **Request body (NEW shape):**
   ```json
   {
-    "user_id": "u_adm_analyst",
     "chat_id": "TC001-run3",
-    "messages": [{ "role": "user", "content": "What's our retention rate for last year's class?" }]
+    "dataset_name": "campus",
+    "message": "What's our retention rate for last year's class?"
   }
   ```
-- **Persona is carried by `user_id`** — set it to the test case's `persona.user_id`. The memory
-  layer maps `user_id → (department, role)` via the T3 provisioned map (§5, Ryan-owned). **Do not**
-  invent a `department`/`role` field; `user_id` is the whole mechanism.
-- **Do NOT set `data_source`** — both departments are co-loaded server-side (Ryan's setup). Setting
-  it would narrow to one source and break shared visibility.
-- **Multi-turn:** reuse the **same `chat_id`** across a case's turns, and **resend the full
-  conversation** in `messages[]` each turn (safe regardless of server-side history handling).
-  Sessions are keyed by `(user_id, chat_id)`. Use a **fresh `chat_id` per case run** for isolation.
+- **Persona is carried by the token, not the body.** The asking identity = the authenticated user
+  behind the token; the memory layer maps that user → `(department, role)` (Ryan-owned map, §5).
+  **Do not** put `user_id`/`department`/`role` in the body — pick the right **token** instead.
+- **`dataset_name` is required and is always `"campus"`** — the single combined dataset holding
+  **both** departments' tables (co-visibility is preserved by the dataset's design, §4, not by
+  omitting a param). Ambiguous terms still have competing tables within it.
+- **Multi-turn:** the server keeps history per `(user_id, chat_id)` → **send only the new turn's
+  `message`**, reusing the same `chat_id`. Use a **fresh `chat_id` per case run** for isolation.
+- **Bootstrap (Ryan-provided, one-time per server boot):** Ryan ships a setup helper that runs
+  `docker compose up` (Postgres + core), registers the 4 personas into their dept groups, and emits
+  `personas.json`. You consume `personas.json`; the auth machinery is not your concern.
 - **A/B toggle is a server-side env var, NOT a per-request param.** Baseline = launch Pneuma with
   the memory flag **OFF**; memory = launch with it **ON**. Run the same suite against both launches
   (two base URLs or two server boots). *Proposed flag name `ENABLE_MEMORY_INJECTION` — Ryan confirms
