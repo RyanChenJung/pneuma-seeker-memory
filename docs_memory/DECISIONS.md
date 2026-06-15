@@ -982,13 +982,13 @@ scenario-spec/§6.3 Lawrence contract.
   runs in the provided `core` container. `/auth/register` is **open** (no admin needed). Crucially,
   **`POST /chat` does NOT enforce dataset-access permission** (it only sets `config.DATA_SOURCES`), so
   personas need no `dataset:access:*` grant — just to exist + hold a token.
-- **D27-2 — The skeleton survives with ZERO code change (the key insight).** `t3_identity.UserIdentity.
-  lookup(user_id)` already treats `user_id` as an **opaque** key into `_config/identity_map.json` (D19).
-  Under B, `user_id` becomes a real registered uuid (still opaque); only the *values* in `identity_map.json`
-  change. So the fix is **a one-time setup fixture that regenerates `identity_map.json` keyed on the real
-  registered user_ids** — the memory package (`injector.py`/`t3_identity.py`/`t4_authored.py`) is untouched.
-  persona→(department, role) stays our own Ryan-owned config file, **not** the group system → keeps the
-  coupling to the group/RBAC-reuse question (discussion (1)) minimal.
+- **D27-2 — The skeleton survives with ZERO code change (the key insight).** **⚠️ SUPERSEDED by D28-5:**
+  this held only for harness=B *with identity still from our map*; discussion (1) then chose group-as-
+  department source (D28), which DOES change T3. Original reasoning kept for the trail:
+  `t3_identity.UserIdentity.lookup(user_id)` already treats `user_id` as an **opaque** key into
+  `_config/identity_map.json` (D19); under B `user_id` becomes a real uuid (still opaque), only the *values*
+  change, so a fixture could just regenerate the map. — That path is replaced by D28: department now comes
+  from the group, role from a thin `role_map`.
 - **D27-3 — Obstacle → overcome (summary).** (a) *auth per persona* → a Ryan-owned **setup fixture**:
   admin (auto-created at boot from `ADMIN_PASSWORD`) → create 2 dept groups (Admissions/Finance, optionally
   under a "University" parent → exercises `parent_group_id`) → `POST /auth/register` 4 personas → login →
@@ -1009,3 +1009,40 @@ scenario-spec/§6.3 Lawrence contract.
   fixture must be **idempotent** (skip-if-exists, no `UniqueViolation`); §6.3 + the team `.docx` must be
   rewritten (done this session); the PR to prod is large (carries upstream's whole refactor — but into *our*
   prod).
+
+## D28 — Department = the user's GROUP (ride the substrate); role stays in a thin map; closes discussion (1) for MVP
+Decided 2026-06-15 (user chose option (B), not the (C) hybrid). Closes discussion (1) — whether to reuse
+the synced group/RBAC substrate for our design — for the MVP. Builds on D27 (Option B harness), D20 (Level
+axis), D15 (T4 overlay), D14 (deferred authorization), D26 (the substrate). **Corrects D27-2.**
+
+- **D28-1 — Department now comes from the user's GROUP, not our `identity_map` (chose (B)).** The D27 setup
+  fixture already creates the dept groups (Admissions/Finance) and assigns each persona; so T3 resolves
+  `department = the user's group.name` via `UserDB` (a single lookup). This is the **single source of truth**
+  for department and removes the map↔group redundancy by **dropping the department field from our config**.
+- **D28-2 — Role stays in a thin Ryan-owned `role_map` (key → role) — option (i).** Role (analyst/director)
+  has **no home in the substrate** (`UserRecord` has no role; groups are dept-level) and is "dosed small"
+  (1–2 teaser cases, presentation only). Rejected: (ii) group-per-`(dept,role)` — **pollutes the
+  User/Dept/Inst Level semantics** with a within-dept attribute; (iii) drop role — the scenario already
+  authored role-teaser cases. So `identity_map` shrinks from `(dept, role)` to **role-only**.
+- **D28-3 — Coupling accepted, mitigated by DI.** The T3 read path now depends on `UserDB` (a group lookup
+  at inject time) → the plugin is no longer trivially removable. **Accepted** because post-sync `UserDB` is
+  upstream **core** (every request authenticated, every user grouped), not optional. **Mitigation:** T3 takes
+  an injected **dept-resolver** (`Callable[[user_id], department | None]`) so the memory *package* does not
+  hard-import `UserDB`; the UserDB-backed resolver is wired at the **composition root** (where `MemoryInjector`
+  / the Conductor SC-2 hook is built) and is the only Postgres-coupled piece. Keeps the package unit-testable
+  with a fake resolver.
+- **D28-4 — (1d) the multi-level overlay walk stays deferred; (1b)/(1c) note-only (結論一).** MVP is
+  **single-level** — just the asker's own department (one lookup). The `list_group_ancestors` ancestor-walk
+  for composing **Institution→Department** overlays (1d) activates only once Institution-level *authored*
+  knowledge exists (the Dept/Inst phase, D15 near-term ≥2 levels). Authorization/data-visibility (1b) and the
+  ARBITRATE authority signal (1c) are recorded-as-reuse only (the scenario holds authorization constant —
+  both depts co-visible — and A/B conflict resolution isn't live yet).
+- **D28-5 — Corrects D27-2's "ZERO code change."** That held only for harness=B *with identity still from our
+  map*. Choosing source-of-truth=(B) means **T3 does change**: department resolved from the group (via the
+  injected resolver), role from the thin `role_map`; `identity_map` loses its department field. The fixture's
+  "regenerate `identity_map` on real uuids" step (D27-3) shrinks to **"build the small role_map"** — department
+  needs no map (it *is* the group).
+- **D28-6 — Implementation = part of the B-migration TASKS build, not this doc pass.** The UserDB-backed
+  dept-resolver needs Postgres up to verify and rewrites the T3 unit tests (which currently assert
+  `(dept, role)` from the JSON map). Per verify-before-commit, the code change is folded into the approved
+  TASKS build, not written untested now. This doc pass only records the decision + updates the skeleton's note.
