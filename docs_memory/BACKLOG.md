@@ -52,12 +52,14 @@
 
 ## Tier 4 — Organization Memory
 
-- **Reuse upstream `DocumentDB` / `Knowledge` (local/global) vs build our own** — pending
-  the user's email to the upstream author. Working assumption: `local ≈ T3`, `global ≈ T4`.
-  Authored backend is hidden behind the `OrgMemory` facade, so this is a deferred backend
-  swap. *(D13, D15)*
-- **Exact scope-level count + overlay precedence rules** — provisional until the author
-  replies. v1 = hard 2-level `(institution, department)` hierarchy. *(D13, D15)*
+- **`DocumentDB` as the authored backend** — **reuse-vs-build is RESOLVED in principle (D24):**
+  `DocumentDB` = a backend/index substrate behind the `OrgMemory` authored head (`search_authored`),
+  not the architecture. What remains deferred is the **actual code-level swap** (build our own vs wire
+  `DocumentDB` in) — a backend swap behind the facade, doesn't block B3/B4. *(D13, D15; resolved D24)*
+- **Exact scope-level count + overlay precedence rules** — Level count settled (D20: User/Department/
+  Institution; author confirms local/global = a 2-level subset, D24). **Precedence/conflict rules
+  still soft**: our A/B operative-meaning resolution (D22) + the author's authority-precedence signal
+  (to be folded as a cheap pre-filter, D24-5). *(D13, D15, D20, D22, D24)*
 - **Full org-memory governance** — v1 only tags authored content with thin metadata (source,
   trust, scope). Real version-control / who-authored / approval (sign-off) workflow deferred.
   *(D15)*
@@ -155,6 +157,12 @@
   no human ever reacted to, so picking a winner needs a from-scratch correctness judge with no
   oracle. Listed here so it is not re-litigated; the objective DB re-test for T5 is the only
   legitimate re-execution. *(D22)*
+- **Authority pre-filter — finer tuning + senior-user weighting** — D25 settles the ARBITRATE authority
+  pre-filter (authority governs declarations only; 3 routes). Cut from MVP: (1) **senior-user weighting
+  inside `learned × learned`** — rejected to keep option C clean (rank must not override behavioural
+  evidence in a descriptive conflict); revisit only with a principled reason. (2) **finer authority-gap
+  tolerance + tie-break heuristics** (pure cost/quality tuning; effectiveness-first defers it). The
+  divergence-surface UI itself = the transparency-surface item below. *(D25)*
 - **Memory transparency / alignment surface (surface operative assumptions to the user)** —
   original Pneuma already shows, in the sidebar, the actual tables it ended up retrieving — a
   human↔LLM alignment point. Extend this: surface the **memory-injected operative assumptions**

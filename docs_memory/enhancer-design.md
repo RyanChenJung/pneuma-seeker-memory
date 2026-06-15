@@ -144,7 +144,7 @@ candidate record
    └─ has neighbour → LLM judges the relation:
         ├─ exact same lesson ──→ REINFORCE  support++                           [program writes]
         ├─ partial overlap ───→ MERGE       (see below)
-        └─ direct contradiction → ARBITRATE (see below)
+        └─ direct contradiction → ARBITRATE (D25 authority pre-filter → A/B; see below)
 ```
 
 **REINFORCE is an LLM verdict, not a similarity threshold (D23 #4).** Embedding measures *topical*
@@ -154,7 +154,35 @@ arbitrating the correction — the worst error for the T3 meaning loop. So once 
 neighbour, even REINFORCE goes through the LLM. (A cheap near-exact-text REINFORCE shortcut →
 BACKLOG.)
 
-### ARBITRATE — contradiction → A/B (Option B, D22) — for meaning (T3/T4/T6)
+### ARBITRATE — authority pre-filter (D25): route by record type *before* any replay
+**Generating principle:** authority governs **declarations** (authored records) only; the moment both
+sides are **operative** (learned), authority steps out and recorded reactions decide. Authority = a
+**prior** ("whose declaration to trust with no behavioural oracle"); reactions = the **evidence** — two
+halves of one update, not competing judges. Authority only *weights a declaration source*, it **never**
+emits a "which answer is correct" verdict (the D22 honesty line, kept). At ARBITRATE entry (contradiction
+already confirmed by the relation-judge LLM), branch on the two records' type — **all program, no new LLM:**
+
+```
+ARBITRATE (contradiction confirmed)
+   ├─ authored × authored → program compares `authority`; higher wins;          [no replay]
+   │                         equal/unclear → `contested` → surface ("consult users")
+   │                         (loser marked superseded w/ provenance, not hard-deleted)
+   ├─ authored × learned  → do NOT auto-resolve. Tally the contradiction as       [no replay]
+   │   (= divergence, C)     negative-`support` vs the authored record (D18-8 trust erosion);
+   │                         surface as a DIVERGENCE only at recurrence N=3 (D21), not on
+   │                         the first counter-example. "learned > authored" made observable.
+   └─ learned × learned   → authority does NOT intervene → run the full reaction   [replay]
+                            A/B replay below. (This is the only route that pays the replay.)
+```
+
+**Cost is a side effect, not the motive (effectiveness-first):** this pre-filter is primarily *routing*
+(it *is* how option C is implemented); that the batched-LLM replay now runs only for `learned × learned`
+falls out for free — it **adds no LLM calls, only removes them** (consistent with D23's deferred cost
+cap). Authority data = the authored record's metadata tag (D15-Q2), derivable from the author's
+T3-provisioned `role/grade` (D14); hierarchy = the Level structure (D20). Senior-user weighting inside
+`learned × learned` + finer authority-gap tuning → BACKLOG.
+
+### ARBITRATE — contradiction → A/B (Option B, D22) — for meaning (T3/T4/T6), `learned × learned`
 **Re-READ, never re-run.** Grade against an **already-recorded human reaction** (the honesty
 criterion: a winner is honest iff decided by recorded reaction or an objective oracle, never by a
 model's from-scratch "which is correct").

@@ -246,10 +246,10 @@ they feed** — NOT the mechanism (which is shared). Agreed points:
   into a SQL cache; v1 mitigates by being explicitly few-shot.
 
 **OPEN (NOT locked):**
-- (pt 2) Whether to **reuse the upstream author's `DocumentDB` / `Knowledge` (local/global)
-  design and attach our memory interface there** vs build our own. **User will email the
-  upstream author** to avoid rebuilding the wheel. Working assumption until then:
-  `local ≈ Tier 3`, `global ≈ Tier 4`.
+- (pt 2) ~~Whether to **reuse the upstream author's `DocumentDB`** vs build our own.~~ **RESOLVED in
+  D24** (author replied 2026-06-15): `DocumentDB` = a backend/index substrate behind the `OrgMemory`
+  authored head, **not** the architecture; our Level×Tier + Enhancer sit above it. (Working assumption
+  `local ≈ T3 / global ≈ T4` updated by D24: local/global = our User/Department **Level** axis, D20.)
 - Exact **number of scope levels** + **overlay precedence rules** — provisional; refine when
   we drill T3/T4 in detail and after the author's reply.
 
@@ -781,3 +781,144 @@ principle below settles where every LLM call sits in the per-run pipeline:
   (prove it works first; cheap no-LLM heuristics — behavioural signals + a negation lexicon + a small
   local classifier — are the **cost-optimisation BACKLOG** for later). Rationale: efficacy before
   cost at this stage.
+
+## D24 — DocumentDB = a backend/index substrate, NOT the architecture (resolves the D13/D15 OPEN reuse question)
+Decided 2026-06-15 after the upstream author (Luthfi) replied to our email. **Closes the
+"reuse upstream `DocumentDB` vs build our own" OPEN item** carried since D13 (pt 2) / D15.
+The reply gave enough to settle it *in principle* (the actual code-level swap stays deferred,
+because our design is interface-first). Cross-refs: D13, D14, D15, D18, D20, D22, BACKLOG.
+
+**What the author said `DocumentDB` is:** a place to **extract knowledge from user interactions
+and index it for subsequent interactions**, holding three kinds — (i) about tables/columns
+("Table A should be used for…", "Column X represents…"), (ii) business logic ("the tariff
+computation should account for…"), (iii) **user preferences** (explicitly "like ChatGPT memory").
+Plus: **local/global = user-level/team-level**; the `index()` TODO = `A ∧ ¬A` **contradictions**
+(recognise + surface to users; signal = **user authority levels / hierarchies**); and users may
+**seed curated knowledge upfront** (a team wiki) **alongside** interaction-extracted knowledge.
+
+- **D24-1 — The reframe (the decision).** `DocumentDB` is a **flat extract-and-index store**; it
+  is **plumbing (a backend / retrieval substrate), not the organizing architecture.** Our
+  **Level × Tier structure + the Enhancer sit *above* it.** Concretely, `DocumentDB` is a
+  **candidate backend behind the `OrgMemory` facade's authored head** (`search_authored`, D15-Q5) —
+  exactly the "large authored corpus → retrieved top-k" head. Because the facade hides the backend
+  (interface-first, D11/D12/D15), **reuse-vs-build is a deferred backend swap, not an architecture
+  choice, and does not block B3/B4.** *(Secondary, NOT committed: it could later double as a generic
+  top-k document substrate for any tier that needs retrieval — e.g. T6 Layer-1, D18-4 — but v1 only
+  commits it as the T4-authored backend.)*
+- **D24-2 — His three knowledge kinds confirm our tier decomposition (and routing).** They map onto
+  **T5** (tables/columns/joins), **T6 + T4-learned** (business logic / method), **T3** (user
+  preferences). The author lumps them in one bucket and calls "what policy maps knowledge to
+  categories" an **open question** — which is precisely our **route-by-subject** rule (D6-4), folded
+  into the Enhancer's distill `tier` output (D23). So our memory layer is the organizing layer that
+  *sits on top of* a DocumentDB-style store, not a competitor to it.
+- **D24-3 — local/global = our Level axis (D20); his open "mapping policy" = our promotion.** His
+  2-level local/global = a subset of our **User / Department / Institution** (team = Department). He
+  flags the **policy for mapping knowledge to local/global as open**; we **dissolve it mechanically**:
+  nothing is "classified" — every lesson is **born local (User) and promoted up by sharing/recurrence**
+  (the AGGREGATE Enhancer, D20/D21). The counting unit ("common enough") is the only thing that
+  changes per level. This is a place our design is **ahead** of the author's stated thinking.
+- **D24-4 — Both knowledge sources already coexist in our design.** His two intake paths —
+  **interaction-extracted** and **curated-upfront (wiki)** — are exactly our **T4 two heads**:
+  extracted = **learned (B)**, born local + promoted (D15-Q1/B, D20 promote path); curated-upfront =
+  **authored (A)**, the D20 **exception** that is ingested directly at Dept/Inst, never born at User.
+  So we need **no new mechanism** to honour his "alongside" requirement — D15's two-headed tier
+  already is it.
+- **D24-5 — Contradiction TODO = our A/B / ARBITRATE (D22); his authority signal handled separately.**
+  Recognise = the 4-branch ARBITRATE detector (D23); surface = `contested` + the memory-transparency
+  surface (D22 BACKLOG). His proposed **authority-precedence** signal is a real *addition* we want to
+  fold in as a **cheap deterministic pre-filter ahead of A/B** — but that is its **own** next decision
+  (do **not** let it dilute D22's honesty red line: precedence may *route/short-circuit*, it must never
+  become a from-scratch correctness judge). Tracked as the next item — **now closed by D25.**
+- **D24-6 — Containment direction (us-above-DocumentDB vs us-inside-DocumentDB) is a FRAMING /
+  political choice, not a hard technical fact — and the external framing is deliberately "inside".**
+  Because every tier sits behind an interface (D24-1), *the same code is describable both ways*:
+  "our memory layer that uses DocumentDB as a backend" (framing A) and "the organizing brain/policies
+  that DocumentDB still lacks" (framing B) are the same artifact. **Tell from the reply:** the author
+  writes "**our** vision for Pneuma's **memory layer**" — he already owns the *memory-layer* framing,
+  and lists local/global mapping + contradiction handling as DocumentDB's own **open TODOs**. So the
+  most accurate model is **neither swallows the other**: both DocumentDB (storage/indexing) and our
+  work (extract→distill, promotion-as-classification, A/B contradiction resolution) are **components
+  under the author's memory-layer umbrella**, and our contribution = **exactly the open policies he
+  flagged**. **Decision: externally we adopt framing B** — present our work as *filling his open
+  TODOs / contributing the organizing layer to his memory-layer vision*, **never** "DocumentDB is our
+  backend" (framing A reads as appropriating his project). **Internally we keep the interface seam
+  regardless** (protects us from his internals, keeps the plugin removable per `CLAUDE.md`).
+  - **Honest non-overlap (so "just put it all in DocumentDB" can be answered):** our layer only
+    *partially* overlaps DocumentDB's scope. **Inside** its scope (= "extracted knowledge indexed for
+    reuse"): **T3 / T4 / T6** + the Enhancer's extract/classify/resolve jobs. **Outside** it: **T1**
+    (ephemeral working memory, lives in prompt assembly), **T2** (the raw *pre-extraction* interaction
+    log — logging, not a knowledge base), and **T5's form** (a property *graph*, not a *document*
+    store — though its *content*, table/column/join knowledge, is in scope). So "everything in
+    DocumentDB" is literally wrong; **partial overlap** is the truth.
+  - **This is the core Teams-1:1 alignment topic:** agree on shared *language* ("are we building
+    DocumentDB's brain, or a memory layer that uses DocumentDB?") **before** committing code — and do
+    it privately, not by defining it in the CC'd email thread.
+  - **Tone calibration (deck + meeting, locked 2026-06-15).** Posture stays **humble / contributory**
+    (framing B; being "under Pneuma's vision" is *fine* — appropriation is the only thing to avoid). The
+    refinement is at **decision points**: never phrase them as "you decide" **and** never hard-commit our
+    side either — use a **"we're still forming our view, let's shape it together" suspension**, because
+    those calls need the user's advisor (Utku) first. The authority of the call is held open by *our*
+    unfinished internal alignment — respectful to Pneuma, and it reserves our say without sounding like a
+    peer power-play. Applied to the meeting deck `_luthfi-meeting-deck.html` (local-only).
+- **Net position.** Strong external validation: our independently-derived design **converges with the
+  author's vision** and is **more concrete** on tier decomposition, the promotion mechanism, and the
+  A/B honesty principle. **Email is a wrap-up; technical detail moves to a Teams 1:1** (political
+  framing per D24-6). **No build is unblocked or blocked by this** — it only retires an OPEN
+  flag and fixes how DocumentDB attaches (T4-authored backend, behind `OrgMemory`).
+
+## D25 — Authority as a pre-filter on ARBITRATE: authority governs declarations only; both-operative → reactions decide
+Decided 2026-06-15 (one-at-a-time with user). Closes the "#3" follow-up flagged in D24-5 — how to fold
+the author's **authority-level precedence** signal into our A/B conflict resolution **without** breaking
+the D22 honesty red line. Builds on D22 (A/B = graded against recorded reactions, never a from-scratch
+correctness judge), D23 (ARBITRATE pipeline), D18-8 (authored dynamic trust = f(authority, learned
+negative-`support`)), D14 (T3-provisioned `role/grade`), D20 (Levels = the user hierarchy). Refines the
+D23 ARBITRATE branch.
+
+- **The generating principle (one line):** **Authority only governs *declarations* (authored records).
+  The moment both sides of a conflict are *operative* (learned), authority steps out and recorded
+  reactions decide.** Authority answers a **prior/normative** question ("whose declaration do we trust
+  with no behavioural oracle?"); reactions answer a **descriptive/operative** question ("which version
+  matches what people actually did?"). They are the two halves of a Bayesian update, **not** competing
+  judges. This keeps the honesty line: authority only *weights a declaration source*, it **never**
+  produces a "which answer is correct" verdict.
+- **The authority↔reactions clash = a feature, surfaced (locks the fork; user chose option C).** When a
+  high-authority **declaration** contradicts **operative reality** (e.g. the Admissions director declares
+  "yield = enrolled/admitted" but the team operatively uses "deposited/admitted"), this is **two kinds of
+  truth** (normative rule vs descriptive practice), **not** a "which is correct" question. We do **NOT**
+  auto-resolve it by either side; we **surface it as a divergence** (the D22 transparency surface +
+  D18-8 trust erosion) — making **"learned > authored"** observable. Rejected: (A) authority overrides
+  operative (system blindly trusts the doc, never learns real practice); (B) reactions override / authority
+  is noise (throws away the author's signal + disrespects governance).
+- **The 3-route pre-filter (sits at ARBITRATE entry, AFTER the relation-judge LLM confirms a
+  contradiction; routes by the two records' type, all program / no new LLM):**
+  - **authored × authored** → no behavioural oracle exists → **program compares `authority`**, higher
+    wins; **equal/unclear → `contested` → surface** (= the author's "ambiguous → consult users"). **Skips
+    the LLM replay entirely.** (Loser is marked superseded with provenance, not hard-deleted — governance/
+    audit.)
+  - **authored × learned** (= the option-C divergence case) → **do NOT replay, do NOT auto-resolve.**
+    Program records the contradiction as **negative evidence against the authored record** (D18-8 trust
+    erosion) and **surfaces as a divergence only once it recurs to the threshold** — **user chose (b):
+    accumulate negative-`support` to N=3 (D21) before surfacing**, NOT surface on the first contradiction
+    (consistent with "recurrence = the universal noise filter"; one stray counter-example must not shout
+    "your practice contradicts your rules"). **Skips the LLM replay**, only tallies.
+  - **learned × learned** → **authority does NOT intervene (user-confirmed).** Both are operative, so
+    using rank to override behavioural evidence would smuggle the normative into a descriptive question
+    (breaks option C). Runs the **full reaction A/B replay** (D22/D23) unchanged. **This is the only route
+    that still pays the replay cost.**
+- **Cost is a free side effect, not the motive (effectiveness-first, consistent with D23).** The
+  pre-filter's *primary* value is **routing** — it is literally how option C is implemented (send
+  authored×learned to divergence instead of replay). That the expensive batched-LLM reaction-replay now
+  runs **only for learned×learned** is a welcome side effect; the pre-filter **adds no LLM calls, it only
+  removes them.** So this does not contradict D23's "cost cap deferred". Finer authority tuning (gap
+  tolerances, tie-break heuristics) → BACKLOG.
+- **The authority data + hierarchy already exist (answers the author's stated prerequisite).** The author
+  noted authority "assumes properly defined user hierarchies/groups." We have them: authority lives on the
+  authored record's thin metadata tag (D15-Q2), derivable from the author's **T3-provisioned `role/grade`**
+  (D14); the hierarchy is the **Level** structure User/Department/Institution (D20). No new mechanism.
+- **Generalises D18-8.** D18-8 already framed authored trust as f(authority, learned negative-`support`);
+  D25 makes that the *concrete ARBITRATE behaviour* and connects it to the author's language (precedence
+  auto-resolves declaration ties; ambiguous/divergent → consult users).
+- **BACKLOG (cut from MVP):** (1) senior-user weighting inside learned×learned (rejected for MVP to keep
+  C clean; revisit only with a principled reason); (2) finer authority-gap tolerance + tie-break
+  heuristics; (3) the divergence-surface UI itself rides the existing **memory-transparency / alignment
+  surface** BACKLOG (D22).
