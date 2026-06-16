@@ -4,6 +4,13 @@
 > Scope: the Python backend under `src/pneuma_seeker` (the actual system), plus
 > the surrounding data, baselines, and frontend-bridge assets. Frontend (OpenWebUI)
 > lives in a separate repo; only the bridge functions are in-tree.
+>
+> **⚠️ Updated 2026-06-15 after syncing `upstream/prod`** (the "Polish backend to
+> accommodate new UI" + "Ensure resilience" refactor). Major changes folded in below:
+> `main.py` split into `routers/` (auth · chat · indexing); a Postgres-backed
+> **auth/users/groups/permissions (RBAC)** subsystem; the data layer split into
+> `datasets/ + users/ + workspaces/` behind a new `PneumaDB` facade
+> (`db/main.py` → `db/workspaces/manager.py`); **Claude + Gemini** LLM backends.
 
 ---
 
@@ -25,7 +32,12 @@ framing is "relational reification": turn an information need into a concrete pa
 it is a three-role agent loop layered over shared infrastructure services:
 
 ```
-                         FastAPI (main.py)  ──  /chat (NDJSON stream), /index, /provenance, ...
+              FastAPI (main.py = app + lifespan bootstrap, mounts routers)
+                                │
+          routers/  ──  auth.router · chat.router · indexing.router
+            │                   │  (every /chat & /index call: Bearer-token auth →
+       UserDB (Postgres)        │   get_current_user → group permissions)
+       users·groups·perms       │
                                 │
                          SessionManager  ──>  ChatSession (per user_id+chat_id)
                                 │
@@ -52,19 +64,20 @@ LLM's context bounded and the roles independently testable.
 | Path | Responsibility |
 |------|----------------|
 | `src/pneuma_seeker/` | The backend package. Everything below is under here unless noted. |
-| `main.py` | FastAPI app + all HTTP endpoints (`/chat`, `/index`, `/provenance/...`, downloads). Entry point. |
-| `session_manager.py` | Caches one `ChatSession` per `(user_id, chat_id)`. |
-| `chat_session.py` | Per-conversation object. Owns the `Conductor`, restores/persists session state. |
-| `model.py` | Pydantic request/response models for the indexing & core endpoints. |
+| `main.py` | FastAPI app + `lifespan` bootstrap (init `UserDB` schema, seed `admin` group/user) + CORS. **Mounts `routers/`; no endpoint bodies live here anymore.** Entry point. |
+| `routers/` | The HTTP endpoints, split by concern (post-sync): `auth.py` (register/login/logout/me, group+permission admin), `chat.py` (`POST /chat` NDJSON stream, chat history/search/delete), `indexing.py` (`POST /index`, dataset metadata). Each depends on `get_current_user` (Bearer token). |
+| `session_manager.py` | Caches one `ChatSession` per `(user_id, chat_id)`. Now constructed with a shared `PneumaDB` passed into each `DBAPI`. |
+| `chat_session.py` | Per-conversation object. Owns the `Conductor`, **always** restores/persists session state (the `PERSIST_CHAT_SESSION` toggle was removed). `chat(latest_user_message, files)` takes a single new message string and maintains `self.messages` internally. |
+| `models.py` | Pydantic request/response models (renamed from `model.py`). Now also covers auth/users/groups: `RegisterRequest`, `LoginRequest`, `TokenResponse`, `UserResponse`, `GroupCreateRequest/Response`, `SetPermissionRequest`, plus `PermissionKey` + `EndpointTag` enums. |
 | `provenance/` | The provenance graph (`graph.py`) and code-generation helpers (`provenance_helper.py`). |
 | `services/core/conductor/` | The Conductor agent — top-level planner. `main.py`, `state.py` (the `(T,S)` state), prompt factories. |
 | `services/core/materializer/` | The Materializer agent — builds the target tables. `main.py`, `state.py`, prompt factories, `action_descriptions.py`. |
 | `services/core/action_set/` | The shared **tool library**. `main.py` (`ActionSet` facade), `interfaces.py` (ABCs), `impl/` (one file per action). |
 | `services/core/ir_system/` | Retrieval subsystem. `main.py` (`Retriever` facade), `retriever/` (factory + impls + persisted indices), `indexing.py`, prompt factory. |
 | `services/core/api/` | Thin API clients the agents talk to: `db.py` (`DBAPI`), `language_model.py` (`LanguageModelAPI`). |
-| `services/db/` | `PneumaDB` — DuckDB-backed dataset stores + per-chat workspace stores + session persistence. `datasets/ingest_csv.py`, `workspaces/`. |
+| `services/db/` | Post-sync, split behind the **`pneuma_db.py` (`PneumaDB`) facade**: `datasets/manager.py` (`DatasetManager` — dataset `.db` files, metadata, postgres registry, **group-permission-gated `get_accessible_local_datasets`**), `workspaces/manager.py` (`WorkspaceManager` — per-chat workspace DBs + session persistence; **this is the renamed old `db/main.py`**), `users/manager.py` (`UserDB` — **Postgres-backed** users/groups/permissions + auth tokens), `users/models.py`, `datasets/ingest_csv.py`. |
 | `services/indexing/` | `IndexingService` — registers a dataset and builds retrieval indices. `connectors/` (CSV, PostgreSQL, base ABC), `metadata_store.py`. |
-| `services/language_model/` | LLM + embedding implementations. `abstract_model.py`, `model_factory.py`, `impl/` (OpenAI, Azure OpenAI, Ollama, mock). |
+| `services/language_model/` | LLM + embedding implementations. `abstract_model.py`, `model_factory.py`, `impl/` (OpenAI, Azure OpenAI, Ollama, **Claude (`claude_llm.py`), Gemini (`gemini_llm.py`)**, mock). |
 | `shared/` | Cross-cutting code: `config.py` (env-driven settings), `logger.py`, `parser.py` (JSON/code extraction), `str_processor.py`, `table_reader.py`, `table_serializer.py`, `schemas/` (typed data models). |
 | `shared/schemas/` | `core/action.py` (action enum), `core/conductor.py`, `core/ir_system.py` (document types + `RetrieverType`), `db/document_type.py`, `language_model/` (message/role/option). |
 | `docker/` | `core-service.dockerfile` for the backend. |
@@ -85,15 +98,19 @@ LLM's context bounded and the roles independently testable.
 
 **`SessionManager`** — `session_manager.py`
 - `get_chat_session(user_id, chat_id) -> ChatSession` — get-or-create, cached in a dict.
-  Each new session gets its own `DBAPI` and `LanguageModelAPI`.
+  Constructed with a shared `PneumaDB`; each new session gets a `DBAPI(..., pneuma_db=...)`
+  and its own `LanguageModelAPI`.
 
 **`ChatSession`** — `chat_session.py`
-- Holds `messages`, a `Conductor`, and (if `PERSIST_CHAT_SESSION`) restores prior
-  state from the workspace DB on construction.
-- `chat(messages, external_data_paths) -> generator[str]` — pairs up prior
-  user/assistant turns into `UserConductorInteraction` history, then delegates to
-  `Conductor.chat(...)`, yielding response chunks and a final `"DONE"`.
-- `persist_session()` — writes the latest turn + full state/provenance back via `DBAPI`.
+- Holds `messages`, a `dataset_name`, and a `Conductor`. **Always** restores prior state
+  from the workspace DB on construction via `load_session` (the `PERSIST_CHAT_SESSION`
+  toggle was removed post-sync; `load_session` now also returns the persisted `dataset_name`).
+- `chat(latest_user_message, external_data_paths) -> generator[str]` — **takes a single new
+  user message string** (not a full message list), appends it to `self.messages`, pairs up
+  prior user/assistant turns into `UserConductorInteraction` history, delegates to
+  `Conductor.chat(...)`, yields response chunks + a final `"DONE"`, then appends the
+  assistant reply.
+- `persist_session(dataset_name)` — writes the latest turn + full state/provenance back via `DBAPI`.
 
 ### 3.2 Conductor — the top-level agent
 
@@ -197,20 +214,43 @@ string ids. Note `CONTEXT_EXTRACTION` maps to the wire name `"assumption_check"`
   `encode_tokenizer(texts)`. Resolves concrete LLM/embedding classes via
   `model_factory.get_llm/get_embed_model` from `config.LLM_PATH` / `EMBED_MODEL_PATH`.
 
-**`DBAPI`** — `services/core/api/db.py` — thin pass-through to `PneumaDB` (§3.7).
+**`DBAPI`** — `services/core/api/db.py` — thin pass-through to `PneumaDB` (§3.7); now
+constructed with `pneuma_db=` injected by the `SessionManager`.
 
 ### 3.7 Data layer
 
-**`PneumaDB`** — `services/db/main.py`
-- Two DuckDB stores:
-  - **Dataset DBs**: one `.db` per dataset under `services/db/datasets/<name>/<name>.db`,
-    attached read-only into a workspace via `link_dataset_tables` (also supports
-    attaching a **PostgreSQL** source via the postgres extension).
-  - **Workspace DBs**: one `ws.db` per `(user_id, chat_id)` under
-    `services/db/workspaces/<user>/<chat>/`, holding intermediate/target tables and
-    the **session-persistence schema** (see §6).
-- Key methods: `ingest_dataset`, `link_dataset_tables`, `register_postgres_dataset`,
+**`PneumaDB`** — `services/db/pneuma_db.py` (the **facade**; the old monolithic
+`services/db/main.py` was split + renamed in the sync). Composes two managers and
+forwards to them:
+- **`DatasetManager`** (`datasets/manager.py`) — DuckDB dataset stores: one `.db` per
+  dataset under `services/db/datasets/<name>/<name>.db`, attached read-only into a
+  workspace via `link_dataset_tables` (also supports a **PostgreSQL** source via the
+  postgres extension). **New: `get_accessible_local_datasets(is_admin, group_permissions)`**
+  filters visible datasets by the caller's group `dataset:access:<name>` permissions.
+- **`WorkspaceManager`** (`workspaces/manager.py` = the **renamed old `db/main.py`**) —
+  one `ws.db` per `(user_id, chat_id)` under `services/db/workspaces/<user>/<chat>/`,
+  holding intermediate/target tables + the **session-persistence schema** (see §6).
+  New chat-history methods: `get_user_chat_sessions`, `search_chat_sessions`,
+  `delete_chat_session`, `load_chat_history`.
+- Key forwarded methods: `ingest_dataset`, `link_dataset_tables`, `register_postgres_dataset`,
   `execute_query`, `register_temporary_df`, `persist_df`, `persist_session`, `load_session`.
+- **Note for our memory layer:** the T2 episodic-log capture hook attaches around
+  `WorkspaceManager.persist_session` (DuckDB-backed) — not the old `db/main.py` path.
+
+**`UserDB`** — `services/db/users/manager.py` (**new subsystem, Postgres-backed**). The
+identity + access-control substrate the rest of the auth layer rides on:
+- **Users**: `create_user`, `get_user_by_id/email/token`, `verify_user`, password hashing
+  (PBKDF2), session tokens (`create_session_token`/`get_user_by_token`/`revoke_token`).
+- **Groups (hierarchical)**: `GroupRecord{group_id, name, parent_group_id}`; `create_group`,
+  `list_group_ancestors` (walks the `parent_group_id` chain root→leaf, cycle-checked).
+- **Permissions (inherited overlay)**: `GroupPermissionRecord{group_id, key, value}`;
+  `get_effective_group_permissions` resolves a group's permissions by walking ancestors —
+  **"parent applied first; child with the same key overrides ancestors"** (CLAUDE.md-style
+  overlay precedence). `PermissionKey`: `admin`, `dataset:access:*`, `user:management`,
+  `indexing:management`.
+- **Why this matters to us:** this is a real backing for our **Level axis** (D20:
+  User→Department→Institution ≈ group `parent_group_id` chain) and the **authorization**
+  we deferred (D14/BACKLOG) — a potential reuse substrate, discussed separately (not yet wired).
 
 **`IndexingService`** — `services/indexing/main.py`
 - Orchestrates dataset registration + index build. `index_dataset(...)` /
@@ -236,11 +276,13 @@ string ids. Note `CONTEXT_EXTRACTION` maps to the wire name `"assumption_check"`
 
 ## 4. Data Flow — a `/chat` request end to end
 
-1. **HTTP in.** `POST /chat` (`main.py`). Body carries `user_id`, `chat_id`, optional
-   `data_source` (sets `config.DATA_SOURCES`), `messages`, `files`. Messages become
-   `LLMMessage`s; response is an **NDJSON `StreamingResponse`**.
-2. **Session.** `SessionManager.get_chat_session` returns the cached `ChatSession`
-   (restoring prior `(T,S)` + provenance from the workspace DB if persistence is on).
+1. **HTTP in.** `POST /chat` (`routers/chat.py`). **Requires a Bearer token** →
+   `get_current_user` resolves the `UserRecord`; `user_id` comes from the authenticated
+   user (no longer a body param). Body carries `chat_id`, `dataset_name` (sets
+   `config.DATA_SOURCES`; required), the new `message`/`user_message`/`content` string,
+   and `files`. Response is an **NDJSON `StreamingResponse`**.
+2. **Session.** `SessionManager.get_chat_session(user_id, chat_id)` returns the cached
+   `ChatSession` (which **always** restores prior `(T,S)` + provenance from the workspace DB).
 3. **Producer thread.** `ChatSession.chat(...)` runs in a worker thread; its yielded
    strings are pushed through a `Queue` and re-emitted to the client as `log` /
    `assistant` / `done` payloads.
@@ -259,8 +301,8 @@ string ids. Note `CONTEXT_EXTRACTION` maps to the wire name `"assumption_check"`
    `ActionSet.execute_code` → `DBAPI.execute_query` (DuckDB). The natural-language
    answer is the final `user_facing_communication`.
 7. **Stream out + persist.** Each chunk is streamed; on stream close,
-   `ChatSession.persist_session()` writes the new turn, `(T,S)`, the provenance graph,
-   and the document sets into the workspace DB.
+   `ChatSession.persist_session(dataset_name)` writes the new turn, `(T,S)`, the provenance
+   graph, and the document sets into the workspace DB (always on post-sync).
 8. **Side endpoints** read this same state: `/provenance/nodes/...`,
    `/combined/html/...` (state + materialization steps), `/all_tables/...` (ZIP of `T`),
    `/materializer_code/...` (the provenance graph rendered as runnable `.py`),
@@ -277,14 +319,15 @@ These are the seams clearly designed for plug-in:
 
 | Extension point | Where | How to extend |
 |-----------------|-------|---------------|
-| **HTTP API** | `main.py` | FastAPI routes; tags `core` / `indexing` (`model.py:EndpointTag`). |
+| **HTTP API** | `routers/{auth,chat,indexing}.py` | FastAPI `APIRouter`s mounted in `main.py`; tags from `models.py:EndpointTag` (`auth`/`chat`/`indexing`). Endpoints take a `get_current_user` dependency (Bearer token). |
+| **Auth / access control** | `routers/auth.py` + `services/db/users/manager.py` (`UserDB`) | Add a `PermissionKey`, gate an endpoint via `get_current_user_permissions` / `ensure_admin`; groups are hierarchical (`parent_group_id`) with inherited permissions. |
 | **New action / tool** | `action_set/impl/` + `interfaces.py` | Implement `Action` (+ `Applicable`/`Executable`), add to `ActionNames`, wire into `ActionSet.__init__` and the action allow-lists. |
 | **New retriever** | `ir_system/retriever/interface.py` | Subclass `AbstractRetriever`, add a `RetrieverType`, register in `RetrieverFactory`. |
 | **New data source connector** | `services/indexing/connectors/base.py` | Subclass `SourceConnector`; `IndexingService.register_connector("type", Cls)`. Built-ins: CSV, PostgreSQL. |
-| **New LLM / embedding provider** | `services/language_model/abstract_model.py` + `model_factory.py` | Implement `AbstractModel`, add a branch in `get_llm` / `get_embed_model` keyed on `LLM_PATH`/`EMBED_MODEL_PATH`. Existing: OpenAI, Azure OpenAI, Ollama, mock. |
+| **New LLM / embedding provider** | `services/language_model/abstract_model.py` + `model_factory.py` | Implement `AbstractModel`, add a branch in `get_llm` / `get_embed_model` keyed on `LLM_PATH`/`EMBED_MODEL_PATH`. Existing: OpenAI, Azure OpenAI, Ollama, **Claude, Gemini**, mock. (Our Enhancer can reuse `claude_llm` — but note its `batch_chat` is a sequential loop, not the Anthropic Batches API, and `encode` raises `NotImplementedError`, so embeddings need another provider.) |
 | **Prompt variants** | `*/prompt_factory*.py` | Conductor and Materializer ship ablation factories (`_no_context_extraction`, `_no_state`) — swap-in alternate prompting strategies. |
 | **Reranking strategy** | `pneuma_retriever.py:RerankingMode` | `NONE` vs `LLM`; set in `PneumaRetriever.__init__`. |
-| **Configuration** | `shared/config.py` (env / `.env`) | Feature flags (`ENABLE_WEB_SEARCH`, `ENABLE_SEMANTIC_JOIN`, `ENABLE_CONTEXT_EXTRACTION`, …), step caps, retrieval/semantic tuning, persistence toggles. |
+| **Configuration** | `shared/config.py` (env / `.env`) | Feature flags (`ENABLE_WEB_SEARCH`, `ENABLE_SEMANTIC_JOIN`, `ENABLE_CONTEXT_EXTRACTION`, our `ENABLE_MEMORY_INJECTION`, …), step caps, retrieval/semantic tuning. Post-sync also: `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`, `AUTH_*`, `POSTGRES_*` (the `PERSIST_CHAT_SESSION` toggle was removed). |
 | **Frontend bridge** | `openwebui_functions/*.py` | OpenWebUI "pipe"/filter functions that call this backend; imported into the UI as JSON. |
 
 ---
@@ -322,8 +365,9 @@ These are the seams clearly designed for plug-in:
 
 ### 6.2 Persistence "archive" (DuckDB)
 
-**Implementation:** `services/db/main.py` (`PneumaDB`), surfaced through
-`services/core/api/db.py` (`DBAPI`).
+**Implementation:** `services/db/workspaces/manager.py` (`WorkspaceManager`, behind the
+`services/db/pneuma_db.py` facade — renamed from the old `services/db/main.py`), surfaced
+through `services/core/api/db.py` (`DBAPI`).
 
 - **Workspace persistence schema** (`__define_all_persistence_tables`), one `ws.db`
   per `(user_id, chat_id)`:
@@ -335,8 +379,9 @@ These are the seams clearly designed for plug-in:
   When `ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING` is off, it snapshots by wiping the
   prior state tables first (keep-latest semantics).
 - **Read:** `load_session(...)` — rebuilds `messages`, `ConductorState`,
-  `ProvenanceGraph` (nodes + edges), and the document sets, re-attaching dataset tables
-  as needed. `ChatSession.__init__` calls this when `PERSIST_CHAT_SESSION` is on.
+  `ProvenanceGraph` (nodes + edges), the document sets, and the persisted `dataset_name`,
+  re-attaching dataset tables as needed. `ChatSession.__init__` always calls this
+  (the `PERSIST_CHAT_SESSION` gate was removed post-sync).
 - **Dataset archive:** ingested datasets are stored as DuckDB `.db` files under
   `services/db/datasets/`; retrieval **indices** are persisted under
   `ir_system/retriever/impl/indices/pneuma/{vector,fulltext}-index-<dataset>/`

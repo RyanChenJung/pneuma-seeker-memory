@@ -98,8 +98,10 @@ class OrgMemory:
 - **One facade, not two split interfaces** (D15 Q5-ii): (i) concept alignment — one tier = one
   interface, like T1/T2/T3; (ii) the promotion ladder needs both heads under one roof.
 - The **authored backend is hidden behind the facade** — our own store vs reusing upstream
-  `DocumentDB`/`Knowledge` is the still-OPEN email question (D13). Interface-first means the
-  choice doesn't block us; it only swaps the authored backend later.
+  `DocumentDB`/`Knowledge`. **The reuse question is settled in principle (D24):** `DocumentDB`
+  is a backend/index substrate *behind* this authored head, not a competing architecture — so
+  only the code-level backend swap remains deferred. Interface-first means the choice doesn't
+  block us; it only swaps the authored backend later.
 
 ## v1 spec (minimal — simplicity first)
 | Aspect | Design |
@@ -130,6 +132,7 @@ class OrgMemory:
 - ❌ Raw trajectories → Tier 2; reusable procedural skills → Tier 6.
 
 ## Deferred to later versions (→ BACKLOG.md)
-Vector backend, `DocumentDB`/`Knowledge` reuse decision (pending author email), exact
-scope-level count + overlay precedence rules, full governance (versioning/who-authored/
-sign-off), HR/identity-system authored feed, soft-overlapping-cluster org scope.
+Vector backend, the `DocumentDB`/`Knowledge` **code-level backend swap** (reuse-vs-build
+settled in principle by **D24**; only the wiring is deferred), exact scope-level count +
+overlay precedence rules, full governance (versioning/who-authored/sign-off), HR/identity-
+system authored feed, soft-overlapping-cluster org scope.

@@ -9,6 +9,7 @@ temp
 .vscode
 .DS_Store
 pneuma-seeker-ui
+.idea
 
 # Local-only Word docs (team-facing; living copies are the .md specs) — not tracked
 docs_memory/*.docx

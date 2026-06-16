@@ -33,8 +33,9 @@ to disk, must survive the session, consumed **asynchronously** by the Enhancer.
   Tier 1's `_notebooks/`), **NOT** in upstream's `ws.db`. v1 = **JSONL** behind a small
   `EpisodicLog` interface (`append` / `iter` / `mark_processed`). **Recorded upgrade path
   (per user request): swap the JSONL backend to a DuckDB table** — reuse the existing stack
-  (ws.db is already DuckDB; DuckDB can even attach Postgres, `db/main.py:404`), Conductor
-  code unchanged. SQLite (Hermes-style) rejected: DuckDB already occupies that niche.
+  (ws.db is already DuckDB; DuckDB can even attach Postgres — the postgres-attach path now
+  lives in `services/db/datasets/manager.py` post-sync), Conductor code unchanged. SQLite
+  (Hermes-style) rejected: DuckDB already occupies that niche.
   Markdown (Kairos-style) rejected: Tier 2 is high-volume machine-read, wrong shape.
 - **(3) Granularity.** **Step-level full trajectory** (incl. failures + raw CoT). This is
   *free on the LLM axis* — the data already exists in memory; only cost is disk + a clean
@@ -46,8 +47,9 @@ to disk, must survive the session, consumed **asynchronously** by the Enhancer.
 ## Why NOT in `ws.db` (user's pollution concern, confirmed valid)
 1. ws.db schema is upstream-owned (🟡 surgical-only territory).
 2. Per-conversation files would force the Enhancer to crawl many files.
-3. **Decisive:** `persist_session` is **delete-and-replace** (`DELETE` rows,
-   `db/main.py:592-595`), which directly contradicts our **append-only** semantics.
+3. **Decisive:** `persist_session` is **delete-and-replace** (`DELETE` rows, in
+   `WorkspaceManager.persist_session` — the renamed old `db/main.py`), which directly
+   contradicts our **append-only** semantics.
 
 Reuse the DuckDB *technology* (upgrade path), not the ws.db *file*.
 

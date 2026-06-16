@@ -74,7 +74,7 @@ T3 block is the user layer of the overlay composition above.
 ## v1 spec (minimal — simplicity first)
 | Aspect | Design |
 |--------|--------|
-| Scope key | `user_id` |
+| Scope key | `user_id` — **post-2026-06-15 sync this is a real authenticated `UserRecord` id** (Postgres `UserDB`), no longer a free request param; the same record also exposes `group_id`/`parent_group_id` (the user's org placement, useful for the T3→T4 promotion path) |
 | Sources | Provisioned (manual file) + Learned (Enhancer from Tier 2) |
 | Backend | one structured file per user (JSON/Markdown) behind a **`UserMemory` interface** (`read` / `write` / `update_slot`); gitignored local store, **vector backend deferred** |
 | Mode | single-user MVP (multi-user company DB = backend swap → BACKLOG) |

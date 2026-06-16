@@ -1,16 +1,16 @@
-# services/db/main.py
-import csv
+import datetime
 import os
 from logging import Logger
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 import duckdb
-from pandas import DataFrame, isna, read_csv
-from tqdm import tqdm
+from pandas import DataFrame, isna
 
 from pneuma_seeker.provenance.graph import ProvenanceGraph, ProvenanceNode
 from pneuma_seeker.services.core.conductor.state import ConductorState
+from pneuma_seeker.services.db.datasets.manager import DatasetManager
 from pneuma_seeker.shared.config import Config
 from pneuma_seeker.shared.schemas.core.ir_system import (
     AbstractDocument,
@@ -21,231 +21,27 @@ from pneuma_seeker.shared.schemas.core.ir_system import (
 from pneuma_seeker.shared.schemas.db.document_type import DocumentType
 from pneuma_seeker.shared.schemas.language_model.message import LLMMessage
 from pneuma_seeker.shared.schemas.language_model.role import Role
-from pneuma_seeker.shared.str_processor import clean_column_table_name
 
 
-class PneumaDB:
-    """
-    PneumaDB manages:
-      - dataset databases (one .db per dataset)
-      - per-user workspace databases (one .db per user/chat)
-      - external tables (uploaded by users)
-      - intermediate & target tables
-      - metadata tracking
-
-    Notes / design choices:
-    - Each dataset database file uses the `.db` extension.
-    - Each workspace uses its own DB file (ws_{user}_{chat}.db).
-    """
+class WorkspaceManager:
+    """Manages per-user workspace DBs and session persistence."""
 
     def __init__(
         self,
+        workspace_db_path: Path,
         config: Config,
         logger: Logger,
-        dataset_db_path: str | None = None,
-        workspace_db_path: str | None = None,
-    ):
+        dataset_manager: DatasetManager,
+    ) -> None:
+        self.workspace_db_path = Path(workspace_db_path)
         self.config = config
         self.logger = logger
+        self.dataset_manager = dataset_manager
 
-        if dataset_db_path:
-            self.dataset_db_path = Path(dataset_db_path)
-        else:
-            self.dataset_db_path = Path(__file__).resolve().parent / "datasets"
-
-        if workspace_db_path:
-            self.workspace_db_path = Path(workspace_db_path)
-        else:
-            self.workspace_db_path = Path(__file__).resolve().parent / "workspaces"
-
-        os.makedirs(self.dataset_db_path, exist_ok=True)
         os.makedirs(self.workspace_db_path, exist_ok=True)
 
         self._conn_cache: dict[tuple[str, str], duckdb.DuckDBPyConnection] = {}
-        self._pg_registry: dict[str, str] = {}
 
-        self.target_tables_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "..",
-            "..",
-            "..",
-            "data_src",
-            "target_tables",
-        )
-
-    # ------------------------------------------------------------------
-    # Dataset Management (one .db per dataset)
-    # ------------------------------------------------------------------
-    def get_dataset_connection(self, dataset_name: str, read_only: bool = True):
-        """Returns a DuckDB connection to the dataset DB file (uses .db extension)."""
-        os.makedirs(self.dataset_db_path / dataset_name, exist_ok=True)
-        dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
-        # For read-only mode, ensure the file exists first
-        if read_only and not dataset_db_file.exists():
-            # Create it in read-write mode first
-            temp_con = duckdb.connect(
-                database=dataset_db_file.as_posix(), read_only=False
-            )
-            temp_con.close()
-        con = duckdb.connect(database=dataset_db_file.as_posix(), read_only=read_only)
-        return con
-
-    def ingest_dataset(
-        self,
-        dataset_name: str,
-        dataset_path: str,
-        metadata_path: str | None = None,
-        overwrite: bool = True,
-    ) -> None:
-        """
-        Stores CSV files inside the dataset's own DuckDB file.
-        - table name = cleaned(Path(csv_file).stem)
-        - cleans column names
-        - only reads file once for ingestion (fast path)
-        """
-        if (
-            os.path.exists(self.dataset_db_path / dataset_name / f"{dataset_name}.db")
-            and not overwrite
-        ):
-            self.logger.warning(
-                f"Dataset DB already exists for '{dataset_name}' at {self.dataset_db_path / dataset_name / f'{dataset_name}.db'}. Skipping ingestion. Set overwrite=True to force re-ingestion."
-            )
-            return
-
-        if metadata_path is not None and os.path.exists(metadata_path):
-            try:
-                metadata = read_csv(metadata_path)
-                if (
-                    "table_name" in metadata.columns
-                    and "description" in metadata.columns
-                ):
-                    metadata["table_name"] = metadata["table_name"].apply(
-                        clean_column_table_name
-                    )
-                    dest_metadata_path = (
-                        self.dataset_db_path / dataset_name / "metadata.csv"
-                    )
-                    os.makedirs(dest_metadata_path.parent, exist_ok=True)
-                    metadata.to_csv(dest_metadata_path, index=False)
-            except Exception as e:
-                self.logger.warning(
-                    f"Failed to process metadata CSV at {metadata_path}: {e}"
-                )
-
-        dataset_con = self.get_dataset_connection(dataset_name, read_only=False)
-        try:
-            dataset_con.begin()
-            for table_file_name in tqdm(sorted(os.listdir(dataset_path))):
-                if not table_file_name.lower().endswith(".csv"):
-                    continue
-
-                file_path = (Path(dataset_path) / table_file_name).as_posix()
-                table_stem = Path(table_file_name).stem
-                cleaned_table_name = clean_column_table_name(table_stem)
-
-                # Read header only to get original column names (fast)
-                original_cols = None
-                try:
-                    with open(file_path, "r") as f:
-                        header_line = f.readline().strip()
-                        # Simple CSV header parsing (handles quoted fields)
-                        original_cols = list(csv.reader([header_line]))[0]
-                except Exception as exception:
-                    # Fallback: let DuckDB auto-detect and ingest (still fine)
-                    original_cols = None
-
-                if original_cols:
-                    cleaned_cols = self.__dedupe_columns(
-                        [clean_column_table_name(c) for c in original_cols]
-                    )
-                    select_clause = ", ".join(
-                        f'"{orig}" AS "{cleaned}"'
-                        for orig, cleaned in zip(original_cols, cleaned_cols)
-                    )
-
-                    dataset_con.execute(
-                        f"""
-                        CREATE OR REPLACE TABLE "{cleaned_table_name}" AS
-                        SELECT {select_clause}
-                        FROM read_csv_auto(
-                            '{file_path}',
-                            HEADER=TRUE,
-                            IGNORE_ERRORS=TRUE,
-                            STRICT_MODE=FALSE,
-                            NULL_PADDING=TRUE,
-                            SAMPLE_SIZE=100_000,
-                            PARALLEL=FALSE
-                        );
-                        """
-                    )
-                else:
-                    # If we couldn't get header with pandas, let DuckDB create the table
-                    dataset_con.execute(
-                        f"""
-                        CREATE OR REPLACE TABLE "{cleaned_table_name}" AS
-                        SELECT * FROM read_csv_auto(
-                            '{file_path}',
-                            HEADER=TRUE,
-                            IGNORE_ERRORS=TRUE,
-                            STRICT_MODE=FALSE,
-                            NULL_PADDING=TRUE,
-                            SAMPLE_SIZE=100_000,
-                            PARALLEL=FALSE
-                        );
-                        """
-                    )
-            dataset_con.commit()
-        except Exception as exception:
-            dataset_con.rollback()
-            self.logger.error(
-                f"[PneumaDB] Failed to ingest dataset '{dataset_name}': {exception}"
-            )
-            raise exception
-        finally:
-            dataset_con.close()
-
-    def __dedupe_columns(self, cols):
-        """Deduplicates column names by appending _1, _2, etc. to duplicates."""
-        seen = {}
-        result = []
-        for c in cols:
-            if c not in seen:
-                seen[c] = 0
-                result.append(c)
-            else:
-                seen[c] += 1
-                result.append(f"{c}_{seen[c]}")
-        return result
-
-    def get_table_description(self, dataset_name: str, table_name: str) -> str:
-        """Returns the description of a table in the dataset."""
-        os.makedirs(self.dataset_db_path / dataset_name, exist_ok=True)
-        metadata_path = self.dataset_db_path / dataset_name / "metadata.csv"
-        if os.path.exists(metadata_path) is False:
-            return ""
-        try:
-            metadata = read_csv(metadata_path)
-        except Exception:
-            return ""
-
-        if (
-            "table_name" not in metadata.columns
-            or "description" not in metadata.columns
-        ):
-            return ""
-
-        table_meta = metadata[metadata["table_name"] == table_name]
-        if table_meta.empty:
-            return ""
-        description = table_meta.iloc[0]["description"]
-        if description is None or isna(description):
-            return ""
-        return str(description)
-
-    # ------------------------------------------------------------------
-    # Workspace DB Management (one .db per user/chat)
-    # ------------------------------------------------------------------
     def get_ws_db_connection(self, user_id: str, chat_id: str):
         """
         Returns a cached DuckDB connection for the workspace.
@@ -269,19 +65,16 @@ class PneumaDB:
         """Defines all necessary tables for state persistence in the workspace DB."""
         try:
             con.begin()
-            con.execute(
-                """
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS chat_history (
                         chat_history_id     UUID PRIMARY KEY,
                         role                VARCHAR,
                         content             VARCHAR,
-                        creation_timestamp  TIMESTAMP DEFAULT now()
+                        creation_timestamp  TIMESTAMP WITH TIME ZONE DEFAULT now()
                     );
-                """
-            )
+                """)
 
-            con.execute(
-                """
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS conductor_state (
                         state_id                        UUID PRIMARY KEY,
                         chat_history_id                 UUID,
@@ -289,72 +82,74 @@ class PneumaDB:
                         python_script                   VARCHAR,
                         is_python_script_executed       BOOLEAN,
                         join_paths                      VARCHAR,
-                        creation_timestamp              TIMESTAMP DEFAULT now(),
+                        creation_timestamp              TIMESTAMP WITH TIME ZONE DEFAULT now(),
                         FOREIGN KEY (chat_history_id) REFERENCES chat_history(chat_history_id)
                     );
-                """
-            )
+                """)
 
-            con.execute(
-                """
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS provenance_nodes (
                         state_id            UUID,
-                        node_id             UUID PRIMARY KEY,
+                        node_id             UUID,
                         source_retriever    VARCHAR,
                         python_code         VARCHAR,
                         description         VARCHAR,
+                        PRIMARY KEY (state_id, node_id),
                         FOREIGN KEY (state_id) REFERENCES conductor_state(state_id)
                     );
-                """
-            )
+                """)
 
-            con.execute(
-                """
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS documents (
-                        doc_id          VARCHAR PRIMARY KEY,
+                        state_id        UUID,
+                        doc_id          VARCHAR,
                         retriever_type  VARCHAR,
                         content         VARCHAR,
                         path            VARCHAR,
-                        last_node_id    UUID
+                        last_node_id    UUID,
+                        PRIMARY KEY (state_id, doc_id),
+                        FOREIGN KEY (state_id) REFERENCES conductor_state(state_id)
                     );
-                """
-            )
-            con.execute(
-                """
+                """)
+
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS document_metadata (
+                        state_id        UUID,
                         doc_id          VARCHAR,
                         metadata_key    VARCHAR,
                         metadata_value  VARCHAR,
-                        FOREIGN KEY (doc_id) REFERENCES documents(doc_id)
+                        FOREIGN KEY (state_id, doc_id) REFERENCES documents(state_id, doc_id)
                     );
-                """
-            )
-            con.execute(
-                """
+                """)
+
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS state_document_roles (
                         state_id    UUID,
                         doc_id      VARCHAR,
                         role        VARCHAR,
                         PRIMARY KEY (state_id, doc_id, role),
                         FOREIGN KEY (state_id) REFERENCES conductor_state(state_id),
-                        FOREIGN KEY (doc_id) REFERENCES documents(doc_id)
+                        FOREIGN KEY (state_id, doc_id) REFERENCES documents(state_id, doc_id)
                     );
-                """
-            )
+                """)
 
-            con.execute(
-                """
+            con.execute("""
                     CREATE TABLE IF NOT EXISTS provenance_edges (
                         state_id        UUID,
                         parent_node_id  UUID,
                         child_node_id   UUID,
                         PRIMARY KEY (state_id, parent_node_id, child_node_id),
                         FOREIGN KEY (state_id) REFERENCES conductor_state(state_id),
-                        FOREIGN KEY (parent_node_id) REFERENCES provenance_nodes(node_id),
-                        FOREIGN KEY (child_node_id) REFERENCES provenance_nodes(node_id)
+                        FOREIGN KEY (state_id, parent_node_id) REFERENCES provenance_nodes(state_id, node_id),
+                        FOREIGN KEY (state_id, child_node_id) REFERENCES provenance_nodes(state_id, node_id)
                     );
-                """
-            )
+                """)
+
+            con.execute("""
+                    CREATE TABLE IF NOT EXISTS session_metadata (
+                        dataset_name  VARCHAR NOT NULL
+                    );
+                """)
 
             con.commit()
         except Exception as e:
@@ -388,91 +183,20 @@ class PneumaDB:
                 pass
         self._conn_cache.clear()
 
-    # ------------------------------------------------------------------
-    # PostgreSQL Dataset Registry
-    # ------------------------------------------------------------------
-    def register_postgres_dataset(
-        self, dataset_name: str, connection_string: str
-    ) -> None:
-        """Registers a PostgreSQL-backed dataset by storing its libpq connection string.
-
-        When link_dataset_tables is called for this dataset_name, DuckDB will ATTACH
-        via the postgres extension (READ_ONLY) instead of looking for a local .db file.
-
-        Note: Prefer using DuckDB secrets over embedding credentials directly in the
-        connection string to avoid accidental credential exposure in error output.
-        See: https://duckdb.org/docs/stable/core_extensions/postgres#configuring-via-secrets
-        """
-        self._pg_registry[dataset_name] = connection_string
-
-    # ------------------------------------------------------------------
-    # Dataset DB Linking into Workspace DB
-    # ------------------------------------------------------------------
-    def link_dataset_tables(self, user_id: str, chat_id: str, dataset_name: str):
-        """
-        Attach a dataset into the workspace connection under a safe alias.
-
-        - If dataset_name was registered via register_postgres_dataset, attaches
-          using DuckDB's postgres extension (READ_ONLY).
-        - Otherwise, attaches a local .db file (original behaviour).
-
-        The alias is clean_column_table_name(dataset_name). Idempotent.
-        """
-        self.__log(f"[PneumaDB] Linking dataset '{dataset_name}' into workspace.")
-        ws_db_con = self.get_ws_db_connection(user_id, chat_id)
-
-        alias = clean_column_table_name(dataset_name)
-
-        # Check attached databases (PRAGMA database_list)
-        attached = ws_db_con.execute("PRAGMA database_list").fetchdf()
-        # `name` column contains aliases; defensive checks
-        if "name" in attached.columns and alias in attached["name"].tolist():
-            return  # already attached
-
-        if dataset_name in self._pg_registry:
-            conn_str = self._pg_registry[dataset_name]
-            ws_db_con.execute(
-                f"ATTACH '{conn_str}' AS \"{alias}\" (TYPE postgres, READ_ONLY)"
-            )
-        else:
-            dataset_db_file = self.dataset_db_path / dataset_name / f"{dataset_name}.db"
-            if not dataset_db_file.exists():
-                raise FileNotFoundError(
-                    f"Dataset DB not found: {dataset_db_file.as_posix()}"
-                )
-            # Attach read-only
-            ws_db_con.execute(
-                f"ATTACH DATABASE '{dataset_db_file.as_posix()}' AS \"{alias}\" (READ_ONLY)"
-            )
-
-    # ------------------------------------------------------------------
-    # Query Execution
-    # ------------------------------------------------------------------
     def execute_query(
         self, user_id: str, chat_id: str, sql: str, sql_params: tuple = ()
     ) -> DataFrame:
         """
-        Execute SQL in the context of the workspace DB connection.
+        Executes SQL in the context of the workspace DB connection.
         Note: workspace connection is cached so ATTACH persists between calls.
         """
         ws_db_con = self.get_ws_db_connection(user_id, chat_id)
         return ws_db_con.execute(sql, sql_params).fetchdf()
 
-    # ------------------------------------------------------------------
-    # Session Persistence
-    # ------------------------------------------------------------------
     def register_temporary_df(
         self, user_id: str, chat_id: str, df: DataFrame, table_name: str
     ):
-        """Registers a temporary DataFrame in the workspace DB connection.
-
-        Note: DuckDB's `con.register(name, df)` creates a view-like relation that can
-        shadow an existing persistent table with the same name. To prevent subtle
-        correctness issues (e.g., accidentally replacing a materialized target table
-        with a small preview DF), we refuse to register a DF under a name that
-        already exists as a BASE TABLE in the workspace schema.
-        """
-
+        """Registers a temporary DataFrame in the workspace DB connection."""
         con = self.get_ws_db_connection(user_id, chat_id)
 
         existing = con.execute(
@@ -491,8 +215,6 @@ class PneumaDB:
             )
 
         try:
-            # If a temporary view with this name already exists (e.g., from a prior
-            # register call), try to unregister it and re-register.
             if existing:
                 try:
                     con.unregister(table_name)
@@ -536,6 +258,7 @@ class PneumaDB:
         self,
         user_id: str,
         chat_id: str,
+        dataset_name: str,
         new_user_input: str,
         new_system_response: str,
         conductor_state: ConductorState,
@@ -546,9 +269,7 @@ class PneumaDB:
         web_crawl_result: AbstractDocument | None = None,
         join_paths: str | None = None,
     ):
-        """
-        Persists the chat session.
-        """
+        """Persists the chat session."""
         con = self.get_ws_db_connection(user_id, chat_id)
         new_user_message_id = uuid4()
         new_system_response_id = uuid4()
@@ -566,6 +287,13 @@ class PneumaDB:
             )
             con.execute(
                 """
+                INSERT INTO session_metadata (dataset_name)
+                SELECT ? WHERE NOT EXISTS (SELECT 1 FROM session_metadata);
+                """,
+                (dataset_name,),
+            )
+            con.execute(
+                """
                 INSERT INTO chat_history (
                     chat_history_id,
                     role,
@@ -574,28 +302,7 @@ class PneumaDB:
                 """,
                 (new_system_response_id, Role.ASSISTANT.value, new_system_response),
             )
-            con.commit()
-            if not self.config.ENABLE_FINE_GRAINED_STATE_CHANGE_TRACKING:
-                con.begin()
-                con.execute("""DELETE FROM document_metadata;""")
-                con.commit()
-                con.begin()
-                con.execute("""DELETE FROM state_document_roles;""")
-                con.commit()
-                con.begin()
-                con.execute("""DELETE FROM provenance_edges;""")
-                con.commit()
-                con.begin()
-                con.execute("""DELETE FROM documents;""")
-                con.commit()
-                con.begin()
-                con.execute("""DELETE FROM provenance_nodes;""")
-                con.commit()
-                con.begin()
-                con.execute("""DELETE FROM conductor_state;""")
-                con.commit()
 
-            con.begin()
             new_state_id = uuid4()
             con.execute(
                 """
@@ -618,12 +325,23 @@ class PneumaDB:
                 ),
             )
 
-            # Insert all nodes first to satisfy FK constraints.
             self.__log(
                 f"Persisting provenance graph with {len(provenance_graph.nodes)} nodes..."
             )
-            for provenance_node in provenance_graph.nodes.values():
-                con.execute(
+
+            if provenance_graph.nodes:
+                node_data = [
+                    (
+                        new_state_id,
+                        node.id,
+                        node.source_retriever.value,
+                        node.python_code,
+                        node.description,
+                    )
+                    for node in provenance_graph.nodes.values()
+                ]
+
+                con.executemany(
                     """
                     INSERT INTO provenance_nodes (
                         state_id,
@@ -633,50 +351,28 @@ class PneumaDB:
                         description
                     ) VALUES (?, ?, ?, ?, ?);
                     """,
-                    (
-                        new_state_id,
-                        provenance_node.id,
-                        provenance_node.source_retriever.value,
-                        provenance_node.python_code,
-                        provenance_node.description,
-                    ),
+                    node_data,
                 )
 
-            # Insert edges after all nodes are present.
+            edge_set = set()
             for provenance_node in provenance_graph.nodes.values():
                 for child_node in provenance_node.children:
-                    con.execute(
-                        """
-                        INSERT INTO provenance_edges (
-                            state_id,
-                            parent_node_id,
-                            child_node_id
-                        ) VALUES (?, ?, ?)
-                        ON CONFLICT (state_id, parent_node_id, child_node_id) DO NOTHING;
-                        """,
-                        (
-                            new_state_id,
-                            provenance_node.id,
-                            child_node.id,
-                        ),
-                    )
-
+                    edge_set.add((new_state_id, provenance_node.id, child_node.id))
                 for parent_node in provenance_node.parents:
-                    con.execute(
-                        """
-                        INSERT INTO provenance_edges (
-                            state_id,
-                            parent_node_id,
-                            child_node_id
-                        ) VALUES (?, ?, ?)
-                        ON CONFLICT (state_id, parent_node_id, child_node_id) DO NOTHING;
-                        """,
-                        (
-                            new_state_id,
-                            parent_node.id,
-                            provenance_node.id,
-                        ),
-                    )
+                    edge_set.add((new_state_id, parent_node.id, provenance_node.id))
+
+            if edge_set:
+                edge_data = list(edge_set)
+                con.executemany(
+                    """
+                    INSERT INTO provenance_edges (
+                        state_id,
+                        parent_node_id,
+                        child_node_id
+                    ) VALUES (?, ?, ?);
+                    """,
+                    edge_data,
+                )
 
             self.__log(
                 f"=> Persisting {len(conductor_state.T)} target tables, {len(retrieved_tables)} retrieved tables, and {len(enumerated_tables)} enumerated tables..."
@@ -718,10 +414,22 @@ class PneumaDB:
                 )
 
             con.commit()
-            con.checkpoint()
         except Exception as e:
             con.rollback()
             self.__log(f"Failed to persist session: {e}")
+
+    def load_chat_history(self, user_id: str, chat_id: str) -> list[LLMMessage]:
+        """Loads the persisted chat messages for a workspace in chronological order."""
+        con = self.get_ws_db_connection(user_id, chat_id)
+        rows = con.execute("""
+            SELECT role, content
+            FROM chat_history
+            ORDER BY creation_timestamp ASC
+            """).fetchdf()
+        return [
+            LLMMessage(role=row["role"], content=row["content"])
+            for _, row in rows.iterrows()
+        ]
 
     def __insert_document(
         self,
@@ -740,24 +448,24 @@ class PneumaDB:
             else:
                 document_content = document.doc_id
 
-        # doc_id is a PRIMARY KEY, so in fine-grained tracking we must support reusing
-        # the same doc_id across states. Upsert keeps the latest document representation.
         con.execute(
             """
             INSERT INTO documents (
+                state_id,
                 doc_id,
                 retriever_type,
                 content,
                 path,
                 last_node_id
-            ) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (doc_id) DO UPDATE SET
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (state_id, doc_id) DO UPDATE SET
                 retriever_type = excluded.retriever_type,
                 content = excluded.content,
                 path = excluded.path,
                 last_node_id = excluded.last_node_id;
             """,
             (
+                state_id,
                 document.doc_id,
                 document.retriever_type.value,
                 document_content,
@@ -766,24 +474,24 @@ class PneumaDB:
             ),
         )
 
-        # Keep metadata consistent for the doc_id (avoid duplicates).
         con.execute(
             """
             DELETE FROM document_metadata
-            WHERE doc_id = ?;
+            WHERE state_id = ? AND doc_id = ?;
             """,
-            (document.doc_id,),
+            (state_id, document.doc_id),
         )
         for meta_key, meta_value in document.metadata.items():
             con.execute(
                 """
                 INSERT INTO document_metadata (
+                    state_id,
                     doc_id,
                     metadata_key,
                     metadata_value
-                ) VALUES (?, ?, ?);
+                ) VALUES (?, ?, ?, ?);
                 """,
-                (document.doc_id, meta_key, meta_value),
+                (state_id, document.doc_id, meta_key, meta_value),
             )
 
         if state_id is not None:
@@ -800,7 +508,7 @@ class PneumaDB:
             )
 
     def __get_document_last_node_id(self, doc: AbstractDocument) -> str | None:
-        """Helper to get the last_node_id for a document, handling potential NaN or missing values."""
+        """Helper to get the last_node_id for a document."""
         last_node_id = doc.last_node_id
         if last_node_id is not None:
             try:
@@ -834,6 +542,7 @@ class PneumaDB:
         AbstractDocument | None,
         AbstractDocument | None,
         str | None,
+        str | None,
     ]:
         """
         Loads the latest chat session from the chat_session table.
@@ -841,14 +550,12 @@ class PneumaDB:
         """
         con = self.get_ws_db_connection(user_id, chat_id)
 
-        row = con.execute(
-            """
+        row = con.execute("""
             SELECT state_id, are_target_tables_materialized, python_script, is_python_script_executed, join_paths
             FROM conductor_state
             ORDER BY creation_timestamp DESC
             LIMIT 1
-            """
-        ).fetchone()
+            """).fetchone()
 
         if not row:
             return (
@@ -860,27 +567,17 @@ class PneumaDB:
                 None,
                 None,
                 None,
+                None,
             )
 
-        state_id = row[0]  # Already a UUID object from DuckDB
+        state_id = row[0]
         conductor_state = ConductorState()
         conductor_state.is_T_materialized = row[1]
         conductor_state.S = row[2]
         conductor_state.is_S_executed = row[3]
         join_paths = row[4]
 
-        chat_history_rows = con.execute(
-            """
-            SELECT role, content
-            FROM chat_history
-            ORDER BY creation_timestamp ASC
-            """
-        ).fetchdf()
-        chat_history: list[LLMMessage] = []
-        for _, chat_row in chat_history_rows.iterrows():
-            chat_history.append(
-                LLMMessage(role=chat_row["role"], content=chat_row["content"])
-            )
+        chat_history = self.load_chat_history(user_id, chat_id)
 
         provenance_graph = ProvenanceGraph(self.logger, create_default_root=False)
         node_rows = con.execute(
@@ -918,51 +615,65 @@ class PneumaDB:
                 child_node = nodes_dict[child_id]
                 parent_node.add_child(child_node)
 
-        conductor_state.T = {
-            i.doc_id: i
-            for i in self.__load_documents_by_role(
-                user_id,
-                chat_id,
-                con,
-                state_id,
-                DocumentType.TARGET_TABLE.value,
-            )
-        }
+        meta_row = con.execute(
+            "SELECT dataset_name FROM session_metadata LIMIT 1"
+        ).fetchone()
+        dataset_name: str | None = meta_row[0] if meta_row else None
 
-        retrieved_tables = self.__load_documents_by_role(
-            user_id,
-            chat_id,
-            con,
-            state_id,
-            DocumentType.RETRIEVED_TABLE.value,
-        )
-        enumerated_tables = self.__load_documents_by_role(
-            user_id,
-            chat_id,
-            con,
-            state_id,
-            DocumentType.ENUMERATED_TABLE.value,
-        )
+        retrieved_tables: list[AbstractDocument] = []
+        enumerated_tables: list[AbstractDocument] = []
         web_search_result = None
         web_crawl_result = None
-        web_search_docs = self.__load_documents_by_role(
-            user_id,
-            chat_id,
-            con,
-            state_id,
-            DocumentType.WEB_SEARCH_RESULT.value,
-        )
-        if web_search_docs:
-            web_search_result = web_search_docs[0]
-        web_crawl_docs = self.__load_documents_by_role(
-            user_id,
-            chat_id,
-            con,
-            state_id,
-            DocumentType.WEB_CRAWL_RESULT.value,
-        )
-        if web_crawl_docs:
-            web_crawl_result = web_crawl_docs[0]
+        if dataset_name is not None:
+            conductor_state.T = {
+                i.doc_id: i
+                for i in self.__load_documents_by_role(
+                    user_id,
+                    chat_id,
+                    dataset_name,
+                    con,
+                    state_id,
+                    DocumentType.TARGET_TABLE.value,
+                )
+            }
+
+            retrieved_tables = self.__load_documents_by_role(
+                user_id,
+                chat_id,
+                dataset_name,
+                con,
+                state_id,
+                DocumentType.RETRIEVED_TABLE.value,
+            )
+            enumerated_tables = self.__load_documents_by_role(
+                user_id,
+                chat_id,
+                dataset_name,
+                con,
+                state_id,
+                DocumentType.ENUMERATED_TABLE.value,
+            )
+            web_search_docs = self.__load_documents_by_role(
+                user_id,
+                chat_id,
+                dataset_name,
+                con,
+                state_id,
+                DocumentType.WEB_SEARCH_RESULT.value,
+            )
+            web_crawl_docs = self.__load_documents_by_role(
+                user_id,
+                chat_id,
+                dataset_name,
+                con,
+                state_id,
+                DocumentType.WEB_CRAWL_RESULT.value,
+            )
+
+            if web_search_docs:
+                web_search_result = web_search_docs[0]
+            if web_crawl_docs:
+                web_crawl_result = web_crawl_docs[0]
 
         self.__log(
             f"=> Loaded session with {len(chat_history)} chat messages, {len(provenance_graph.nodes)} provenance nodes, {len(conductor_state.T)} target tables, {len(retrieved_tables)} retrieved tables, {len(enumerated_tables)} enumerated tables, {1 if web_search_result else 0} web search results, and {1 if web_crawl_result else 0} web crawl results."
@@ -977,12 +688,204 @@ class PneumaDB:
             web_search_result,
             web_crawl_result,
             join_paths,
+            dataset_name,
         )
+
+    def get_user_chat_sessions(
+        self, user_id: str, limit: int = 10, offset: int = 0
+    ) -> dict[str, Any]:
+        """
+        Scans the user directory for active chat databases, inspects their
+        metadata from the chat_history table, and returns a paginated list
+        ordered by the most recent activity.
+        """
+        user_dir = self.workspace_db_path / user_id
+        if not user_dir.exists() or not user_dir.is_dir():
+            return {"chats": [], "has_more": False, "next_offset": None}
+
+        all_sessions = []
+
+        # Iterate over all chat_id directories for the given user
+        for chat_dir in user_dir.iterdir():
+            if chat_dir.is_dir():
+                db_file = chat_dir / "ws.db"
+                if db_file.exists():
+                    chat_id = chat_dir.name
+                    try:
+                        # Open connection transiently to read metadata
+                        con = None
+                        try:
+                            con = duckdb.connect(database=db_file.as_posix())
+
+                            # Fetch the first message content for the title and the max timestamp for activity
+                            query = """
+                                SELECT 
+                                    (SELECT content FROM chat_history ORDER BY creation_timestamp ASC LIMIT 1) as first_msg,
+                                    (SELECT MAX(creation_timestamp) FROM chat_history) as last_active
+                                FROM chat_history 
+                                LIMIT 1;
+                            """
+                            res = con.execute(query).fetchone()
+                        finally:
+                            if con:
+                                con.close()
+
+                        if res and res[0] is not None:
+                            content = res[0]
+                            # Mimic the frontend title generation logic
+                            title = (
+                                f"{content[:20]}..." if len(content) > 20 else content
+                            )
+
+                            # Standardize timestamp to ISO 8601 string format
+                            last_active_dt = res[1]
+                            last_active_str = (
+                                last_active_dt.astimezone(
+                                    datetime.timezone.utc
+                                ).strftime("%Y-%m-%dT%H:%M:%S.%f")
+                                + "Z"
+                                if hasattr(last_active_dt, "isoformat")
+                                else str(last_active_dt)
+                            )
+
+                            all_sessions.append(
+                                {
+                                    "id": chat_id,
+                                    "title": title,
+                                    "lastActive": last_active_str,
+                                    "_sort_ts": last_active_dt,  # Keep datetime reference for sorting
+                                }
+                            )
+                    except Exception as e:
+                        self.__log(
+                            f"Failed to extract session metadata from {db_file}: {e}"
+                        )
+                        continue
+
+        # Sort all sessions descending by their last active timestamp
+        all_sessions.sort(key=lambda x: x["_sort_ts"], reverse=True)
+
+        # Clean up internal sorting helpers before slicing
+        for session in all_sessions:
+            session.pop("_sort_ts", None)
+
+        # Apply pagination slicing
+        sliced_sessions = all_sessions[offset : offset + limit]
+        has_more = len(all_sessions) > (offset + limit)
+        next_offset = offset + limit if has_more else None
+
+        return {
+            "chats": sliced_sessions,
+            "has_more": has_more,
+            "next_offset": next_offset,
+        }
+
+    def search_chat_sessions(
+        self, user_id: str, query: str, limit: int = 10, offset: int = 0
+    ) -> dict[str, Any]:
+        """
+        Searches all chat sessions for the given user where any message content
+        matches the query using ILIKE, sorted by most recent activity descending.
+        """
+        user_dir = self.workspace_db_path / user_id
+        if not user_dir.exists() or not user_dir.is_dir():
+            return {"chats": [], "has_more": False, "next_offset": None}
+
+        matching_sessions = []
+
+        for chat_dir in user_dir.iterdir():
+            if not chat_dir.is_dir():
+                continue
+            db_file = chat_dir / "ws.db"
+            if not db_file.exists():
+                continue
+
+            chat_id = chat_dir.name
+            try:
+                con = None
+                try:
+                    con = duckdb.connect(database=db_file.as_posix())
+                    res = con.execute(
+                        """
+                        SELECT
+                            (SELECT content FROM chat_history ORDER BY creation_timestamp ASC LIMIT 1) AS first_msg,
+                            MAX(creation_timestamp) AS last_active
+                        FROM chat_history
+                        WHERE content ILIKE ?
+                        HAVING COUNT(*) > 0
+                        """,
+                        (f"%{query}%",),
+                    ).fetchone()
+                finally:
+                    if con:
+                        con.close()
+
+                if res and res[0] is not None and res[1] is not None:
+                    content = res[0]
+                    title = f"{content[:20]}..." if len(content) > 20 else content
+                    last_active_dt = res[1]
+                    last_active_str = (
+                        last_active_dt.astimezone(datetime.timezone.utc).strftime(
+                            "%Y-%m-%dT%H:%M:%S.%f"
+                        )
+                        + "Z"
+                        if hasattr(last_active_dt, "isoformat")
+                        else str(last_active_dt)
+                    )
+                    matching_sessions.append(
+                        {
+                            "id": chat_id,
+                            "title": title,
+                            "lastActive": last_active_str,
+                            "_sort_ts": last_active_dt,
+                        }
+                    )
+            except Exception as e:
+                self.__log(f"Failed to search session {db_file}: {e}")
+                continue
+
+        matching_sessions.sort(key=lambda x: x["_sort_ts"], reverse=True)
+        for session in matching_sessions:
+            session.pop("_sort_ts", None)
+
+        sliced = matching_sessions[offset : offset + limit]
+        has_more = len(matching_sessions) > (offset + limit)
+        next_offset = offset + limit if has_more else None
+
+        return {
+            "chats": sliced,
+            "has_more": has_more,
+            "next_offset": next_offset,
+        }
+
+    def delete_chat_session(self, user_id: str, chat_id: str) -> None:
+        """
+        Deletes a specific chat session by closing active connections and
+        permanently removing the corresponding workspace directory.
+        Raises FileNotFoundError if the chat session directory does not exist.
+        """
+        chat_dir = self.workspace_db_path / user_id / chat_id
+        if not chat_dir.exists() or not chat_dir.is_dir():
+            raise FileNotFoundError(
+                f"Chat session with ID '{chat_id}' for user '{user_id}' not found."
+            )
+
+        self.close_workspace_connection(user_id, chat_id)
+
+        try:
+            from shutil import rmtree
+
+            rmtree(chat_dir)
+            self.__log(f"Successfully deleted chat session directory: {chat_dir}")
+        except Exception as e:
+            self.__log(f"Failed to delete chat session directory {chat_dir}: {e}")
+            raise e
 
     def __load_documents_by_role(
         self,
         user_id: str,
         chat_id: str,
+        dataset_name: str,
         con: duckdb.DuckDBPyConnection,
         state_id: UUID,
         role: str,
@@ -992,7 +895,8 @@ class PneumaDB:
             """
             SELECT d.doc_id, d.retriever_type, d.content, d.path, d.last_node_id
             FROM documents d
-            JOIN state_document_roles sdr ON d.doc_id = sdr.doc_id
+            JOIN state_document_roles sdr
+                ON d.state_id = sdr.state_id AND d.doc_id = sdr.doc_id
             WHERE sdr.state_id = ? AND sdr.role = ?
             """,
             (state_id, role),
@@ -1004,9 +908,9 @@ class PneumaDB:
                 """
                 SELECT metadata_key, metadata_value
                 FROM document_metadata
-                WHERE doc_id = ?
+                WHERE state_id = ? AND doc_id = ?
                 """,
-                (doc_row["doc_id"],),
+                (state_id, doc_row["doc_id"]),
             ).fetchdf()
             metadata: dict[str, str] = {}
             for _, meta_row in metadata_rows.iterrows():
@@ -1031,30 +935,30 @@ class PneumaDB:
                 or retriever_type == RetrieverType.ENUMERATOR
                 or retriever_type == RetrieverType.USER
             ):
-                dataset_name = self.config.DATA_SOURCES[0]
-                if "dataset_name" in metadata:
-                    dataset_name = metadata["dataset_name"]
-
-                self.link_dataset_tables(
+                self.dataset_manager.link_dataset_tables(
                     user_id,
                     chat_id,
                     dataset_name,
+                    self.get_ws_db_connection,
                 )
 
                 if (
                     retriever_type == RetrieverType.MATERIALIZER
                     or retriever_type == RetrieverType.CONDUCTOR
                 ):
-                    select_query = f"""SELECT * FROM "{doc_row['doc_id']}";"""
+                    select_query = f"""SELECT * FROM \"{doc_row['doc_id']}\";"""
                 else:
                     select_query = (
-                        f"""SELECT * FROM "{dataset_name}"."{doc_row['doc_id']}";"""
+                        f"""SELECT * FROM \"{dataset_name}\".\"{doc_row['doc_id']}\";"""
                     )
-                content = self.execute_query(
-                    user_id,
-                    chat_id,
-                    select_query,
-                )
+                try:
+                    content = self.execute_query(
+                        user_id,
+                        chat_id,
+                        select_query,
+                    )
+                except Exception as e:
+                    continue
                 document = Table(
                     doc_id=doc_row["doc_id"],
                     retriever_type=retriever_type,
@@ -1078,4 +982,4 @@ class PneumaDB:
 
     def __log(self, message: str):
         """Helper logging method."""
-        self.logger.info(f"[PneumaDB] {message}")
+        self.logger.info(f"[WorkspaceManager] {message}")

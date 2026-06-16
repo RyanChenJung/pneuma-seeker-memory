@@ -3,6 +3,10 @@
 > One line per file: *what it is*, not what's in it. For **live state / where we are now**, read
 > `RESUME.md` first (this map is the static "what each file is" axis; RESUME is the "current
 > progress" axis). Maintenance rule: **new file = add one line here.**
+>
+> 👥 **Teammates (Sola / Juan / Lawrence): you want [`TEAM.md`](TEAM.md), not this file.** This map
+> is the *internal* index; `TEAM.md` is the team-facing one. Only `scenario-spec.md` + `ROADMAP.md`
+> are team-facing (and version-managed); everything else below is internal.
 
 ## Design specs (stable)
 - `system_architecture.md` — the 6-tier north-star design target
@@ -25,8 +29,10 @@
 - `ROADMAP.md` — milestones M1–M4 + team roles + weekly breakdown
 - `surgical-changes.md` — log of surgical (additive, flag-gated) edits to upstream code
 
-## Scenario
-- `scenario-spec-v1.md` — the campus validation scenario (2 depts, ambiguous terms, hidden rules)
+## Team-facing (👥 version-managed; see `TEAM.md`)
+- `TEAM.md` — the teammate entry point: which doc is whose + every team-facing doc's current version
+- `scenario-spec.md` — the campus validation scenario (2 depts, ambiguous terms, hidden rules) + the 3 contracts **[v2]**
+- `ROADMAP.md` — milestones M1–M4 + team roles + weekly breakdown **[v1]** *(also listed under Process)*
 
 > Local-only ephemera (gitignored, not part of the repo): `_*.md` handoff/draft files and the
 > exported `*.docx` team contract.

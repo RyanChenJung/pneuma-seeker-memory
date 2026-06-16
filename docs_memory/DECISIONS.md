@@ -246,10 +246,10 @@ they feed** — NOT the mechanism (which is shared). Agreed points:
   into a SQL cache; v1 mitigates by being explicitly few-shot.
 
 **OPEN (NOT locked):**
-- (pt 2) Whether to **reuse the upstream author's `DocumentDB` / `Knowledge` (local/global)
-  design and attach our memory interface there** vs build our own. **User will email the
-  upstream author** to avoid rebuilding the wheel. Working assumption until then:
-  `local ≈ Tier 3`, `global ≈ Tier 4`.
+- (pt 2) ~~Whether to **reuse the upstream author's `DocumentDB`** vs build our own.~~ **RESOLVED in
+  D24** (author replied 2026-06-15): `DocumentDB` = a backend/index substrate behind the `OrgMemory`
+  authored head, **not** the architecture; our Level×Tier + Enhancer sit above it. (Working assumption
+  `local ≈ T3 / global ≈ T4` updated by D24: local/global = our User/Department **Level** axis, D20.)
 - Exact **number of scope levels** + **overlay precedence rules** — provisional; refine when
   we drill T3/T4 in detail and after the author's reply.
 
@@ -558,7 +558,7 @@ and **locks** the D16 "T2 no-delete" lean. Folds the `system_architecture.md` §
 ## D19 — Persona identity rides the existing `user_id` (principal → profile via T3), no new field
 Decided 2026-06-12, before the walking-skeleton build. Answers "Pneuma has no department/role —
 does using `user_id` for persona break the original design?" **No.** Cross-refs:
-`scenario-spec-v1.md` §5, `ROADMAP.md` (context model), BACKLOG (real-user/role separation).
+`scenario-spec.md` §5, `ROADMAP.md` (context model), BACKLOG (real-user/role separation).
 
 - **What `user_id` is in Pneuma (verified):** an **opaque namespace key**, never interpreted
   semantically. Used only as (1) session key `chat_sessions[(user_id, chat_id)]`, (2) the
@@ -781,3 +781,268 @@ principle below settles where every LLM call sits in the per-run pipeline:
   (prove it works first; cheap no-LLM heuristics — behavioural signals + a negation lexicon + a small
   local classifier — are the **cost-optimisation BACKLOG** for later). Rationale: efficacy before
   cost at this stage.
+
+## D24 — DocumentDB = a backend/index substrate, NOT the architecture (resolves the D13/D15 OPEN reuse question)
+Decided 2026-06-15 after the upstream author (Luthfi) replied to our email. **Closes the
+"reuse upstream `DocumentDB` vs build our own" OPEN item** carried since D13 (pt 2) / D15.
+The reply gave enough to settle it *in principle* (the actual code-level swap stays deferred,
+because our design is interface-first). Cross-refs: D13, D14, D15, D18, D20, D22, BACKLOG.
+
+**What the author said `DocumentDB` is:** a place to **extract knowledge from user interactions
+and index it for subsequent interactions**, holding three kinds — (i) about tables/columns
+("Table A should be used for…", "Column X represents…"), (ii) business logic ("the tariff
+computation should account for…"), (iii) **user preferences** (explicitly "like ChatGPT memory").
+Plus: **local/global = user-level/team-level**; the `index()` TODO = `A ∧ ¬A` **contradictions**
+(recognise + surface to users; signal = **user authority levels / hierarchies**); and users may
+**seed curated knowledge upfront** (a team wiki) **alongside** interaction-extracted knowledge.
+
+- **D24-1 — The reframe (the decision).** `DocumentDB` is a **flat extract-and-index store**; it
+  is **plumbing (a backend / retrieval substrate), not the organizing architecture.** Our
+  **Level × Tier structure + the Enhancer sit *above* it.** Concretely, `DocumentDB` is a
+  **candidate backend behind the `OrgMemory` facade's authored head** (`search_authored`, D15-Q5) —
+  exactly the "large authored corpus → retrieved top-k" head. Because the facade hides the backend
+  (interface-first, D11/D12/D15), **reuse-vs-build is a deferred backend swap, not an architecture
+  choice, and does not block B3/B4.** *(Secondary, NOT committed: it could later double as a generic
+  top-k document substrate for any tier that needs retrieval — e.g. T6 Layer-1, D18-4 — but v1 only
+  commits it as the T4-authored backend.)*
+- **D24-2 — His three knowledge kinds confirm our tier decomposition (and routing).** They map onto
+  **T5** (tables/columns/joins), **T6 + T4-learned** (business logic / method), **T3** (user
+  preferences). The author lumps them in one bucket and calls "what policy maps knowledge to
+  categories" an **open question** — which is precisely our **route-by-subject** rule (D6-4), folded
+  into the Enhancer's distill `tier` output (D23). So our memory layer is the organizing layer that
+  *sits on top of* a DocumentDB-style store, not a competitor to it.
+- **D24-3 — local/global = our Level axis (D20); his open "mapping policy" = our promotion.** His
+  2-level local/global = a subset of our **User / Department / Institution** (team = Department). He
+  flags the **policy for mapping knowledge to local/global as open**; we **dissolve it mechanically**:
+  nothing is "classified" — every lesson is **born local (User) and promoted up by sharing/recurrence**
+  (the AGGREGATE Enhancer, D20/D21). The counting unit ("common enough") is the only thing that
+  changes per level. This is a place our design is **ahead** of the author's stated thinking.
+- **D24-4 — Both knowledge sources already coexist in our design.** His two intake paths —
+  **interaction-extracted** and **curated-upfront (wiki)** — are exactly our **T4 two heads**:
+  extracted = **learned (B)**, born local + promoted (D15-Q1/B, D20 promote path); curated-upfront =
+  **authored (A)**, the D20 **exception** that is ingested directly at Dept/Inst, never born at User.
+  So we need **no new mechanism** to honour his "alongside" requirement — D15's two-headed tier
+  already is it.
+- **D24-5 — Contradiction TODO = our A/B / ARBITRATE (D22); his authority signal handled separately.**
+  Recognise = the 4-branch ARBITRATE detector (D23); surface = `contested` + the memory-transparency
+  surface (D22 BACKLOG). His proposed **authority-precedence** signal is a real *addition* we want to
+  fold in as a **cheap deterministic pre-filter ahead of A/B** — but that is its **own** next decision
+  (do **not** let it dilute D22's honesty red line: precedence may *route/short-circuit*, it must never
+  become a from-scratch correctness judge). Tracked as the next item — **now closed by D25.**
+- **D24-6 — Containment direction (us-above-DocumentDB vs us-inside-DocumentDB) is a FRAMING /
+  political choice, not a hard technical fact — and the external framing is deliberately "inside".**
+  Because every tier sits behind an interface (D24-1), *the same code is describable both ways*:
+  "our memory layer that uses DocumentDB as a backend" (framing A) and "the organizing brain/policies
+  that DocumentDB still lacks" (framing B) are the same artifact. **Tell from the reply:** the author
+  writes "**our** vision for Pneuma's **memory layer**" — he already owns the *memory-layer* framing,
+  and lists local/global mapping + contradiction handling as DocumentDB's own **open TODOs**. So the
+  most accurate model is **neither swallows the other**: both DocumentDB (storage/indexing) and our
+  work (extract→distill, promotion-as-classification, A/B contradiction resolution) are **components
+  under the author's memory-layer umbrella**, and our contribution = **exactly the open policies he
+  flagged**. **Decision: externally we adopt framing B** — present our work as *filling his open
+  TODOs / contributing the organizing layer to his memory-layer vision*, **never** "DocumentDB is our
+  backend" (framing A reads as appropriating his project). **Internally we keep the interface seam
+  regardless** (protects us from his internals, keeps the plugin removable per `CLAUDE.md`).
+  - **Honest non-overlap (so "just put it all in DocumentDB" can be answered):** our layer only
+    *partially* overlaps DocumentDB's scope. **Inside** its scope (= "extracted knowledge indexed for
+    reuse"): **T3 / T4 / T6** + the Enhancer's extract/classify/resolve jobs. **Outside** it: **T1**
+    (ephemeral working memory, lives in prompt assembly), **T2** (the raw *pre-extraction* interaction
+    log — logging, not a knowledge base), and **T5's form** (a property *graph*, not a *document*
+    store — though its *content*, table/column/join knowledge, is in scope). So "everything in
+    DocumentDB" is literally wrong; **partial overlap** is the truth.
+  - **This is the core Teams-1:1 alignment topic:** agree on shared *language* ("are we building
+    DocumentDB's brain, or a memory layer that uses DocumentDB?") **before** committing code — and do
+    it privately, not by defining it in the CC'd email thread.
+  - **Tone calibration (deck + meeting, locked 2026-06-15).** Posture stays **humble / contributory**
+    (framing B; being "under Pneuma's vision" is *fine* — appropriation is the only thing to avoid). The
+    refinement is at **decision points**: never phrase them as "you decide" **and** never hard-commit our
+    side either — use a **"we're still forming our view, let's shape it together" suspension**, because
+    those calls need the user's advisor (Utku) first. The authority of the call is held open by *our*
+    unfinished internal alignment — respectful to Pneuma, and it reserves our say without sounding like a
+    peer power-play. Applied to the meeting deck `_luthfi-meeting-deck.html` (local-only).
+- **Net position.** Strong external validation: our independently-derived design **converges with the
+  author's vision** and is **more concrete** on tier decomposition, the promotion mechanism, and the
+  A/B honesty principle. **Email is a wrap-up; technical detail moves to a Teams 1:1** (political
+  framing per D24-6). **No build is unblocked or blocked by this** — it only retires an OPEN
+  flag and fixes how DocumentDB attaches (T4-authored backend, behind `OrgMemory`).
+
+## D25 — Authority as a pre-filter on ARBITRATE: authority governs declarations only; both-operative → reactions decide
+Decided 2026-06-15 (one-at-a-time with user). Closes the "#3" follow-up flagged in D24-5 — how to fold
+the author's **authority-level precedence** signal into our A/B conflict resolution **without** breaking
+the D22 honesty red line. Builds on D22 (A/B = graded against recorded reactions, never a from-scratch
+correctness judge), D23 (ARBITRATE pipeline), D18-8 (authored dynamic trust = f(authority, learned
+negative-`support`)), D14 (T3-provisioned `role/grade`), D20 (Levels = the user hierarchy). Refines the
+D23 ARBITRATE branch.
+
+- **The generating principle (one line):** **Authority only governs *declarations* (authored records).
+  The moment both sides of a conflict are *operative* (learned), authority steps out and recorded
+  reactions decide.** Authority answers a **prior/normative** question ("whose declaration do we trust
+  with no behavioural oracle?"); reactions answer a **descriptive/operative** question ("which version
+  matches what people actually did?"). They are the two halves of a Bayesian update, **not** competing
+  judges. This keeps the honesty line: authority only *weights a declaration source*, it **never**
+  produces a "which answer is correct" verdict.
+- **The authority↔reactions clash = a feature, surfaced (locks the fork; user chose option C).** When a
+  high-authority **declaration** contradicts **operative reality** (e.g. the Admissions director declares
+  "yield = enrolled/admitted" but the team operatively uses "deposited/admitted"), this is **two kinds of
+  truth** (normative rule vs descriptive practice), **not** a "which is correct" question. We do **NOT**
+  auto-resolve it by either side; we **surface it as a divergence** (the D22 transparency surface +
+  D18-8 trust erosion) — making **"learned > authored"** observable. Rejected: (A) authority overrides
+  operative (system blindly trusts the doc, never learns real practice); (B) reactions override / authority
+  is noise (throws away the author's signal + disrespects governance).
+- **The 3-route pre-filter (sits at ARBITRATE entry, AFTER the relation-judge LLM confirms a
+  contradiction; routes by the two records' type, all program / no new LLM):**
+  - **authored × authored** → no behavioural oracle exists → **program compares `authority`**, higher
+    wins; **equal/unclear → `contested` → surface** (= the author's "ambiguous → consult users"). **Skips
+    the LLM replay entirely.** (Loser is marked superseded with provenance, not hard-deleted — governance/
+    audit.)
+  - **authored × learned** (= the option-C divergence case) → **do NOT replay, do NOT auto-resolve.**
+    Program records the contradiction as **negative evidence against the authored record** (D18-8 trust
+    erosion) and **surfaces as a divergence only once it recurs to the threshold** — **user chose (b):
+    accumulate negative-`support` to N=3 (D21) before surfacing**, NOT surface on the first contradiction
+    (consistent with "recurrence = the universal noise filter"; one stray counter-example must not shout
+    "your practice contradicts your rules"). **Skips the LLM replay**, only tallies.
+  - **learned × learned** → **authority does NOT intervene (user-confirmed).** Both are operative, so
+    using rank to override behavioural evidence would smuggle the normative into a descriptive question
+    (breaks option C). Runs the **full reaction A/B replay** (D22/D23) unchanged. **This is the only route
+    that still pays the replay cost.**
+- **Cost is a free side effect, not the motive (effectiveness-first, consistent with D23).** The
+  pre-filter's *primary* value is **routing** — it is literally how option C is implemented (send
+  authored×learned to divergence instead of replay). That the expensive batched-LLM reaction-replay now
+  runs **only for learned×learned** is a welcome side effect; the pre-filter **adds no LLM calls, it only
+  removes them.** So this does not contradict D23's "cost cap deferred". Finer authority tuning (gap
+  tolerances, tie-break heuristics) → BACKLOG.
+- **The authority data + hierarchy already exist (answers the author's stated prerequisite).** The author
+  noted authority "assumes properly defined user hierarchies/groups." We have them: authority lives on the
+  authored record's thin metadata tag (D15-Q2), derivable from the author's **T3-provisioned `role/grade`**
+  (D14); the hierarchy is the **Level** structure User/Department/Institution (D20). No new mechanism.
+- **Generalises D18-8.** D18-8 already framed authored trust as f(authority, learned negative-`support`);
+  D25 makes that the *concrete ARBITRATE behaviour* and connects it to the author's language (precedence
+  auto-resolves declaration ties; ambiguous/divergent → consult users).
+- **BACKLOG (cut from MVP):** (1) senior-user weighting inside learned×learned (rejected for MVP to keep
+  C clean; revisit only with a principled reason); (2) finer authority-gap tolerance + tie-break
+  heuristics; (3) the divergence-surface UI itself rides the existing **memory-transparency / alignment
+  surface** BACKLOG (D22).
+
+## D26 — Upstream `prod` sync (backend refactor): impact + the authoritative path/interface remap
+Decided 2026-06-15. We synced `upstream/prod` (the "Polish backend to accommodate new UI" #23 +
+"Ensure resilience" commits) into `feat-memory-experiement` via a **merge** (only `.gitignore`
+conflicted; SC-1/SC-2 auto-merged cleanly into regions upstream didn't touch). This D anchors the
+impact so older decision records' code paths are read **through** it (this section supersedes any
+pre-sync path reference elsewhere in this log — they are not individually rewritten).
+
+- **D26-1 — Authoritative path/interface remap (what moved).**
+  - `services/db/main.py` → **`services/db/workspaces/manager.py`** (`WorkspaceManager`), now behind
+    a new **`services/db/pneuma_db.py` (`PneumaDB`) facade** that composes `DatasetManager`
+    (`datasets/manager.py`) + `WorkspaceManager` + `UserDB` (`users/manager.py`). Old `db/main.py:NNN`
+    line refs in D12/tier2 point at the renamed file (line numbers shifted; reference the method, not
+    the number): delete-and-replace lives in `WorkspaceManager.persist_session`; postgres-attach lives
+    in `DatasetManager`.
+  - `main.py` → split into **`routers/{auth,chat,indexing}.py`**; `main.py` is now app + lifespan
+    bootstrap only. **Our 🟡 `/chat` surgical seam is now `routers/chat.py`** (the SC-2 conductor hook
+    itself is unchanged and still valid).
+  - `model.py` → **`models.py`** (adds auth/user/group/permission request-response models +
+    `PermissionKey`/`EndpointTag`).
+  - `PERSIST_CHAT_SESSION` config flag **removed** — sessions always persist; `load_session` now also
+    returns `dataset_name`.
+  - LLM backends: **Claude (`claude_llm.py`) + Gemini** added to `model_factory` (+ `ANTHROPIC_API_KEY`/
+    `GEMINI_API_KEY`, `AUTH_*`, `POSTGRES_*` config).
+- **D26-2 — New substrate relevant to our design (validation, not yet wired).** A Postgres-backed
+  **identity/RBAC** layer now exists: `UserDB` with `UserRecord{user_id, group_id, …}`, **hierarchical
+  groups** (`GroupRecord.parent_group_id`, `list_group_ancestors`), and **inherited group permissions**
+  (`get_effective_group_permissions`: "parent first, child overrides" = CLAUDE.md-style overlay).
+  This is real backing for the **D20 Level axis** (User/Department/Institution ≈ group ancestry) and the
+  **authorization we deferred** (D14) + the **authority signal** (D15/D25). **Decision: record as a reuse
+  opportunity only; do NOT wire it into T3/T4 yet** — that is a separate design discussion (deliberately
+  deferred). Also: `dataset:access:*` group permissions can make datasets dept-private (our scenario keeps
+  them co-visible, so unused at MVP).
+- **D26-3 — SC seams after sync (verified).** SC-1 (`ENABLE_MEMORY_INJECTION` in `config.py`) and SC-2
+  (conductor memory hook) survived the merge intact; both seam files `py_compile`; the SC-2 call still
+  sits right after `get_sys_prompt()`. 8/11 memory tests pass; the 3 Conductor integration tests need the
+  full native runtime (couldn't stand up cleanly on the dev box — env issue, not a merge conflict).
+- **D26-4 — D24 confirmed, not changed.** `DocumentDB` (`ir_system/retriever/impl/document_db.py`) was
+  **not touched** by these commits — the D24 read (DocumentDB = backend index behind the `OrgMemory`
+  authored head) stands.
+- **D26-5 — New runtime + test dependencies (consequences).** The merged server now needs **Postgres +
+  `ADMIN_PASSWORD`** and **Bearer-token auth on `/chat`** (impacts the scenario-spec/Lawrence harness
+  contract — flagged in `scenario-spec.md`, resolution deferred to the auth discussion). `tests/`
+  gained an upstream `conftest.py` that imports `testcontainers.postgres`, so **`pytest tests/` now
+  requires `testcontainers` (+ Docker)**; run our memory tests via `unittest` (or install testcontainers)
+  to bypass it. New deps: `psycopg[binary]`, `anthropic`, `google-genai`, `testcontainers[postgres]`.
+
+## D27 — Harness/auth = Option B (run the experiment on the synced auth'd API), and how the skeleton survives it
+Decided 2026-06-15 (user chose B over A/C). Resolves the D26-5 open harness/auth question: the 6/17
+A/B experiment will run against the **post-sync** `/chat` (Bearer-token auth, `dataset_name` required,
+server-side history) — not a pinned pre-auth fork. We PR the sync to `origin/prod` and adapt the
+team contract. Builds on D19 (persona rides an opaque `user_id`), D26 (the sync remap). Refines the
+scenario-spec/§6.3 Lawrence contract.
+
+- **D27-1 — Why B is feasible (upstream shipped the scaffolding).** `docker-compose.yml` +
+  `postgres.dockerfile` + `core-service.dockerfile` stand up Postgres **and** the core service in one
+  command (with a healthcheck) — so Postgres isn't fragile and the heavy native runtime (chromadb/torch)
+  runs in the provided `core` container. `/auth/register` is **open** (no admin needed). Crucially,
+  **`POST /chat` does NOT enforce dataset-access permission** (it only sets `config.DATA_SOURCES`), so
+  personas need no `dataset:access:*` grant — just to exist + hold a token.
+- **D27-2 — The skeleton survives with ZERO code change (the key insight).** **⚠️ SUPERSEDED by D28-5:**
+  this held only for harness=B *with identity still from our map*; discussion (1) then chose group-as-
+  department source (D28), which DOES change T3. Original reasoning kept for the trail:
+  `t3_identity.UserIdentity.lookup(user_id)` already treats `user_id` as an **opaque** key into
+  `_config/identity_map.json` (D19); under B `user_id` becomes a real uuid (still opaque), only the *values*
+  change, so a fixture could just regenerate the map. — That path is replaced by D28: department now comes
+  from the group, role from a thin `role_map`.
+- **D27-3 — Obstacle → overcome (summary).** (a) *auth per persona* → a Ryan-owned **setup fixture**:
+  admin (auto-created at boot from `ADMIN_PASSWORD`) → create 2 dept groups (Admissions/Finance, optionally
+  under a "University" parent → exercises `parent_group_id`) → `POST /auth/register` 4 personas → login →
+  emit **`personas.json`** {persona → token, user_id} + regenerate `identity_map.json`. Lawrence consumes
+  `personas.json`; he doesn't touch auth. (b) *body shape* → one **combined "campus" dataset** (both depts'
+  tables in one) preserves co-visibility via dataset design; body = `{chat_id, dataset_name:"campus",
+  message}`. (c) *multi-turn* → server keeps `(user_id,chat_id)` history → **send only the new turn**, reuse
+  chat_id (simpler than the old "resend full `messages[]`"). (d) *A/B switch* → **unchanged**
+  (`ENABLE_MEMORY_INJECTION` env, two boots).
+- **D27-4 — Migration sequence.** (1) PR synced `feat` → `origin/prod` (never upstream). (2) Sola: campus
+  combined dataset (both depts, one dataset). (3) Ryan: setup fixture + `identity_map.json` regen + rewrite
+  §6.3 Contract C. (4) Lawrence: token header + new body; A/B two boots unchanged. (5) Smoke `docker compose
+  up` (postgres+core) one OFF/ON case. **Needs a TASKS.md breakdown + user approval before sub-agent dispatch.**
+- **D27-5 — Scope guard.** B adopts only the **identity/account plumbing** (groups as persona containers,
+  tokens). The full RBAC-driven memory wiring (authorization, authority-precedence reading group permissions)
+  stays deferred = discussion (1). So choosing B does **not** pre-commit (1).
+- **Residual risks (honest):** full LLM backend must actually run (always needed, B adds nothing); the setup
+  fixture must be **idempotent** (skip-if-exists, no `UniqueViolation`); §6.3 + the team `.docx` must be
+  rewritten (done this session); the PR to prod is large (carries upstream's whole refactor — but into *our*
+  prod).
+
+## D28 — Department = the user's GROUP (ride the substrate); role stays in a thin map; closes discussion (1) for MVP
+Decided 2026-06-15 (user chose option (B), not the (C) hybrid). Closes discussion (1) — whether to reuse
+the synced group/RBAC substrate for our design — for the MVP. Builds on D27 (Option B harness), D20 (Level
+axis), D15 (T4 overlay), D14 (deferred authorization), D26 (the substrate). **Corrects D27-2.**
+
+- **D28-1 — Department now comes from the user's GROUP, not our `identity_map` (chose (B)).** The D27 setup
+  fixture already creates the dept groups (Admissions/Finance) and assigns each persona; so T3 resolves
+  `department = the user's group.name` via `UserDB` (a single lookup). This is the **single source of truth**
+  for department and removes the map↔group redundancy by **dropping the department field from our config**.
+- **D28-2 — Role stays in a thin Ryan-owned `role_map` (key → role) — option (i).** Role (analyst/director)
+  has **no home in the substrate** (`UserRecord` has no role; groups are dept-level) and is "dosed small"
+  (1–2 teaser cases, presentation only). Rejected: (ii) group-per-`(dept,role)` — **pollutes the
+  User/Dept/Inst Level semantics** with a within-dept attribute; (iii) drop role — the scenario already
+  authored role-teaser cases. So `identity_map` shrinks from `(dept, role)` to **role-only**.
+- **D28-3 — Coupling accepted, mitigated by DI.** The T3 read path now depends on `UserDB` (a group lookup
+  at inject time) → the plugin is no longer trivially removable. **Accepted** because post-sync `UserDB` is
+  upstream **core** (every request authenticated, every user grouped), not optional. **Mitigation:** T3 takes
+  an injected **dept-resolver** (`Callable[[user_id], department | None]`) so the memory *package* does not
+  hard-import `UserDB`; the UserDB-backed resolver is wired at the **composition root** (where `MemoryInjector`
+  / the Conductor SC-2 hook is built) and is the only Postgres-coupled piece. Keeps the package unit-testable
+  with a fake resolver.
+- **D28-4 — (1d) the multi-level overlay walk stays deferred; (1b)/(1c) note-only (結論一).** MVP is
+  **single-level** — just the asker's own department (one lookup). The `list_group_ancestors` ancestor-walk
+  for composing **Institution→Department** overlays (1d) activates only once Institution-level *authored*
+  knowledge exists (the Dept/Inst phase, D15 near-term ≥2 levels). Authorization/data-visibility (1b) and the
+  ARBITRATE authority signal (1c) are recorded-as-reuse only (the scenario holds authorization constant —
+  both depts co-visible — and A/B conflict resolution isn't live yet).
+- **D28-5 — Corrects D27-2's "ZERO code change."** That held only for harness=B *with identity still from our
+  map*. Choosing source-of-truth=(B) means **T3 does change**: department resolved from the group (via the
+  injected resolver), role from the thin `role_map`; `identity_map` loses its department field. The fixture's
+  "regenerate `identity_map` on real uuids" step (D27-3) shrinks to **"build the small role_map"** — department
+  needs no map (it *is* the group).
+- **D28-6 — Implementation = part of the B-migration TASKS build, not this doc pass.** The UserDB-backed
+  dept-resolver needs Postgres up to verify and rewrites the T3 unit tests (which currently assert
+  `(dept, role)` from the JSON map). Per verify-before-commit, the code change is folded into the approved
+  TASKS build, not written untested now. This doc pass only records the decision + updates the skeleton's note.

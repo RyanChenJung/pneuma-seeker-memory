@@ -11,7 +11,8 @@
 
 Edits are permitted **only** to these upstream files, and only under the discipline below:
 `services/core/conductor/` (+ prompt factories) · `services/core/ir_system/` ·
-`services/db/main.py` · `shared/config.py` · `main.py`.
+`services/db/workspaces/manager.py` (renamed from `db/main.py` in the 2026-06-15 sync) ·
+`shared/config.py` · `routers/chat.py` (the `/chat` endpoint, moved out of `main.py`).
 Everything in `services/memory/`, `tests/memory/`, `docs_memory/` is 🟢 ours (not logged here).
 `docs/`, `README.md`, `LICENSE`, `baselines/`, upstream `data_src/` are 🔴 never touched.
 
@@ -40,7 +41,7 @@ Status values: `planned` → `applied` (with commit) → `reverted`.
   flag via `self.config.ENABLE_MEMORY_INJECTION`.
 - **Footprint:** ~3 added lines. No existing line changed.
 - **Removal:** delete the added attribute.
-- **Refs:** D19; `scenario-spec-v1.md` §6.3 (Lawrence A/B contract); TASKS WS1.
+- **Refs:** D19; `scenario-spec.md` §6.3 (Lawrence A/B contract); TASKS WS1.
 
 ### SC-2 — `services/core/conductor/main.py` — prompt-injection hook
 - **Status:** applied (Goal WS / WS5; on `feat-memory-experiement`).

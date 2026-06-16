@@ -11,6 +11,15 @@
 > - 🟡 *Seam only* — there's an attachment point/scaffold, but no real substance.
 > - 🔴 *Build new* — spirit-level resemblance at best; architecture differs enough that
 >   "reuse" would mislead.
+>
+> **⚠️ Updated 2026-06-15 after the `upstream/prod` backend-refactor sync.** New substrate
+> now exists that changes a few "(none)" cells: a Postgres-backed **identity layer**
+> (`UserDB`: real `user_id`/`UserRecord`, hierarchical groups via `parent_group_id`,
+> inherited group permissions). It supplies *keys/scaffold* for T3 (user) and T4 (org
+> Level + authorization), but **not** the memory *content* — the learned memory is still
+> net-new. Interface-path fixes (e.g. `persist_session` moved) folded in per tier below.
+> The DocumentDB-reuse question is no longer OPEN — **resolved in D24** (it's a backend
+> behind the T4-authored head, not the architecture).
 
 | Tier | Spec intent (1-line) | Closest existing code | Reuse |
 |------|----------------------|------------------------|-------|
@@ -80,7 +89,8 @@ structure — Claude to propose).
 (success **and** errors)*. JSON/JSONL. The Enhancer's input. *(The brief's "user feedback"
 field is dropped — no explicit channel; inferred from the next turn, D17.)*
 
-**Code — what actually gets persisted (`PneumaDB.persist_session`):**
+**Code — what actually gets persisted (`WorkspaceManager.persist_session`, behind the
+`PneumaDB` facade — post-sync path; was `PneumaDB.persist_session` in old `db/main.py`):**
 - `chat_history`: only `(role, content)` for the **user input** and the **final
   assistant response**. Nothing in between.
 - `provenance_nodes/edges`: the **successful** materialization steps, as runnable code.
@@ -119,13 +129,17 @@ truth. This section keeps only the code↔tier gap above (Spec / Code / Attach).
 **Spec:** persona constraints + inquiry habits, vector store, accelerates "latent intent
 convergence."
 
-**Code:** none. `interaction_history` is transient (rebuilt each call from message
-history). There is no user profile, no per-user persistent store, no semantic recall of
-"how this user tends to ask."
+**Code:** no *user memory*. `interaction_history` is transient (rebuilt each call from
+message history); there is no learned profile, no per-user habit store, no semantic recall
+of "how this user tends to ask." **Post-sync nuance:** a real *identity* now exists —
+`UserDB` gives an authenticated `UserRecord{user_id, email, username, group_id, is_active}`,
+so `user_id` is a real key (not a free param) and `group_id`+`parent_group_id` give the
+user's org placement. That is the **key/scaffold** T3 hangs off, but still **not** the
+memory *content* (habits/aliases/format prefs) — that remains net-new.
 
 **Attach:** entirely new, in `services/memory/`. Read path: inject a compact user-profile
 summary into the Conductor env-state prompt. Write path: Enhancer derives habits from the
-episodic log keyed by `user_id` (which already flows through every layer).
+episodic log keyed by `user_id` (now a real authenticated user id flowing through every layer).
 
 **Internal design — LOCKED (DECISIONS D13 direction → D14 lock; full spec
 `tier3-user-memory-design.md`).** The authoritative design lives in those; not duplicated
@@ -152,7 +166,13 @@ provides "contextual priors."
    never populates the KB indices. It's a built scaffold with no content and no caller.
 2. **Lexical only.** It's BM25 (full-text), not the spec's vector/semantic store. Fine as
    a start, but "vector DB for semantic retrieval" would need adding embeddings.
-3. **No governance.** No notion of authoritative protocols, versioning, or trust.
+3. **No governance _in the KB itself_.** `DocumentDB`/`Knowledge` still carry no notion of
+   authoritative protocols, versioning, or trust. **Post-sync nuance:** an adjacent
+   *access/authority* substrate now exists — hierarchical groups (`parent_group_id`) +
+   inherited group permissions (`get_effective_group_permissions`, child-overrides-parent
+   = CLAUDE.md-style overlay). That gives a real backing for the D20 **Level** axis and the
+   authority signal in D15/D25, though it governs *data/endpoint access*, not KB content
+   trust — wiring it into T4 governance is a separate (not-yet-taken) reuse decision.
 
 **Attach:** this is the **lowest-effort tier to light up** — populate `indices/kb/*`,
 re-enable the `DOCUMENT_DB` action behind a flag, and (optionally) back it with vectors.
@@ -161,9 +181,10 @@ Most of the plumbing already exists.
 **Internal design — LOCKED (DECISIONS D13 direction → D15 lock; full spec
 `tier4-org-memory-design.md`).** The authoritative design lives in those; not duplicated
 here, to keep a single source of truth. Two-headed tier (authored authoritative KB +
-learned org conventions); the still-OPEN `DocumentDB`-reuse question is parked in
-`BACKLOG.md`. This section keeps only the code↔tier gap above (note the dormant `DocumentDB`
-scaffold is the lowest-effort attach point).
+learned org conventions); the `DocumentDB`-reuse question is **resolved in D24** (a backend
+behind the authored head, not the architecture — a deferred backend swap, no longer OPEN).
+This section keeps only the code↔tier gap above (note the dormant `DocumentDB` scaffold is
+the lowest-effort attach point).
 
 ---
 
@@ -250,8 +271,11 @@ Enhancer runs offline).
 **Code:** Conductor, Retriever (the IR `Retriever`), and Materializer exist as classes,
 but:
 - **No Enhancer** at all (no offline consolidation process).
-- **No permission model** — the agents share `DBAPI`/`LanguageModelAPI` freely; nothing
-  enforces "read-only on memory."
+- **No _agent↔memory_ permission model** — the agents share `DBAPI`/`LanguageModelAPI`
+  freely; nothing enforces "read-only on memory." (Post-sync, a *user/data-access* RBAC
+  now exists — group permissions like `dataset:access:*`, `user:management` — but that
+  gates **which user/group sees which dataset/endpoint**, orthogonal to the spec's
+  *only-the-Enhancer-writes-memory* rule, which is still net-new.)
 - The current "Retriever" is an *IR/table* retriever, not a *memory* retriever — same word,
   different job. Watch the naming collision.
 
@@ -268,7 +292,8 @@ client and the Enhancer the only writable one.
 - **Looks reusable but isn't (verify before relying):** Tier 2 (persistence captures the
   destination, not the journey, and drops failures) and Tier 5 (`join_paths`/provenance
   are *not* a persistent scored schema graph).
-- **Net-new:** Tiers 3 and 6, the Enhancer, the permission model, and — critically — the
-  **append-only episodic log** that everything else feeds on.
+- **Net-new:** Tiers 3 and 6, the Enhancer, the *agent↔memory* permission model (the
+  user/data-access RBAC that arrived in the sync is a different thing), and — critically —
+  the **append-only episodic log** that everything else feeds on.
 - **Build order this implies:** Tier 2 (episodic log) is the foundation — without it, the
   Enhancer has nothing to learn from, and Tiers 3/5/6 have no write path. Start there.
