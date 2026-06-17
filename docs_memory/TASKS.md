@@ -64,6 +64,32 @@ Surgical footprint (🟡, additive + flag-guarded, ~5 lines total): `shared/conf
 | WS5 | Surgical hook in `conductor/main.py`: build `self.memory_injector` once + `_inject_memory()` helper called after sys prompt | done | — | — | SC-2; 3 edits, all flag-guarded |
 | WS6 | Tests `tests/memory/`: OFF→no injection / ON+known persona→string present in `llm_messages` / ON+unknown→no injection | done | — | — | 8 pass; 3 conductor tests skip when full runtime absent — all 11 (incl. the 3 vs the real Conductor) confirmed passing in an isolated venv 2026-06-13 |
 
+## Goal B-MIG — Migrate the A/B harness onto the synced auth'd API (Option B)
+
+Proposed 2026-06-16 — **needs user approval before any sub-agent dispatch** (workflow step 3).
+Design rationale: `DECISIONS.md` **D27** (harness = Option B: run the 6/17 A/B experiment on the
+post-sync auth'd `/chat`) + **D28** (department = the user's GROUP via `UserDB`; role = a thin
+Ryan-owned `role_map`). Contract of record: `scenario-spec.md` §6.3 Contract C (already rewritten
+to B) + team `.docx` v2. Sequence mirrors D27-4. The whole goal is still **flag-gated**
+(`ENABLE_MEMORY_INJECTION`); A/B = two `docker compose up` boots (env OFF vs ON), no code switch.
+
+**Scope guard (D27-5):** adopt only the identity/account plumbing (groups as persona containers +
+tokens + group→dept). Full RBAC memory wiring (authorization, authority-precedence) stays deferred.
+MVP read is **single-level** (asker's own dept; D28-4) — no ancestor overlay walk yet.
+
+| ID | Task | Owner | Status | Commit | Notes |
+|----|------|-------|--------|--------|-------|
+| BM-a | PR synced `feat` → `origin/prod` (never upstream) | Ryan | done | PR #7 (`3e488a3`) | Carries upstream's whole backend refactor into *our* prod; feat == prod now |
+| BM-b | Sola: one combined **"campus"** dataset (both depts' tables in a single dataset) | Sola | todo | — | Co-visibility comes from dataset design, not RBAC (D27-3b); `dataset_name:"campus"` |
+| BM-c | Ryan: **setup fixture** (idempotent) — `docker compose up` → admin login (from `ADMIN_PASSWORD`) → create 2 dept groups (Admissions/Finance, optional "University" parent) → `POST /auth/register` 4 personas → login → emit **`personas.json`** `{persona→token,user_id}` + build the small **`role_map`** `{user_id→role}` | Ryan | todo | — | Skip-if-exists, no `UniqueViolation` (D27 residual risk). `identity_map` loses its dept field — dept now from group (D28-1/5) |
+| BM-d | Ryan: **T3 dept-resolver** — `t3_identity` resolves `department` via an injected `Callable[[user_id], dept\|None]` (UserDB group lookup), `role` from `role_map`; wire the UserDB-backed resolver at the composition root (SC-2 hook); **rewrite T3 unit tests** (drop the `(dept,role)`-from-JSON assertions → fake resolver + role_map) | Ryan | todo | — | D28-2/3/5/6. Package stays unit-testable with a fake resolver; UserDB import only at comp-root |
+| BM-e | Lawrence: harness adopts **Bearer token** header (from `personas.json`) + new body `{chat_id, dataset_name:"campus", message}`; multi-turn = **send only the new turn**, reuse `chat_id` | Lawrence | todo | — | A/B = two boots, unchanged (D27-3d). Consumes `personas.json`; does not touch auth |
+| BM-f | Smoke: `docker compose up` (postgres+core) → one **OFF/ON** case end-to-end | Ryan | todo | — | Proves the post-sync contract; ON injects dept(+role) SYSTEM msg, OFF byte-identical |
+
+**Dependency order:** BM-a ✅ → BM-b ∥ BM-c (independent) → BM-d (needs BM-c's `role_map` + a live
+UserDB to verify) → BM-e (needs BM-c's `personas.json`) → BM-f (needs all). BM-d's code is written
+**under test against a live Postgres**, not stubbed in (verify-before-commit, D28-6).
+
 ## Backlog (proposed — not yet approved)
 
 These came up in discussion. They need the user's go-ahead (workflow step 3) before

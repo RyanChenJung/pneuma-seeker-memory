@@ -1046,3 +1046,31 @@ axis), D15 (T4 overlay), D14 (deferred authorization), D26 (the substrate). **Co
   dept-resolver needs Postgres up to verify and rewrites the T3 unit tests (which currently assert
   `(dept, role)` from the JSON map). Per verify-before-commit, the code change is folded into the approved
   TASKS build, not written untested now. This doc pass only records the decision + updates the skeleton's note.
+
+## D29 — Upstream prompt sync (#24) is COMMON-MODE for the A/B experiment; baseline rebases, increment is unaffected
+Decided 2026-06-17. Synced the one new `upstream/prod` commit `4906158 "Update system prompts (#24)"`
+into `feat-memory-experiement` via merge (clean, no conflicts — it only touches `conductor/prompt_factory.py`
++ `materializer/prompt_factory.py`, files we never edit; our SC-2 hook lives in `conductor/main.py`). 8/11
+memory tests pass; the 3 Conductor tests skip (runtime-only, not a regression — same as D26-3). Read this
+**through** D26's path remap; it does not change any interface.
+
+- **D29-1 — What the commit changes (content only).** Pure system-prompt *text*: Conductor is now told to
+  prefer a **single unified table in T** and push **all** integration (joins/unions/source-level filtering)
+  into Materializer's `note`; `S` is for post-integration analytics only. Materializer's prompt gains the
+  matching "you are the integration layer / exactly the columns in T" guidance. **No function signatures
+  changed** — `get_sys_prompt()` is unchanged, so the SC-2 inject (append our memory SYSTEM message right
+  after the sys prompt, `conductor/main.py:164`) sits correctly and is unaffected.
+- **D29-2 — Common-mode ⇒ the ON−OFF increment is preserved (the key call).** The experiment measures the
+  **delta** ON minus OFF (memory injected vs not), not absolute scores. The new prompt is shared by **both**
+  arms (OFF and ON both run it). So it shifts the *absolute baseline* of both arms together but does **not**
+  distort the gap we actually measure. (Court-raised-evenly analogy: both players stand on the same lifted
+  floor; "how many more B scores than A" barely moves.) Effect on our core thesis (latent intent = pick the
+  right table per department) is essentially nil — that happens at `TABLE_RETRIEVE`, a different stage than
+  T/S/Materializer division. Hidden-rule *application location* may move from `S` into the Materializer
+  `note`, but symmetrically across both arms, so the A/B comparison stays fair.
+- **D29-3 — Practical consequence: rebaseline, nothing to discard.** Any baseline numbers measured under the
+  *old* prompt would not be comparable to the new one. We have **not** run the formal A/B yet (still in the
+  BM setup stage), so there is **no stale baseline to throw away** — the timing is clean. Going forward, the
+  baseline is taken on the post-#24 prompt.
+- **D29-4 — Scope guard.** Recorded as analysis only; no code/design change triggered. The sync merge is the
+  only artifact. (Stage-2 review of Sola's campus dataset PR #8 is tracked separately, not in this D.)
