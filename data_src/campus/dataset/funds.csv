@@ -1,0 +1,11 @@
+fund_id,fund_name,fund_type,opening_balance
+FUND001,Fund 1,operating,1400785.18
+FUND002,Fund 2,escrow,631172.48
+FUND003,Fund 3,endowment,2229362.42
+FUND004,Fund 4,operating,3669870.8
+FUND005,Fund 5,escrow,1637018.84
+FUND006,Fund 6,endowment,3070423.38
+FUND007,Fund 7,operating,2605972.99
+FUND008,Fund 8,escrow,1987457.62
+FUND009,Fund 9,endowment,2925281.41
+FUND010,Fund 10,operating,1348140.28
