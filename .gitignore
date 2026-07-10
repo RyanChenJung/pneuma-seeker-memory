@@ -21,3 +21,4 @@ docs_memory/RESUME.md
 
 # Local-only temp/handoff drafts (hand off then delete) — never tracked
 docs_memory/_*.md
+data_src/restaurant/raw_original/

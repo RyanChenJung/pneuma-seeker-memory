@@ -1,0 +1,192 @@
+{
+  "round": "round2_semantic",
+  "overall": {
+    "correct": 16,
+    "total": 16,
+    "pct": 100.0
+  },
+  "by_group": {
+    "A": {
+      "correct": 5,
+      "total": 5,
+      "pct": 100.0
+    },
+    "B": {
+      "correct": 3,
+      "total": 3,
+      "pct": 100.0
+    },
+    "C": {
+      "correct": 3,
+      "total": 3,
+      "pct": 100.0
+    },
+    "D": {
+      "correct": 3,
+      "total": 3,
+      "pct": 100.0
+    },
+    "E": {
+      "correct": 2,
+      "total": 2,
+      "pct": 100.0
+    }
+  },
+  "by_tribal_knowledge": {
+    "visitors_definition": {
+      "correct": 3,
+      "total": 3,
+      "wrong_ids": []
+    },
+    "fiscal_year_convention": {
+      "correct": 3,
+      "total": 3,
+      "wrong_ids": []
+    },
+    "booking_channel_scope": {
+      "correct": 3,
+      "total": 3,
+      "wrong_ids": []
+    },
+    "fiscal_year_convention+booking_channel_scope": {
+      "correct": 1,
+      "total": 1,
+      "wrong_ids": []
+    },
+    "visitors_definition+fiscal_year_convention": {
+      "correct": 1,
+      "total": 1,
+      "wrong_ids": []
+    }
+  },
+  "per_question": [
+    {
+      "id": "A-01",
+      "group": "A",
+      "correct": true,
+      "detail": "got 252108.0, expected 252108.0 (\u00b12.0%)",
+      "tribal_knowledge": null,
+      "sql": "SELECT COUNT(*) FROM visits"
+    },
+    {
+      "id": "A-02",
+      "group": "A",
+      "correct": true,
+      "detail": "got 829.0, expected 829.0 (\u00b12.0%)",
+      "tribal_knowledge": null,
+      "sql": "SELECT COUNT(DISTINCT venue_code) FROM venues"
+    },
+    {
+      "id": "A-03",
+      "group": "A",
+      "correct": true,
+      "detail": "got 14.0, expected 14.0 (\u00b12.0%)",
+      "tribal_knowledge": null,
+      "sql": "SELECT COUNT(DISTINCT cuisine_type) FROM venues"
+    },
+    {
+      "id": "A-04",
+      "group": "A",
+      "correct": true,
+      "detail": "got 65.13, expected 65.13 (\u00b12.0%)",
+      "tribal_knowledge": null,
+      "sql": "SELECT ROUND(AVG(seating_capacity),2) FROM venues"
+    },
+    {
+      "id": "A-05",
+      "group": "A",
+      "correct": true,
+      "detail": "got 'Category-08', expected 'Category-08'",
+      "tribal_knowledge": null,
+      "sql": "SELECT cuisine_type FROM venues GROUP BY cuisine_type ORDER BY COUNT(*) DESC LIMIT 1"
+    },
+    {
+      "id": "B-01",
+      "group": "B",
+      "correct": true,
+      "detail": "got 5287653.0, expected 5287653.0 (\u00b12.0%)",
+      "tribal_knowledge": "visitors_definition",
+      "sql": "SELECT SUM(guest_count) FROM visits"
+    },
+    {
+      "id": "B-02",
+      "group": "B",
+      "correct": true,
+      "detail": "got 519021.0, expected 519021.0 (\u00b12.0%)",
+      "tribal_knowledge": "visitors_definition",
+      "sql": "SELECT SUM(expected_covers) FROM reservations"
+    },
+    {
+      "id": "B-03",
+      "group": "B",
+      "correct": true,
+      "detail": "got 20.97, expected 20.97 (\u00b12.0%)",
+      "tribal_knowledge": "visitors_definition",
+      "sql": "SELECT ROUND(AVG(guest_count),2) FROM visits"
+    },
+    {
+      "id": "C-01",
+      "group": "C",
+      "correct": true,
+      "detail": "got 1276883.0, expected 1276883.0 (\u00b12.0%)",
+      "tribal_knowledge": "fiscal_year_convention",
+      "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')"
+    },
+    {
+      "id": "C-02",
+      "group": "C",
+      "correct": true,
+      "detail": "got 1096001.0, expected 1096001.0 (\u00b12.0%)",
+      "tribal_knowledge": "fiscal_year_convention",
+      "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.cycle_label=(SELECT MIN(cycle_label) FROM calendar WHERE cycle_label LIKE '%-1')"
+    },
+    {
+      "id": "C-03",
+      "group": "C",
+      "correct": true,
+      "detail": "got 816.0, expected 816.0 (\u00b12.0%)",
+      "tribal_knowledge": "fiscal_year_convention",
+      "sql": "SELECT COUNT(DISTINCT v.venue_code) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')"
+    },
+    {
+      "id": "D-01",
+      "group": "D",
+      "correct": true,
+      "detail": "got 414015.0, expected 414015.0 (\u00b12.0%)",
+      "tribal_knowledge": "booking_channel_scope",
+      "sql": "SELECT SUM(expected_covers) FROM reservations WHERE source_channel='direct'"
+    },
+    {
+      "id": "D-02",
+      "group": "D",
+      "correct": true,
+      "detail": "got 519021.0, expected 519021.0 (\u00b12.0%)",
+      "tribal_knowledge": "booking_channel_scope",
+      "sql": "SELECT SUM(expected_covers) FROM reservations"
+    },
+    {
+      "id": "D-03",
+      "group": "D",
+      "correct": true,
+      "detail": "got 20.23, expected 20.23 (\u00b12.0%)",
+      "tribal_knowledge": "booking_channel_scope",
+      "sql": "SELECT ROUND(100.0*SUM(CASE WHEN source_channel='partner' THEN expected_covers ELSE 0 END)/SUM(expected_covers),2) FROM reservations"
+    },
+    {
+      "id": "E-01",
+      "group": "E",
+      "correct": true,
+      "detail": "got 23257.0, expected 23257.0 (\u00b12.0%)",
+      "tribal_knowledge": "fiscal_year_convention+booking_channel_scope",
+      "sql": "SELECT SUM(r.expected_covers) FROM reservations r JOIN calendar c ON r.visit_day=c.service_day WHERE c.cycle_label=(SELECT MIN(cycle_label) FROM calendar WHERE cycle_label LIKE '%-1')"
+    },
+    {
+      "id": "E-02",
+      "group": "E",
+      "correct": true,
+      "detail": "got 1276883.0, expected 1276883.0 (\u00b12.0%)",
+      "tribal_knowledge": "visitors_definition+fiscal_year_convention",
+      "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')"
+    }
+  ]
+}
