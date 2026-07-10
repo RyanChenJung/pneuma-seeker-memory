@@ -41,7 +41,7 @@ def dedupe_columns(cols):
     return result
 
 
-DATASET_NAME = "proc_spend"
+DATASET_NAME = "restaurant"
 DATASET_PATH = f"../../../../../data_src/{DATASET_NAME}/dataset"
 OVERWRITE_DB = True
 

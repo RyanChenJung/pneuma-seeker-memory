@@ -1,0 +1,6 @@
+table_name,description
+visits.csv,Restaurant venue attendance records including service day and party size
+reservations.csv,Restaurant booking records including expected party size, booking timestamp, and source channel (direct vs. partner-referred)
+venues.csv,Restaurant venue information including cuisine type and location details
+calendar.csv,Calendar reference table with day-of-week and period labels
+daily_summary.csv,Daily rollup of booking activity per venue

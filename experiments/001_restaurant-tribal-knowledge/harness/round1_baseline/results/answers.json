@@ -1,0 +1,82 @@
+[
+  {
+    "id": "A-01",
+    "sql": "SELECT COUNT(*) FROM visits",
+    "answer": 252108
+  },
+  {
+    "id": "A-02",
+    "sql": "SELECT COUNT(DISTINCT venue_code) FROM venues",
+    "answer": 829
+  },
+  {
+    "id": "A-03",
+    "sql": "SELECT COUNT(DISTINCT cuisine_type) FROM venues",
+    "answer": 14
+  },
+  {
+    "id": "A-04",
+    "sql": "SELECT ROUND(AVG(seating_capacity),2) FROM venues",
+    "answer": 65.13
+  },
+  {
+    "id": "A-05",
+    "sql": "SELECT cuisine_type FROM venues GROUP BY cuisine_type ORDER BY COUNT(*) DESC LIMIT 1",
+    "answer": "Category-08"
+  },
+  {
+    "id": "B-01",
+    "sql": "SELECT SUM(guest_count) FROM visits",
+    "answer": 5287653
+  },
+  {
+    "id": "B-02",
+    "sql": "SELECT SUM(guest_count) FROM visits",
+    "answer": 5287653
+  },
+  {
+    "id": "B-03",
+    "sql": "SELECT ROUND(AVG(guest_count),2) FROM visits",
+    "answer": 20.97
+  },
+  {
+    "id": "C-01",
+    "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')",
+    "answer": 1276883
+  },
+  {
+    "id": "C-02",
+    "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')",
+    "answer": 1276883
+  },
+  {
+    "id": "C-03",
+    "sql": "SELECT COUNT(DISTINCT v.venue_code) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')",
+    "answer": 816
+  },
+  {
+    "id": "D-01",
+    "sql": "SELECT SUM(expected_covers) FROM reservations WHERE source_channel='direct'",
+    "answer": 414015
+  },
+  {
+    "id": "D-02",
+    "sql": "SELECT SUM(expected_covers) FROM reservations",
+    "answer": 519021
+  },
+  {
+    "id": "D-03",
+    "sql": "SELECT ROUND(100.0*SUM(CASE WHEN source_channel='partner' THEN expected_covers ELSE 0 END)/SUM(expected_covers),2) FROM reservations",
+    "answer": 20.23
+  },
+  {
+    "id": "E-01",
+    "sql": "SELECT SUM(r.expected_covers) FROM reservations r JOIN calendar c ON r.visit_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')",
+    "answer": 90792
+  },
+  {
+    "id": "E-02",
+    "sql": "SELECT SUM(v.guest_count) FROM visits v JOIN calendar c ON v.service_day=c.service_day WHERE c.period_code=(SELECT MIN(period_code) FROM calendar WHERE period_code LIKE '%-1')",
+    "answer": 1276883
+  }
+]

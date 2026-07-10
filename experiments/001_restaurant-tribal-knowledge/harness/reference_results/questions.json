@@ -1,0 +1,109 @@
+[
+  {
+    "id": "A-01",
+    "group": "A",
+    "answer_type": "single_number",
+    "expected": 252108
+  },
+  {
+    "id": "A-02",
+    "group": "A",
+    "answer_type": "single_number",
+    "expected": 829
+  },
+  {
+    "id": "A-03",
+    "group": "A",
+    "answer_type": "single_number",
+    "expected": 14
+  },
+  {
+    "id": "A-04",
+    "group": "A",
+    "answer_type": "single_number",
+    "expected": 65.13
+  },
+  {
+    "id": "A-05",
+    "group": "A",
+    "answer_type": "single_value",
+    "expected": "Category-08"
+  },
+  {
+    "id": "B-01",
+    "group": "B",
+    "answer_type": "single_number",
+    "expected": 5287653,
+    "tribal_knowledge": "visitors_definition"
+  },
+  {
+    "id": "B-02",
+    "group": "B",
+    "answer_type": "single_number",
+    "expected": 519021,
+    "tribal_knowledge": "visitors_definition"
+  },
+  {
+    "id": "B-03",
+    "group": "B",
+    "answer_type": "single_number",
+    "expected": 20.97,
+    "tribal_knowledge": "visitors_definition"
+  },
+  {
+    "id": "C-01",
+    "group": "C",
+    "answer_type": "single_number",
+    "expected": 1276883,
+    "tribal_knowledge": "fiscal_year_convention"
+  },
+  {
+    "id": "C-02",
+    "group": "C",
+    "answer_type": "single_number",
+    "expected": 1096001,
+    "tribal_knowledge": "fiscal_year_convention"
+  },
+  {
+    "id": "C-03",
+    "group": "C",
+    "answer_type": "single_number",
+    "expected": 816,
+    "tribal_knowledge": "fiscal_year_convention"
+  },
+  {
+    "id": "D-01",
+    "group": "D",
+    "answer_type": "single_number",
+    "expected": 414015,
+    "tribal_knowledge": "booking_channel_scope"
+  },
+  {
+    "id": "D-02",
+    "group": "D",
+    "answer_type": "single_number",
+    "expected": 519021,
+    "tribal_knowledge": "booking_channel_scope"
+  },
+  {
+    "id": "D-03",
+    "group": "D",
+    "answer_type": "single_number",
+    "expected": 20.23,
+    "tribal_knowledge": "booking_channel_scope"
+  },
+  {
+    "id": "E-01",
+    "group": "E",
+    "answer_type": "single_number",
+    "expected": 23257,
+    "tribal_knowledge": "fiscal_year_convention+booking_channel_scope"
+  },
+  {
+    "id": "E-02",
+    "group": "E",
+    "answer_type": "single_number",
+    "expected": 1276883,
+    "tribal_knowledge": "visitors_definition+fiscal_year_convention"
+  }
+]
